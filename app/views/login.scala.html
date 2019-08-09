@@ -1,0 +1,84 @@
+@(basePath: String)
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <link rel="shortcut icon" type="image/png" href="@routes.Assets.at("images/favicon.png")">
+        <title>Login</title>
+        <link href="//fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+        <link rel="stylesheet" href="@routes.Assets.at("styles/bootstrap.min.css")">
+        <link rel="stylesheet" href="@routes.Assets.at("styles/main.css")">
+    </head>
+
+    <body>
+        <section id="form">
+            <form class="form-login" action="#" method="POST" autocomplete="on">
+                <input id="redirectUrlInput" type="hidden" name="redirectUrl" />
+                <div class="form-group">
+                    <label for="login">Login</label>
+                    <input id="login" name="login" type="text" class="form-control">
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input id="password" name="password" type="password" class="form-control">
+                </div>
+
+                <div class="input-field col s12">
+                <button class="btn btn-primary" type="submit">Login</button>
+                </div>
+            </form>
+        </section>
+
+        <script type="text/javascript">
+                var basePath = "@{basePath}";
+
+                function login(handler) {
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', basePath + '/login');
+                    xhr.setRequestHeader('Content-Type', 'application/json');
+
+                    xhr.onload = function() {
+                        if (xhr.status === 200) {
+                            var token = JSON.parse(xhr.responseText);
+                            handler(token.token);
+                        } else if (xhr.status !== 200) {
+                            alert('Authorization failed');
+                        }
+                    };
+
+                    xhr.send(JSON.stringify({
+                        login: document.querySelector("#login").value,
+                        password: document.querySelector("#password").value
+                    }));
+                }
+
+                function authorizeApp(token) {
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('GET', window.location.href);
+                    xhr.setRequestHeader('X-Auth-Token', token);
+
+                    xhr.onload = function() {
+                        if (xhr.status === 200) {
+                            var data = xhr.responseText;
+                            document.querySelector("section#form").text = data;
+                            console.log(data);
+                        } else if (xhr.status !== 200) {
+                            alert('Authorization failed');
+                        }
+                    };
+
+                    xhr.send();
+                }
+
+                document.querySelector(".form-login").addEventListener("submit", function (event) {
+                    event.preventDefault();
+                    login(authorizeApp);
+                });
+        </script>
+
+
+    </body>
+</html>

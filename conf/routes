@@ -1,0 +1,1591 @@
+# Routes
+# This file defines all application routes (Higher priority routes first)
+# ~~~~
+
+# Home page
+### NoDocs ###
+GET           /                                                   @controllers.ApplicationController.index
+
+###
+# summary: Performs user login, returns authorization token
+# description: In case if SMS confirmation is on and login without password is allowed, then password is not mandatory – instead user will have to confirm itself with OTP sent to `POST /users/confirm`.
+# operationId: login
+# tags:
+#   - Login
+# security: []
+# responses:
+#   200:
+#     description: Token response
+#     schema:
+#       type: object
+#       properties:
+#         token:
+#           type: string
+#           description: Authorization token that has to be placed into `X-Auth-Token` header
+#           example: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI/docs/templates1NiJ9eyJzdWIiOiIxLU0zWDYrMUeXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9eyJzdWIiOiIxLU0zWDYrMUeXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9eyJzdWIiOiIxLU0zWDYrMU
+#   400:
+#     description: Wrong request format
+#     schema:
+#       $ref: '#/definitions/errorResponse'
+#   403:
+#     description: Authorization data is invalid or user not confirmed
+#     schema:
+#       $ref: '#/definitions/errorResponse'
+#   404:
+#     description: Specified user is not found
+#     schema:
+#       $ref: '#/definitions/errorResponse'
+#   428:
+#     description: Password field is not specified and sms authorization is on. Will send sms code, which has to be provided on `POST /users/confirm` endpoint, which in turn will return the token
+#     schema:
+#       $ref: '#/definitions/errorResponse'
+# parameters:
+#   - name: body
+#     required: true
+#     schema:
+#      $ref: '#/definitions/loginCredentials'
+###
+POST          /login                                              @controllers.ApplicationController.authenticate
+
+###
+# summary: Performs user logout
+# tags:
+#   - Login
+# operationId: logout
+# responses:
+#   303:
+#     description: Successful logout
+#   401:
+#     description: User unauthorized
+###
+POST          /logout                                             @controllers.ApplicationController.logout
+
+###
+# summary: Retrieve information abount current session
+# tags:
+#   - Sessions
+# operationId: listUserSessions
+# security:
+#   - login: []
+#   - api_key: []
+# responses:
+#   200:
+#     description: Session information object
+#     schema:
+#       type: object
+#       properties:
+#         createdAt:
+#           type: integer
+#           format: int64
+#           description: User account status normal – for registered user or unconfirmed for unconfirmed users
+#         expiredAt:
+#           type: integer
+#           format: int64
+#           description: User account status normal – for registered user or unconfirmed for unconfirmed users
+#         onlineTime:
+#           type: integer
+#           format: int64
+#           description: User account status normal – for registered user or unconfirmed for unconfirmed users
+#   403:
+#     description: Authorization token not found
+#   404:
+#     description: Session not found
+###
+GET           /sessions                                           @controllers.ApplicationController.session()
+
+###
+# summary: Creates user
+# tags:
+#   - Users
+# operationId: createUser
+# security: []
+# responses:
+#   200:
+#     description: User information
+#   409:
+#     description: User already exists
+#   428:
+#     description: Login(email/phone) confirmation required for next step of user registration
+# parameters:
+#   - name: body
+#     required: true
+#     schema:
+#      $ref: '#/definitions/forms.OpenFormData'
+###
+POST          /users                                              @controllers.ApplicationController.register
+
+###
+# summary: Invite user to your structure
+# tags:
+#   - Branches
+# operationId: inviteUser
+# responses:
+#   204:
+#     description: Invitation was send
+# parameters:
+#   - name: body
+#     required: true
+#     schema:
+#      $ref: '#/definitions/forms.InviteForm.Invite'
+###
+POST          /users/invite                                       @controllers.ApplicationController.invite()
+
+###
+# summary: Confirms a user by code send by email/phone
+# tags:
+#   - Users
+# operationId: confirmUser
+# security: []
+# parameters:
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/forms.ConfirmForm.ConfirmData'
+# responses:
+#   200:
+#     description: Token response
+#     schema:
+#      $ref: '#/definitions/tokenResponse'
+#   404:
+#     description: Confirmation code not found
+###
+POST          /users/confirm                                      @controllers.ApplicationController.confirm
+
+###
+# summary: Get version of user confirmation link. Confirms a user by code send by email/phone
+# tags:
+#   - Users
+# operationId: confirmUserGet
+# security: []
+# parameters:
+#   - name: login
+#     in: query
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid)
+#   - name: code
+#     in: query
+#     type: string
+#     required: true
+#     description: OTP code send to email or phone
+# responses:
+#   200:
+#     description: Token response
+#     schema:
+#      $ref: '#/definitions/tokenResponse'
+#   404:
+#     description: Confirmation code not found
+###
+GET          /users/confirm                                      @controllers.ApplicationController.confirm
+
+###
+# summary: Requests confirmation code on email/phone
+# tags:
+#   - Users
+# operationId: resendOTP
+# responses:
+#   204:
+#     description: Otp successfully created
+#   412:
+#     description: User account already confirmed
+# security: []
+# parameters:
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/forms.ConfirmForm.ReConfirm'
+###
+POST          /users/resend-otp                                   @controllers.ApplicationController.resendOtp
+
+###
+# summary: Changes user password
+# tags:
+#   - Users
+# operationId: changePassword
+# responses:
+#   204:
+#     description: Password successfully changed
+#   403:
+#     description: Wrong old password used
+#   404:
+#     description: User not found
+# security: []
+# parameters:
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/forms.UserForm.UpdatePass'
+###
+POST          /users/change-pass                                  @controllers.UserController.changePassword
+
+###
+# summary: Starts user password reset process by sending email with password change link
+# tags:
+#   - Users
+# operationId: recoverPassword
+# responses:
+#   204:
+#     description: Otp successfully generated. Use '/users/recovery/confirm' to complete password recovery.
+#   404:
+#     description: User not found
+# parameters:
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/forms.ResetPasswordForm.ResetPassword'
+###
+POST          /users/recovery                                     @controllers.UserController.resetPassword
+
+###
+# summary: Confirms password change on password recovery
+# tags:
+#   - Users
+# operationId: confirmPasswordRecovery
+# responses:
+#   204:
+#     description: Otp successfully generated. Use '/users/recovery/confirm' to complete password recovery.
+#   404:
+#     description: User or confirmation code not found
+# parameters:
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/forms.ResetPasswordForm.SetNewPassword'
+###
+POST          /users/recovery/confirm                             @controllers.UserController.resetPasswordConfirm
+
+###
+# summary: Checks is user exists
+# description: No authentication required
+# tags:
+#   - Users
+# operationId: checkUserExistence
+# security: []
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid) or 'me' to identify self
+# responses:
+#   204:
+#     description: User exists
+#   404:
+#     description: User does not exist
+###
+GET           /users/:userId/exists                               @controllers.UserController.checkExistence(userId: String)
+
+###
+# summary: Finds user with specified identifier
+# tags:
+#   - Users
+# operationId: findUser
+# security:
+#   - oauth: ['read:users']
+#   - api_key: []
+# responses:
+#   200:
+#     description: Users list
+#     schema:
+#       type: array
+#       items:
+#           - "$ref": "#/definitions/models.User"
+# parameters:
+#   - name: q
+#     in: query
+#     type: string
+#     required: true
+#     description: User identifier
+#   - name: limit
+#     in: query
+#     type: integer
+#     format: int32
+#     description: Results count limit (default 100)
+###
+GET           /users/search                                       @controllers.UserController.search
+
+###
+# summary: Returns count of users registered in system
+# tags:
+#   - Users
+# operationId: usersCount
+# security:
+#   - oauth: ['read:users']
+#   - api_key: []
+# responses:
+#   200:
+#     description: Users count
+#     schema:
+#       type: object
+#       properties:
+#         count:
+#           description: Users count
+#           type: number
+###
+GET           /users/count                                        @controllers.UserController.count
+
+###
+# summary: Updates specific user information fields
+# tags:
+#   - Users
+# operationId: updateUser
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid) or 'me' to identify self
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/forms.UserForm.UpdateUser'
+# responses:
+#   200:
+#     description: User successfully updated, returns updated user
+#     schema:
+#       "$ref": "#/definitions/models.User"
+#   400:
+#     description: Error in request
+#     schema:
+#       $ref: '#/definitions/errorResponse'
+#   404:
+#     description: Specified user is not found
+#     schema:
+#       $ref: '#/definitions/errorResponse'
+#   428:
+#     description: Will send sms code, which has to be provided on `POST /users/confirm` endpoint to complete request. Sent when email or phone is changed
+#     schema:
+#       $ref: '#/definitions/errorResponse'
+###
+PUT         /users/:userId                                        @controllers.UserController.put(userId: String)
+
+###
+# summary: Updates specific user information fields
+# tags:
+#   - Users
+# operationId: patchUser
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid) or 'me' to identify self
+#   - name: body
+#     schema:
+#      type: array
+#      description: Json patch object. See http://jsonpatch.com.
+#      example: [ { "op": "replace", "path": "/email", "value": "new@mail.com" } ]
+# responses:
+#   200:
+#     description: User successfully updated, returns updated user
+#     schema:
+#       "$ref": "#/definitions/models.User"
+#   400:
+#     description: Error in request
+#     schema:
+#       $ref: '#/definitions/errorResponse'
+#   404:
+#     description: Specified user is not found
+#     schema:
+#       $ref: '#/definitions/errorResponse'
+#   428:
+#     description: Will send sms code, which has to be provided on `POST /users/confirm` endpoint to complete request. Sent when email or phone is changed
+#     schema:
+#       $ref: '#/definitions/errorResponse'
+###
+PATCH         /users/:userId                                        @controllers.UserController.patch(userId: String)
+
+###
+# summary: Change password expiration
+# tags:
+#   - Users
+# operationId: updatePasswordTTL
+# security:
+#   - oauth: ['users:edit']
+#   - api_key: ['users:edit']
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid) or 'me' to identify self
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/forms.UserForm.PasswordTTL'
+# responses:
+#   204:
+#     description: Password expiration successfully changed
+###
+PUT         /users/:userId/password-tll                                        @controllers.UserController.changePasswordTTL(userId: String)
+
+###
+# summary: Block or unblock specified user by admin
+# tags:
+#   - Users
+# operationId: blockOrUnblockUser
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid)
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/forms.UserForm.BlockUser'
+# responses:
+#   204:
+#     description: User successfully blocked/unblocked
+###
+PUT         /users/:userId/block                                  @controllers.UserController.blockUser(userId: String)
+
+###
+# summary: Removes user from the system
+# tags:
+#   - Users
+# operationId: deleteUser
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid) or 'me' to identify self
+#   - name: comment
+#     in: query
+#     type: string
+#     required: false
+#     description: Optional comment for user deletion
+# responses:
+#   204:
+#     description: User sucessfully deleted
+#   404:
+#     description: User not found
+#   403:
+#     description: Lack of permissions to perfrom this operation
+###
+DELETE         /users/:userId                                     @controllers.UserController.delete(userId: String, comment: Option[String])
+
+###
+# summary: Returns user extended information
+# tags:
+#   - Users
+# operationId: getUserExtendedInfo
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid) or 'me' to identify self
+# responses:
+#   200:
+#     description: Retrieve user extended info
+#     schema:
+#       type: object
+###
+GET             /users/:userId/extended-info                      @controllers.UserController.retrieveExtendedInfo(userId: String)
+
+###
+# summary: Create user extended information
+# tags:
+#   - Users
+# operationId: createUserExtendedInfo
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid) or 'me' to identify self
+# responses:
+#   200:
+#     description: Created user extended info
+#     schema:
+#       type: object
+###
+POST            /users/:userId/extended-info                      @controllers.UserController.createExtendedInfo(userId: String)
+
+###
+# summary: Update user extended information
+# tags:
+#   - Users
+# operationId: updateUserExtendedInfo
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid) or 'me' to identify self
+# responses:
+#   200:
+#     description: Updated user extended info
+#     schema:
+#       type: object
+###
+PUT             /users/:userId/extended-info                      @controllers.UserController.updateExtendedInfo(userId: String)
+
+###
+# summary: Retrieve user structure
+# tags:
+#   - Branches
+# operationId: getUserStructure
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid) or 'me' to identify self
+#   - name: limit
+#     in: query
+#     type: integer
+#     required: false
+#     description: Maximum number of users
+#   - name: offset
+#     in: query
+#     type: integer
+#     required: false
+#     description: Offset of users list begin
+#   - name: since
+#     in: query
+#     type: string
+#     required: false
+#     default: Month before
+#     description: Date from wich users will be taken, format ISO 8601-2004
+#   - name: until
+#     in: query
+#     type: string
+#     required: false
+#     default: Current time
+#     description: Date to wich users will be taken, format ISO 8601-2004
+###
+GET             /users/:userId/structure                          @controllers.UserController.retrieveOwnStructure(userId: String)
+
+###
+# summary: Authenticates a user against a social provider
+# tags:
+#   - Login
+# operationId: socialProviderLogin
+# security: []
+# parameters:
+#   - name: provider
+#     in: path
+#     type: string
+#     required: true
+#     description: provider identifier
+###
+GET           /auth/:provider                                     @controllers.SocialAuthController.authenticate(provider)
+
+###
+# summary: Returns user information
+# tags:
+#   - Users
+# operationId: getUser
+# security:
+#   - api_key: []
+#   - oauth: ['read:users']
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid) or 'me' to identify self
+# responses:
+#   200:
+#     description: User object
+#     schema:
+#       $ref: '#/definitions/user'
+###
+GET           /users/:userId                                      @controllers.UserController.get(userId: String)
+
+###
+# summary: Returns users list
+# tags:
+#   - Users
+# operationId: listUsers
+# security:
+#   - api_key: ['read:users']
+#   - oauth: ['read:users']
+# parameters:
+#   - name: offset
+#     in: query
+#     type: integer
+#     required: false
+#     description: Users list offset
+#   - name: limit
+#     in: query
+#     type: integer
+#     required: false
+#     description: Maximum number of users to get
+# responses:
+#   200:
+#     description: User objects list
+#     schema:
+#       type: object
+#       description: Users list
+#       properties:
+#         items:
+#           type: array
+#           description: users array
+#           required: true
+#           items:
+#             $ref: '#/definitions/user'
+###
+GET           /users                                              @controllers.UserController.list()
+
+###
+# summary: Authorize user with OAuth service
+# description: >
+#               There are two ways to get the application access to the user: a two-stage and a simplified.
+#               For most applications, a two-step access scheme is suitable: first, retrieve a temporary "authorization code" in
+#               terms of OAuth, which shoul exchange for a permanent token. Which option will be used depends on
+#               the responseType parameter. The lifetime of the temporary token is 30 seconds.
+#               If in 30 seconds you don't exchange it for a permanent, you shoult try to get temporary token again.
+#               In simplified version you retrieve oauth access token
+# tags:
+#   - OAuth
+# operationId: socialAuthorize
+# consumes:
+#   - application/json
+# parameters:
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/models.OAuthAuthorizeRequest'
+# responses:
+#   200:
+#     description: TOKEN {"accessToken":"token","expiresIn":1} or CODE {"code":"temporary-token"}
+#     schema:
+#       type: object
+#       properties:
+#         accessToken:
+#           type: string
+#           description: Token
+#         expiresIn:
+#           type: integer
+#           format: int64
+#           description: Ttl in seconds
+###
+POST          /oauth/authorize                                    @controllers.OAuthController.authorize
+
+###
+# summary: Creates user token for OAuth code
+# description: >
+#               As the authentication data, you must specify client_id as the login and client_secret as the password
+#               in Authorization header with format `Basic base64(clientId:clientSecret)`
+# tags:
+#   - OAuth
+# operationId: createOAuthToken
+# parameters:
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/forms.ThirdPartyAppForm.Code'
+# responses:
+#   200:
+#     description: OAuth token
+#     schema:
+#       type: object
+#       properties:
+#         accessToken:
+#           type: string
+#           description: Token
+#         expiresIn:
+#           type: integer
+#           format: int64
+#           description: Ttl in seconds
+###
+POST          /oauth/token                                        @controllers.OAuthController.createToken
+
+###
+# summary: Authorize user with OAuth service by admin
+# description: >
+#               There are two ways to get the application access to the user: a two-stage and a simplified.
+#               For most applications, a two-step access scheme is suitable: first, retrieve a temporary "authorization code" in
+#               terms of OAuth, which shoul exchange for a permanent token. Which option will be used depends on
+#               the responseType parameter. The lifetime of the temporary token is 30 seconds.
+#               If in 30 seconds you don't exchange it for a permanent, you shoult try to get temporary token again.
+#               In simplified version you retrieve oauth access token
+# tags:
+#   - OAuth
+# operationId: oauthAuthorize
+# security:
+#   - api_key: ['oauth_token:create']
+# consumes:
+#   - application/json
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: required
+#     description: User identifier (email/phone/uuid)
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/models.OAuthAuthorizeRequest'
+# responses:
+#   200:
+#     description: TOKEN {"accessToken":"token","expiresIn":1} or CODE {"code":"temporary-token"}
+#     schema:
+#       type: object
+#       properties:
+#         accessToken:
+#           type: string
+#           description: Token
+#         expiresIn:
+#           type: integer
+#           format: int64
+#           description: Ttl in seconds
+###
+POST          /oauth/users/:userId/authorize                      @controllers.OAuthController.adminAuthorize(userId: String)
+
+###
+# summary: Creates user token for OAuth code
+# description: >
+#               As the authentication data, you must specify client_id as the login and client_secret as the password
+#               in Authorization header with format `Basic base64(clientId:clientSecret)`
+# tags:
+#   - OAuth
+# operationId: oauthCreateToken
+# security:
+#   - api_key: ['oauth_token:create']
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: required
+#     description: User identifier (email/phone/uuid)
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/forms.ThirdPartyAppForm.Code'
+# responses:
+#   200:
+#     description: OAuth token
+#     schema:
+#       type: object
+#       properties:
+#         accessToken:
+#           type: string
+#           description: Token
+#         expiresIn:
+#           type: integer
+#           format: int64
+#           description: Ttl in seconds
+###
+POST          /oauth/users/:userId/token                          @controllers.OAuthController.adminCreateToken(userId: String)
+
+###
+# summary: Registers Thirdparty application
+# description: >
+#               The result is the application identifier (clientId) and the application secret code (clientSecret)
+#               which require for basic authorization.
+# tags:
+#   - OAuth
+# operationId: registerOauthApplication
+# parameters:
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/forms.ThirdPartyAppForm.CreateApps'
+# responses:
+#   200:
+#     description: Application information for OAuth token authorization
+#     schema:
+#       type: object
+#       properties:
+#         clientSecret:
+#           type: string
+#           description: Application secret
+#         clientId:
+#           type: integer
+#           format: int64
+#           description: Application unique identifier     
+###
+POST          /users/oauth-apps                                 @controllers.OAuthController.createApp
+
+###
+# summary: Returns list of OAuth tokens
+# tags:
+#   - OAuth
+# operationId: getUserOauthTokens
+# parameters:
+#   - name: userId
+#     in: query
+#     type: integer
+#     format: int64
+#     required: false
+#     description: User identifier (uuid)
+#   - name: accountId
+#     in: query
+#     type: integer
+#     format: int64
+#     required: false
+#     description: User account identifier
+#   - name: clientId
+#     in: query
+#     type: integer
+#     format: int64
+#     required: false
+#     description: User account identifier
+#   - name: limit
+#     in: query
+#     type: integer
+#     required: false
+#     description: Maximum number of transactions
+#   - name: offset
+#     in: query
+#     type: integer
+#     required: false
+#     description: Offset of transactions list begin
+# responses:
+#   200:
+#     description: User object
+###
+GET           /oauth/tokens                                       @controllers.OAuthController.getAuthenticators
+
+###
+# summary: Removes OAuth token specified in the URL
+# tags:
+#   - OAuth
+# operationId: deleteUserOauthToken
+# parameters:
+#   - name: token
+#     in: path
+#     type: string
+#     required: true
+#     description: OAuth token
+# responses:
+#   204:
+#     description: Token successfully removed
+###
+DELETE        /oauth/tokens/:token                                @controllers.OAuthController.removeToken(token: String)
+
+###
+# summary: Returns Thirdparty application by given id
+# tags:
+#   - OAuth
+# operationId: getOAuthApplication
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid)
+#   - name: id
+#     in: path
+#     type: integer
+#     required: true
+#     description: Thirdparty application id
+# responses:
+#   200:
+#     description: Single application information
+#     schema:
+#       $ref: '#/definitions/models.ThirdpartyApplication'
+###
+GET           /users/:userId/oauth-apps/:id                             @controllers.OAuthController.getApp(userId: String, id: Long)
+
+###
+# summary: Returns Thirdparty application by id
+# tags:
+#   - OAuth
+# operationId: getOAuthApplicationById
+# parameters:
+#   - name: id
+#     in: path
+#     type: integer
+#     required: true
+#     description: Thirdparty application id
+# security: []
+# responses:
+#   200:
+#     description: Single application information
+#     schema:
+#       $ref: '#/definitions/models.ThirdpartyApplication'
+###
+GET           /oauth-apps/:id                                     @controllers.OAuthController.getAppById(id: Long)
+
+
+###
+# summary: Updates Thirdparty application by given id
+# tags:
+#   - OAuth
+# operationId: updateOAuthApplication
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid)
+#   - name: id
+#     in: path
+#     type: integer
+#     required: true
+#     description: Thirdparty application id
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/forms.ThirdPartyAppForm.UpdateApps'
+# responses:
+#   200:
+#     description: Updated application information
+#     schema:
+#       $ref: '#/definitions/models.ThirdpartyApplication'
+###
+PUT           /users/:userId/oauth-apps/:id                             @controllers.OAuthController.updateApp(userId: String, id: Long)
+
+###
+# summary: Removes Thirdparty application by given id
+# tags:
+#   - OAuth
+# operationId: removeOAuthApplication
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid)
+#   - name: id
+#     in: path
+#     type: integer
+#     required: true
+#     description: Thirdparty application id
+# responses:
+#   204:
+#     description: Application successfully removed
+###
+DELETE        /users/:userId/oauth-apps/:id                             @controllers.OAuthController.removeApp(userId: String, id: Long)
+
+###
+# summary: Returns all Thirdparty applications for given user
+# tags:
+#   - OAuth
+# operationId: getUserOAuthApplications
+# parameters:
+#   - name: userId
+#     in: path
+#     type: string
+#     required: true
+#     description: User identifier (email/phone/uuid)
+# responses:
+#   200:
+#     description: User applications list
+#     schema:
+#       type: object
+#       properties:
+#         items:
+#           type: array
+#           items:
+#               $ref: '#/definitions/models.ThirdpartyApplication'
+#         count:
+#           type: integer
+#           format: int64
+#           description: Count
+###
+GET           /users/:userId/oauth-apps                                 @controllers.OAuthController.getApps(userId: String)
+
+
+###
+# summary: Get roles list
+# tags:
+#   - Roles
+# operationId: getRoles
+# security:
+#   - oauth: ['permissions:read']
+#   - api_key: []
+# responses:
+#   200:
+#     description: successfully returted user permission
+#     schema:
+#       type: object
+#       required: [items]
+#       properties:
+#         items:
+#           type: array
+#           items:
+#              description: Role name
+#              type: string
+#   404:
+#       description: No user was found
+###
+GET             /roles                                            @controllers.UserRolePermissionController.listRoles()
+
+###
+# summary: Adds a role with permissions list
+# tags:
+#   - Roles
+# operationId: createRole
+# security:
+#   - oauth: ['permissions:edit']
+#   - api_key: []
+# parameters:
+#   - name: role
+#     in: body
+#     required: true
+#     description: role permission
+#     schema:
+#       $ref: '#/definitions/roleCreate'
+# responses:
+#   200:
+#       description: successfully created user permission
+###
+POST            /roles                                            @controllers.UserRolePermissionController.add
+
+###
+# summary: Get permissions list for a role
+# tags:
+#   - Roles
+# operationId: getRole
+# security:
+#   - oauth: ['permissions:read']
+#   - api_key: []
+# parameters:
+#   - name: role
+#     type: string
+#     in: path
+#     required: true
+#     description: Users role
+# responses:
+#   200:
+#       description: successfully returted user permission
+#       schema:
+#           $ref: '#/definitions/rolePermissions'
+#   404:
+#       description: No user was found
+###
+GET             /roles/:role                                      @controllers.UserRolePermissionController.get(role: String)
+
+###
+# summary: Update permissions for a role
+# tags:
+#   - Roles
+# operationId: updateRole
+# security:
+#   - oauth: ['permissions:edit']
+#   - api_key: []
+# parameters:
+#   - name: role
+#     type: string
+#     in: path
+#     required: true
+#     description: Users role
+#   - name: permission
+#     in: body
+#     required: true
+#     description: role permissions
+#     schema:
+#       $ref: '#/definitions/rolePermissions'
+# responses:
+#   204:
+#       description: Successfully updated user permission
+###
+PUT             /roles/:role                                      @controllers.UserRolePermissionController.update(role: String)
+
+###
+# summary: Removes role
+# tags:
+#   - Roles
+# operationId: removeRole
+# security:
+#   - oauth: ['permissions:edit']
+#   - api_key: []
+# parameters:
+#   - name: role
+#     type: string
+#     in: path
+#     required: true
+#     description: Users role
+# responses:
+#   204:
+#       description: successfully removed user permission
+###
+DELETE           /roles/:role                                     @controllers.UserRolePermissionController.remove(role: String)
+
+
+###
+# summary: Creates a new branch
+# tags:
+#   - Branches
+# operationId: createBranch
+# security:
+#   - oauth: ['branches:edit']
+#   - api_key: ['branches:edit']
+# parameters:
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/createBranch'
+# responses:
+#   200:
+#       description: successfully created a branch
+###
+POST        /branches                                                    @controllers.BranchesController.create
+
+###
+# summary: Updates a branch
+# tags:
+#   - Branches
+# operationId: updateBranch
+# security:
+#   - oauth: ['branches:edit']
+#   - api_key: ['branches:edit']
+# parameters:
+#   - name: branchId
+#     type: string
+#     in: path
+#     required: true
+#     description: Parent branch identifier or `root` to list branches from root
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/createBranch'
+# responses:
+#   200:
+#       description: successfully updated a branch
+###
+PUT        /branches:branchId                                                     @controllers.BranchesController.update(branchId: String)
+
+###
+# summary: Obtains branch information
+# tags:
+#   - Branches
+# operationId: getBranch
+# security:
+#   - oauth: ['branches:read']
+#   - api_key: ['branches:read']
+# parameters:
+#   - name: branchId
+#     type: string
+#     in: path
+#     required: true
+#     description: Branch identifier
+# responses:
+#   200:
+#       description: branch information
+###
+GET        /branches/:branchId                                            @controllers.BranchesController.get(branchId: String)
+
+###
+# summary: Lists all child branches
+# tags:
+#   - Branches
+# operationId: listChildBranches
+# security:
+#   - oauth: ['branches:read']
+#   - api_key: ['branches:read']
+# parameters:
+#   - name: branchId
+#     type: string
+#     in: path
+#     required: true
+#     description: Parent branch identifier or `root` to list branches from root
+# responses:
+#   200:
+#       description: child branches list
+###
+GET        /branches/:branchId/children                                   @controllers.BranchesController.list(branchId: String)
+
+###
+# summary: Removes a branch
+# tags:
+#   - Branches
+# operationId: removeBranch
+# security:
+#   - oauth: ['branches:edit']
+#   - api_key: ['branches:edit']
+# parameters:
+#   - name: branchId
+#     type: string
+#     in: path
+#     required: true
+#     description: Branch identifier
+# responses:
+#   204:
+#       description: successfully removed a branch
+###
+DELETE           /branches/:branchId                                       @controllers.BranchesController.remove(branchId: String)
+
+###
+# summary: Creates restriction
+# tags:
+#   - Restrictions
+# operationId: createRestriction
+# security:
+#   - oauth: ['restrictions:edit']
+#   - api_key: ['restrictions:edit']
+# parameters:
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/restriction'
+# responses:
+#   200:
+#       description: successfully created a restriction
+###
+POST        /restrictions                                                     @controllers.RestrictionController.save
+
+###
+# summary: Update restriction
+# tags:
+#   - Restrictions
+# operationId: updateRestriction
+# security:
+#   - oauth: ['restrictions:edit']
+#   - api_key: ['restrictions:edit']
+# parameters:
+#   - name: name
+#     type: string
+#     in: path
+#     required: true
+#     description: Restriction name
+#   - name: body
+#     schema:
+#      $ref: '#/definitions/restriction'
+# responses:
+#   200:
+#     description: successfully updated a restriction
+###
+PUT          /restrictions/:name                                @controllers.RestrictionController.update(name: String)
+
+###
+# summary: Obtains restriction information
+# tags:
+#   - Restrictions
+# operationId: getRestriction
+# security:
+#   - oauth: ['restrictions:read']
+#   - api_key: ['restrictions:read']
+# parameters:
+#   - name: name
+#     type: string
+#     in: path
+#     required: true
+#     description: Restriction name
+# responses:
+#   200:
+#       description: Restriction information
+###
+GET        /restrictions/:name                                             @controllers.RestrictionController.get(name: String)
+
+###
+# summary: Lists all restrictions
+# tags:
+#   - Restrictions
+# operationId: listRestrictions
+# security:
+#   - oauth: ['restrictions:read']
+#   - api_key: ['restrictions:read']
+# responses:
+#   200:
+#       description: Restriction list
+###
+GET        /restrictions                                                   @controllers.RestrictionController.list
+
+###
+# summary: Removes restriction
+# tags:
+#   - Restrictions
+# operationId: deleteRestriction
+# security:
+#   - oauth: ['restrictions:edit']
+#   - api_key: ['restrictions:edit']
+# parameters:
+#   - name: name
+#     type: string
+#     in: path
+#     required: true
+#     description: Restriction name
+# responses:
+#   204:
+#       description: successfully removed a restriction
+###
+DELETE           /restrictions/:name                                     @controllers.RestrictionController.remove(name: String)
+
+###
+# summary: Returns server version
+# tags:
+#   - System
+# operationId: getServiceVersion
+# security: 
+#   - api_key: []
+#   - oauth: ['internal_web']
+###
+GET           /version                                            @controllers.ApplicationController.version
+
+
+###
+# summary: List Discovered services
+# tags:
+#   - System
+# operationId: getDiscoveredServices
+# security:
+#   - api_key: ['swagger:read']
+#   - oauth: ['swagger:read']
+# responses:
+#   200:
+#     description: Services list
+#     schema:
+#       type: object
+#       properties:
+#         items:
+#           type: array
+#           items:
+#             type: object
+#             properties:
+#               name:
+#                 type: string
+#                 description: Service Name
+#               pattern:
+#                 type: string
+#                 description: Service routing pattern
+#               basePath:
+#                 type: string
+#                 description: Service Base Path
+#               swaggerUrl:
+#                 type: string
+#                 description: Service Swagger URL
+#         count:
+#           type: integer
+#           format: int64
+#           description: Count
+###
+GET           /discovery/services                                 @controllers.ProxyController.listServices
+
+### NoDocs ###
+GET           /metrics                                            @controllers.PrometheusController.metrics()
+
+# Map static resources from the /public folder to the /assets URL path
+
+### NoDocs ###
+GET           /api/assets/*file                                   controllers.Assets.at(path="/public", file)
+### NoDocs ###
+GET           /assets/*file                                       controllers.Assets.at(path="/public", file)
+
+###
+# summary: compiled swagger definition
+# description: for swagger UI to consume
+# tags:
+#   - Documentation
+# operationId: getDocsJson
+###
+GET           /docs/:name.json                                    @controllers.swagger.ApiSpecs.specs(name : String)
+
+
+###
+# summary: compiled swagger HTML documentation
+# description: swagger UI
+# tags:
+#   - Documentation
+# operationId: getDocsHtml
+###
+GET           /docs/:name.html                                    @controllers.swagger.ApiSpecs.docsIndex(name : String)
+
+###
+# summary: Create swagger api template
+# description: Create swagger api template ( "include" and "exclude" fields is optional )
+# tags:
+#   - Documentation
+# operationId: createDocsTemplate
+# security:
+#   - oauth: ['swagger:edit']
+#   - api_key: []
+# parameters:
+#   - name: body
+#     required: true
+#     schema:
+#      $ref: '#/definitions/models.ApiTemplate'
+# responses:
+#   200:
+#     description: swagger api template
+#     schema:
+#       $ref: '#/definitions/models.ApiTemplate'
+###
+POST          /docs/templates                                     @controllers.ApiTemplateController.insert
+
+###
+# summary: Returns swagger api template
+# description: Returns swagger api template (only template, not a compiled document)
+# tags:
+#   - Documentation
+# operationId: getDocsTemplate
+# security:
+#   - oauth: ['swagger:read']
+#   - api_key: []
+# parameters:
+#   - name: name
+#     in: path
+#     type: string
+#     required: true
+#     description: swagger api template name
+# responses:
+#   200:
+#     description: swagger api template
+#     schema:
+#       $ref: '#/definitions/models.ApiTemplate'
+###
+GET           /docs/templates/:name                               @controllers.ApiTemplateController.retrieve(name: String)
+
+###
+# summary: Returns available swagger api templates
+# tags:
+#   - Documentation
+# operationId: listDocsTemplates
+# security:
+#   - oauth: ['swagger:read']
+#   - api_key: []
+# parameters:
+#   - name: offset
+#     in: query
+#     type: integer
+#     required: false
+#     default: 0
+#     description: Offset of api list begin
+#   - name: limit
+#     in: query
+#     default: 100
+#     type: integer
+#     required: false
+#     description: Maximum number of apis
+# responses:
+#   200:
+#     description: Document key-value list
+#     schema:
+#       type: object
+#       properties:
+#         items:
+#           type: array
+#           items:
+#               $ref: '#/definitions/models.ApiTemplate'
+#         count:
+#           type: integer
+#           format: int64
+#           description: Count
+###
+GET           /docs/templates                                     @controllers.ApiTemplateController.list
+
+###
+# summary: Update swagger api template
+# description: Update swagger api template ( "include" and "exclude" fields is optional )
+# tags:
+#   - Documentation
+# operationId: updateDocTemplate
+# security:
+#   - oauth: ['swagger:edit']
+#   - api_key: []
+# parameters:
+#   - name: name
+#     in: path
+#     type: string
+#     required: true
+#     description: Document object unique identifier
+#   - name: body
+#     required: true
+#     schema:
+#      $ref: '#/definitions/models.ApiTemplate'
+# responses:
+#   200:
+#     description: new swagger api template
+#     schema:
+#       $ref: '#/definitions/models.ApiTemplate'
+###
+PUT          /docs/templates/:name                                @controllers.ApiTemplateController.update(name: String)
+
+###
+# summary: Remove swagger api template
+# tags:
+#   - Documentation
+# operationId: deleteDocTemplate
+# security:
+#   - oauth: ['swagger:edit']
+#   - api_key: []
+# parameters:
+#   - name: name
+#     in: path
+#     type: string
+#     required: true
+#     description: swagger api template name
+# responses:
+#   204:
+#     description: Document successfully removed
+###
+DELETE       /docs/templates/:name                                @controllers.ApiTemplateController.remove(name: String)
+
+###
+# summary: Display form to grant access (implicit Flow)
+# description: Display form to grant access or show login page if session doesn't exist.
+# tags:
+#   - OAuth
+# operationId: oauthAuthorizationForm
+# security: []
+# parameters:
+#   - name: response_type
+#     type: string
+#     in: query
+#     required: true
+#     description: In Implicit Grant this Value MUST be set to "token"
+#   - name: client_id
+#     type: integer
+#     in: query
+#     required: true
+#     description: Thirdparty application id
+#   - name: redirect_uri
+#     type: string
+#     in: query
+#     required: true
+#     description: Redirection Endpoint
+#   - name: scope
+#     type: string
+#     in: query
+#     required: true
+#     description: Access Token Scope
+#   - name: state
+#     type: string
+#     in: query
+#     required: false
+#     description:
+#       The parameter SHOULD be used for preventing
+#       cross-site request forgery.
+###
+GET     /authorization                                @controllers.OAuthUIController.displayAuthorize(client_id: Long, scope:String)
+
+###
+# summary: Swagger Oauth2 redirect page (implicit Flow)
+# description: If the resource owner grants the access request, the authorization
+#   server issues an access token and delivers it to the client by adding
+#   the following parameters
+# tags:
+#   - OAuth
+# operationId: oauthRedirect
+# parameters:
+#   - name: access_token
+#     type: string
+#     in: query
+#     required: true
+#     description: The access token issued by the authorization server.
+#   - name: token_type
+#     type: string
+#     in: query
+#     required: false
+#     description: The type of the token issued. Default value is "Bearer"
+#   - name: expires_in
+#     type: string
+#     in: query
+#     required: true
+#     description:
+#         The lifetime in seconds of the access token.  For
+#         example, the value "3600" denotes that the access token will
+#         expire in one hour from the time the response was generated.
+#   - name: state
+#     type: string
+#     in: query
+#     required: false
+#     description:
+#       REQUIRED if the "state" parameter was present in the client
+#       authorization request.  The exact value received from the
+#       client.
+###
+GET    /oauth2-redirect.html                                      @controllers.OAuthUIController.oauthRedirect
+
+### NoDocs ###
+GET           /docs/*file                                         @controllers.swagger.ApiSpecs.docsResources(file)
+
+
+#########
+# Services proxy
+#########
+
+### NoDocs ###
+GET     /*path                                                    @controllers.ProxyController.pass(path)
+
+### NoDocs ###
+POST    /*path                                                    @controllers.ProxyController.pass(path)
+
+### NoDocs ###
+PUT     /*path                                                    @controllers.ProxyController.pass(path)
+
+### NoDocs ###
+DELETE  /*path                                                    @controllers.ProxyController.pass(path)
+
+### NoDocs ###
+PATCH   /*path                                                    @controllers.ProxyController.pass(path)

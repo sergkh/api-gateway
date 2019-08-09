@@ -1,0 +1,8 @@
+---
+  - type: java\.util\.date
+    specAsParameter:
+      - type: integer
+        format: int64
+  - type: reactivemongo\.bson\.bsonobjectid
+    specAsParameter:
+      - type: string

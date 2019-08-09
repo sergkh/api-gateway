@@ -1,0 +1,30 @@
+<ehcache xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="http://ehcache.org/ehcache.xsd"
+         updateCheck="false" monitoring="autodetect" dynamicConfig="true"
+         maxBytesLocalHeap="250M">
+
+    <!-- This is a default configuration for 256Mb of cached data using the JVM's heap, but it must be adjusted
+         according to specific requirement and heap sizes -->
+
+    <sizeOfPolicy maxDepth="1000" maxDepthExceededBehavior="abort" />
+
+    <defaultCache
+            maxBytesLocalHeap="50M"
+            eternal="false"
+            timeToIdleSeconds="120"
+            timeToLiveSeconds="120"
+            overflowToDisk="false"
+            maxElementsOnDisk="10000000"
+            diskPersistent="false"
+            diskExpiryThreadIntervalSeconds="120"
+            memoryStoreEvictionPolicy="LRU"
+    />
+
+    <!-- TODO: it would be good to configure specific caches, but unfortunately Play have some bug
+     with it http://stackoverflow.com/questions/31857301/how-to-configure-custom-ehcaches-in-play-framework
+
+        <cache name="users" />
+        <cache name="accounts"/>
+    -->
+
+</ehcache>

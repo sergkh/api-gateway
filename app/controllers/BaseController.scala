@@ -1,0 +1,37 @@
+package controllers
+
+import akka.stream.scaladsl.Source
+import akka.util.ByteString
+import com.impactua.bouncer.commons.utils.Logging
+import com.mohiva.play.silhouette.api.actions.SecuredRequest
+import models.JwtEnv
+import play.api.http.{ContentTypeOf, ContentTypes, Writeable}
+import play.api.i18n.Lang
+import play.api.libs.json.{JsArray, JsValue, Json}
+import play.api.mvc._
+import services.StreamedProxyRequest
+
+import scala.language.implicitConversions
+
+/**
+  * Created by sergeykhruschak on 12/9/15.
+  */
+trait BaseController extends Logging with InjectedController {
+
+  implicit def contentTypeOfSeqJsValue(implicit codec: Codec): ContentTypeOf[Seq[JsValue]] = {
+    ContentTypeOf[Seq[JsValue]](Some(ContentTypes.JSON))
+  }
+
+  implicit def writeableOfSeqJsValue(implicit codec: Codec): Writeable[Seq[JsValue]] = {
+    Writeable { list =>
+      codec.encode(Json.stringify(JsArray(list)))
+    }
+  }
+
+  implicit def securedRequestToProxyReq(req: SecuredRequest[JwtEnv, JsValue]): StreamedProxyRequest = {
+    StreamedProxyRequest(req, Some(req.identity), Option(Source.single(ByteString(Json.stringify(req.body).getBytes))))
+  }
+
+  @deprecated("See https://www.playframework.com/documentation/2.6.x/MessagesMigration26", "2.6.0")
+  implicit def request2lang(implicit request: RequestHeader): Lang = play.api.i18n.Lang.defaultLang
+}

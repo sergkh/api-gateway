@@ -1,0 +1,3 @@
+name := """base-models"""
+
+publish := ()

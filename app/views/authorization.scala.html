@@ -1,0 +1,52 @@
+@(basePath: String, clientApp:ThirdpartyApplication, scopes:Array[String])
+
+<section class="container">
+    <h1>Grant access to your account</h1>
+    <div class="row margin-top40">
+            <!-- LOGIN -->
+        <div class="col-md-12">
+         <form class="oauth2Form" action="@{basePath}/oauth/authorize" method="POST">
+             <input type="hidden" name="clientId" value="@clientApp.id">
+             <input type="hidden" name="responseType" value="TOKEN">
+             @for(i <- 0 until scopes.length) {
+                     <input type="hidden" name="permissions[@i]" value="@scopes(i)">
+             }
+            <p>Application <b>@{clientApp.name}</b> requires following permissions:</p>
+            <ul>
+            @for(scope <- scopes) {
+                <li>
+                    <label>@scope</label>
+                </li>
+            }
+            </ul>
+            <div class="row">
+                <div class="col-md-12">
+                    <input id="allowBtn" type="submit" value="Grant access" class="btn btn-success pull-right"/>
+                </div>
+            </div>
+         </form>
+        </div>
+            <!-- /LOGIN -->
+    </div>
+</section>
+
+<script type="application/javascript">
+    function submit(){
+        // onsubmit="return submit();"
+    }
+
+/*
+    $(function() {
+        $(document).on('submit','form.oauth2Form',function(){
+
+            var form = $(this);
+            var params = (new URL(window.location)).searchParams;
+
+            $.post("/login/authorize", form.serializeJson()).done(function (resp, status, xhr) {
+                var redirect_uri = params.get("redirect_uri")+"?state="+params.get("state")+"&token_type=Bearer"+"&access_token="+resp.accessToken+"&expires_in="+resp.expiresIn;
+                if (window.baseUrl) redirect_uri=baseUrl+redirect_uri;
+                window.location.replace(redirect_uri);
+            });
+        });
+    }); */
+</script>
