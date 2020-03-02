@@ -1,9 +1,9 @@
 package security
 
-import com.impactua.bouncer.commons.utils.Logging
 import com.mohiva.play.silhouette.api.repositories.AuthenticatorRepository
 import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
 import services.OAuthService
+import utils.Logging
 import utils.Responses._
 
 import scala.concurrent.Future

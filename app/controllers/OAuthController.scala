@@ -4,10 +4,6 @@ package controllers
 
 import akka.actor.ActorSystem
 import javax.inject.{Inject, Singleton}
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.utils.RichJson._
-import com.impactua.bouncer.commons.utils.RichRequest._
 import com.mohiva.play.silhouette.api.Silhouette
 import com.mohiva.play.silhouette.api.services.AuthenticatorService
 import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
@@ -20,7 +16,9 @@ import play.api.libs.json.{JsObject, Json}
 import security._
 import services.{OAuthService, UserService}
 import utils.Settings._
-
+import utils.RichRequest._
+import utils.RichJson._
+import ErrorCodes._
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.language.implicitConversions
 
@@ -95,7 +93,7 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
         }
       case None =>
         log.error("Oauth token " + token + " not found")
-        throw AppException(ResponseCode.ENTITY_NOT_FOUND, "Can't found oauth token")
+        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, "Can't found oauth token")
     }
   }
 

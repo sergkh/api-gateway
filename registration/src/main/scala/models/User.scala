@@ -3,8 +3,6 @@ package models
 import java.security.{Permission, Permissions}
 import java.util.Date
 
-import com.impactua.bouncer.commons.models.User.UserPermission
-import com.impactua.bouncer.commons.utils.JsonHelper
 import com.mohiva.play.silhouette.api.Identity
 import com.mohiva.play.silhouette.impl.providers.{OAuth1Info, OAuth2Info}
 import play.api.libs.functional.syntax._
@@ -38,12 +36,6 @@ case class User(uuid: Long = UuidGenerator.generateId,
     } yield first + " " + last
   }
 
-  lazy val javaPermissions: java.security.Permissions = {
-    val perm = new Permissions()
-    permissions.foreach(p => perm.add(UserPermission(p.toUpperCase)))
-    perm
-  }
-
   val uuidStr = uuid.toString
 
   def identifier: String = email getOrElse (phone getOrElse uuid).toString
@@ -55,8 +47,6 @@ case class User(uuid: Long = UuidGenerator.generateId,
   def hasAnyRole(r: String*): Boolean = roles.exists(hasRole)
 
   def hasPermission(p: String): Boolean = permissions.contains(p)
-
-  def hasPermission(p: Permission): Boolean = javaPermissions.implies(p)
 
   def hasAllPermission(p: String*): Boolean = p.forall(hasPermission)
 
@@ -124,22 +114,20 @@ object User {
     ) (User.apply _)
 
   implicit val oWriter = new OWrites[User] {
-    def writes(u: User): JsObject = {
-      JsonHelper.toNonemptyJson(
-        "uuid" -> u.uuid,
-        "email" -> u.email,
-        "phone" -> u.phone,
-        "passTtl" -> u.passTtl,
-        "flags" -> Option(u.flags).filterNot(_.isEmpty),
-        "roles" -> Option(u.roles).filterNot(_.isEmpty),
-        "permissions" -> Option(u.permissions).filterNot(_.isEmpty),
-        "branch" -> u.branch,
-        "hierarchy" -> Option(u.hierarchy).filterNot(_.isEmpty),
-        "firstName" -> u.firstName,
-        "lastName" -> u.lastName,
-        "version" -> u.version
-      )
-    }
+    def writes(u: User): JsObject = Json.obj(
+      "uuid" -> u.uuid,
+      "email" -> u.email,
+      "phone" -> u.phone,
+      "passTtl" -> u.passTtl,
+      "flags" -> Option(u.flags).filterNot(_.isEmpty),
+      "roles" -> Option(u.roles).filterNot(_.isEmpty),
+      "permissions" -> Option(u.permissions).filterNot(_.isEmpty),
+      "branch" -> u.branch,
+      "hierarchy" -> Option(u.hierarchy).filterNot(_.isEmpty),
+      "firstName" -> u.firstName,
+      "lastName" -> u.lastName,
+      "version" -> u.version
+    ).filterNulls
   }
 
   val mongoReader: Reads[User] = (
@@ -160,7 +148,7 @@ object User {
 
   val mongoWriter: OWrites[User] = new OWrites[User] {
     def writes(u: User): JsObject = {
-      JsonHelper.toNonemptyJson(
+      Json.obj(
         "_id" -> u.uuid,
         "email" -> u.email,
         "phone" -> u.phone,
@@ -173,12 +161,12 @@ object User {
         "firstName" -> u.firstName,
         "lastName" -> u.lastName,
         "version" -> u.version
-      )
+      ).filterNulls
     }
   }
 
   val shortUserWriter = new OWrites[User] {
-    def writes(u: User): JsObject = JsonHelper.toNonemptyJson(
+    def writes(u: User): JsObject = Json.obj(
       "id" -> u.uuid,
       "em" -> u.email,
       "ph" -> u.phone,
@@ -188,7 +176,14 @@ object User {
       "rol" -> Option(u.roles).filterNot(_.isEmpty),
       "prm" -> Option(u.permissions).filterNot(_.isEmpty),
       "hrc" -> Option(u.hierarchy).filterNot(_.isEmpty),
-    )
+    ).filterNulls
+  }
+
+  implicit class ExtJson(val js: JsObject) extends AnyVal {
+    def filterNulls: JsObject = JsObject(js.fields.filter {
+      case (_, JsNull) => false
+      case (_, _) => true
+    })
   }
 
 }

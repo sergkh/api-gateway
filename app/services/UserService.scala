@@ -4,14 +4,9 @@ import java.util.Date
 
 import akka.http.scaladsl.util.FastFuture
 import javax.inject.{Inject, Singleton}
-import com.impactua.bouncer.commons.models.ResponseCode._
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.utils.Logging
-import com.impactua.bouncer.commons.utils.RichJson._
 import com.mohiva.play.silhouette.api.util.PasswordInfo
 import com.mohiva.play.silhouette.api.{AuthInfo, LoginInfo}
-import models.{QueryParams, RolePermissions, User}
+import models.{AppException, ErrorCodes, QueryParams, RolePermissions, User}
 import net.ceedubs.ficus.Ficus._
 import play.api.Configuration
 import play.api.cache.{AsyncCacheApi, NamedCache}
@@ -23,7 +18,8 @@ import reactivemongo.play.json._
 import reactivemongo.play.json.collection.JSONCollection
 import services.auth.SocialAuthService
 import services.social.CustomSocialProfile
-import utils.UuidGenerator
+import utils.{Logging, UuidGenerator}
+import utils.RichJson._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
@@ -40,6 +36,8 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
                             reactiveMongoApi: ReactiveMongoApi,
                             authService: SocialAuthService,
                             conf: Configuration)(implicit exec: ExecutionContext) extends UserIdentityService with Logging {
+
+  import ErrorCodes._
 
   private[this] final val futureNoneUser: Future[Option[User]] = FastFuture.successful(None)
 
@@ -69,9 +67,9 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
         log.debug("Getting user by from DB: " + login)
         getByAnyIdOpt(login.providerKey) map {
           case Some(u) if u.hasFlag(User.FLAG_BLOCKED) =>
-            throw AppException(BLOCKED_USER, s"User ${u.identifier} is blocked")
+            throw AppException(ErrorCodes.BLOCKED_USER, s"User ${u.identifier} is blocked")
           case Some(u) if u.hasExpiredPassword =>
-            throw AppException(EXPIRED_PASSWORD, s"User ${u.identifier} has expired password! Please change it.")
+            throw AppException(ErrorCodes.EXPIRED_PASSWORD, s"User ${u.identifier} has expired password! Please change it.")
           case Some(u) => Some(cacheUser(u))
           case None => None
         }
@@ -240,7 +238,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
       users.findAndUpdate(versionedSelector(user4update), obj, true).recover(processUserDbEx(user4update.uuid)).map { res =>
         res.result[User].getOrElse {
           log.error(s"Concurrent modification exception occurred on user ${user4update.uuid} updating")
-          throw AppException(ResponseCode.CONCURRENT_MODIFICATION, s"User exists, but version is conflicts")
+          throw AppException(ErrorCodes.CONCURRENT_MODIFICATION, s"User exists, but version is conflicts")
         }
       }
     }
@@ -276,7 +274,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
       .cursor[User](ReadPreference.secondaryPreferred).collect[List](query.limit, errorHandler[User]))
   }
 
-  def getByAnyId(id: String): Future[User] = getByAnyIdOpt(id).map(_ getOrElse (throw AppException(ResponseCode.USER_NOT_FOUND, s"User '$id' not found")))
+  def getByAnyId(id: String): Future[User] = getByAnyIdOpt(id).map(_ getOrElse (throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User '$id' not found")))
 
   def getByAnyIdOpt(id: String): Future[Option[User]] = {
     val user = id match {
@@ -302,7 +300,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     case "me" => Future.successful(u)
     case alsoMe: String if u.checkId(alsoMe) => Future.successful(u)
     case otherUser: String if permissions.forall(u.hasPermission) => getByAnyId(otherUser)
-    case _ => throw AppException(ResponseCode.ACCESS_DENIED, s"Access denied to another user: $id")
+    case _ => throw AppException(ErrorCodes.ACCESS_DENIED, s"Access denied to another user: $id")
   }
 
   private def loadPermissions(roles: Seq[String]): Future[Seq[String]] = rolesCache.getOrElseUpdate(roles.mkString(",")) {
@@ -317,15 +315,15 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   private def processUserDbEx[T](userId: Long): PartialFunction[Throwable, T] = {
     case ex: DatabaseException if ex.code.exists(c => c == 11000 || c == 11001) =>
       log.error(s"Error occurred on user $userId updating (duplicate identifier) ", ex)
-      throw AppException(ResponseCode.ALREADY_EXISTS, "Email or phone already exists")
+      throw AppException(ErrorCodes.ALREADY_EXISTS, "Email or phone already exists")
 
     case ex: DatabaseException =>
       log.error(s"Database exception occurred on user $userId updating, code ${ex.code}", ex)
-      throw AppException(ResponseCode.INTERNAL_SERVER_ERROR, "Database error occurred on user updating")
+      throw AppException(ErrorCodes.INTERNAL_SERVER_ERROR, "Database error occurred on user updating")
 
     case ex: Exception =>
       log.error(s"Undefined exception occurred on user $userId updating ", ex)
-      throw AppException(ResponseCode.INTERNAL_SERVER_ERROR, "Internal error occurred on user updating")
+      throw AppException(ErrorCodes.INTERNAL_SERVER_ERROR, "Internal error occurred on user updating")
   }
 
   private def transformToDbUser(user: User): JsObject = transformToDbUser(Json.toJson(user).as[JsObject]).withFields("version" -> JsNumber(user.version + 1))

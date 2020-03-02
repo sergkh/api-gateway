@@ -18,7 +18,6 @@ import org.scalatest.mockito.MockitoSugar
 import org.scalatest.time.{Seconds, Span}
 import service.fakes.FakeEventsStream
 
-
 class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
   with WordSpecLike
   with MustMatchers

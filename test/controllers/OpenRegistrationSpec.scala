@@ -2,22 +2,20 @@ package controllers
 
 import java.util.concurrent.TimeUnit
 
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.models.exceptions.AppException
 import com.mohiva.play.silhouette.api.util.PasswordInfo
 import com.mohiva.play.silhouette.api.{EventBus, LoginInfo}
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import com.typesafe.config.ConfigFactory
 import helpers.AnswerSugar
 import models.AppEvent.OtpGeneration
-import models.User
+import models.{AppException, ErrorCodes, User}
 import module.{GeneralModule, InitializationModule}
 import modules.FakeModule
 import modules.FakeModule._
 import net.codingwell.scalaguice.ScalaModule
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
-import org.scalatest.mockito.MockitoSugar
+import org.mockito.MockitoSugar
 import org.scalatestplus.play.PlaySpec
 import org.scalatestplus.play.guice.GuiceOneAppPerSuite
 import play.api.inject.guice.GuiceApplicationBuilder
@@ -27,7 +25,7 @@ import play.api.test.FakeRequest
 import play.api.test.Helpers._
 import play.api.{Application, Configuration, Mode}
 import services.impl.RegistrationFiltersChain
-import services.{RestrictionService, UserService}
+import services.UserService
 
 import scala.concurrent.Future
 
@@ -46,14 +44,14 @@ class OpenRegistrationSpec extends PlaySpec
   private val userServiceMock = {
     val m = mock[UserService]
 
-    when(m.save(any[User]())).thenAnswer { inv =>
-      Future.successful(inv.getArguments.head.asInstanceOf[User])
+    when(m.save(any[User]())).thenAnswer { user: User =>
+      Future.successful(user)
     }
 
     when(m.updatePassHash(anyString(), any[PasswordInfo]())).thenReturn(Future.successful({}))
 
-    when(m.updateFlags(any[User]())).thenAnswer { inv =>
-      Future.successful(inv.getArguments.head.asInstanceOf[User])
+    when(m.updateFlags(any[User]())).thenAnswer { user: User =>
+      Future.successful(user)
     }
 
     m
@@ -85,27 +83,27 @@ class OpenRegistrationSpec extends PlaySpec
       when(userServiceMock.retrieve(LoginInfo("credentials", newIdentity.email.get)))
         .thenReturn(Future.successful(None.asInstanceOf[Option[User]]))
 
-      when(restrictionServiceMock.apply(any())).thenAnswer { inv =>
-        Future.successful(inv.getArguments.head.asInstanceOf[JsValue])
+      when(restrictionServiceMock.apply(any())).thenAnswer { js: JsValue =>
+        Future.successful(js)
       }
 
       val requestBody = Json.obj("login" -> newIdentity.email.get, "password" -> newIdentity.passHash)
       val Some(result) = route(app, FakeRequest(routes.ApplicationController.register()).withJsonBody(requestBody))
 
-      val otpThrown = the[AppException[_]] thrownBy {
+      val otpThrown = the[AppException] thrownBy {
         status(result)
       }
 
-      otpThrown.code mustBe ResponseCode.CONFIRMATION_REQUIRED
+      otpThrown.code mustBe ErrorCodes.CONFIRMATION_REQUIRED
 
       val Some(failedConfirm) = route(app, FakeRequest(routes.ApplicationController.confirm())
         .withJsonBody(Json.obj("code" -> "undefined", "login" -> newIdentity.email.get)))
 
-      val thrown = the[AppException[_]] thrownBy {
+      val thrown = the[AppException] thrownBy {
         status(failedConfirm)
       }
 
-      thrown.code mustBe ResponseCode.CONFIRM_CODE_NOT_FOUND
+      thrown.code mustBe ErrorCodes.CONFIRM_CODE_NOT_FOUND
 
       val confirmation = await(codeFuture, 1, TimeUnit.SECONDS)
 

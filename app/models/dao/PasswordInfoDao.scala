@@ -9,11 +9,14 @@ import services.UserService
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
+import scala.reflect.ClassTag
 
 /**
   * The DAO to store the password information.
   */
 class PasswordInfoDao @Inject()(userService: UserService) extends DelegableAuthInfoDAO[PasswordInfo] {
+
+  implicit val classTag: ClassTag[PasswordInfo] = implicitly[ClassTag[PasswordInfo]]
 
   override def find(loginInfo: LoginInfo): Future[Option[PasswordInfo]] = {
     userService.retrieve(loginInfo).map(_.map(u => PasswordInfo(BCryptPasswordHasher.ID, u.passHash)))

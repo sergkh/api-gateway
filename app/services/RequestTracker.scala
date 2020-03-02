@@ -1,23 +1,20 @@
 package services
 
 import java.io.Serializable
-import javax.inject.{Inject, Singleton}
 
+import javax.inject.{Inject, Singleton}
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.fotolog.redis.{BinaryConverter, RedisClient}
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.utils.Logging
+import models.{AppException, ErrorCodes}
 import play.api.Configuration
 import play.api.http.HttpEntity.Streamed
-import play.api.http.Status
 import play.api.mvc.{ResponseHeader, Result}
 import services.RequestTracker._
 import utils.KryoSerializer
-
+import ErrorCodes._
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -48,7 +45,7 @@ class RedisRequestTracker @Inject() (conf: Configuration)
       case Some(Some(data)) =>
         FastFuture.successful(Some(data.toHttpResult(status = alreadyReportedStatus)))
       case Some(None) =>
-        throw AppException(ResponseCode.DUPLICATE_REQUEST, "Please wait for a previous request to finish")
+        throw AppException(ErrorCodes.DUPLICATE_REQUEST, "Please wait for a previous request to finish")
       case None =>
         redis.setNxAsync(strKey, Array[Byte](), timeout)
         none

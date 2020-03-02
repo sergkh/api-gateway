@@ -1,6 +1,6 @@
 package forms
 
-import com.impactua.bouncer.commons.utils.FormConstraints._
+import UserForm._
 import play.api.data.Form
 import play.api.data.Forms._
 import utils.Settings._
@@ -12,13 +12,13 @@ object ResetPasswordForm {
 
   val form = Form(
     mapping(
-      TAG_LOGIN -> nonEmptyText.verifying(or(emailAddress, phoneNumber))
+      TAG_LOGIN -> nonEmptyText
     )(ResetPassword.apply)(ResetPassword.unapply)
   )
 
   val confirm = Form(
     mapping(
-      TAG_LOGIN -> nonEmptyText.verifying(emailAddress, phoneNumber),
+      TAG_LOGIN -> nonEmptyText,
       TAG_CODE -> nonEmptyText,
       TAG_PASSWORD -> password
     )(SetNewPassword.apply)(SetNewPassword.unapply)

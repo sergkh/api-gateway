@@ -2,20 +2,19 @@ package controllers
 
 import java.util.Date
 
-import com.impactua.bouncer.commons.models.exceptions.AppException
 import com.mohiva.play.silhouette.api.LoginInfo
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import com.mohiva.play.silhouette.test._
 import helpers.AnswerSugar
-import models.{Branch, JwtEnv, User}
+import models.{AppException, Branch, JwtEnv, User}
 import module.{GeneralModule, InitializationModule}
 import modules.FakeModule
 import modules.FakeModule._
 import net.codingwell.scalaguice.ScalaModule
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
+import org.mockito.MockitoSugar
 import org.scalatest.Inside
-import org.scalatestplus.mockito.MockitoSugar
 import org.scalatestplus.play.PlaySpec
 import org.scalatestplus.play.guice.GuiceOneAppPerSuite
 import play.api.http.Status.FORBIDDEN
@@ -25,7 +24,7 @@ import play.api.mvc.Results
 import play.api.test.Helpers._
 import play.api.test._
 import play.api.{Application, Mode}
-import services.{BranchesService, ExtendedUserService, RestrictionService, UserService}
+import services.{BranchesService, ExtendedUserService, UserService}
 
 import scala.concurrent.Future
 
@@ -40,14 +39,12 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
 
   val userServiceMock = mock[UserService]
   val branchesMock = mock[BranchesService]
-  val restrictionServiceMock = mock[RestrictionService]
   val extInfoService = mock[ExtendedUserService]
 
   val usersMockModule = new ScalaModule {
     override def configure(): Unit = {
       bind[UserService].toInstance(userServiceMock)
       bind[BranchesService].toInstance(branchesMock)
-      bind[RestrictionService].toInstance(restrictionServiceMock)
       bind[ExtendedUserService].toInstance(extInfoService)
     }
   }
@@ -93,7 +90,7 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
       reset(userServiceMock, branchesMock)
       when(userServiceMock.getByAnyIdOpt("unknown-user@gmail.com")).thenReturn(Future.successful(None))
 
-      assertThrows[AppException[_]] {
+      assertThrows[AppException] {
         val Some(result) = route(app, FakeRequest(routes.UserController.checkExistence("unknown-user@gmail.com")))
         status(result) mustBe NOT_FOUND
       }
@@ -117,21 +114,17 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
     }
 
     "update user" in {
-      reset(userServiceMock, branchesMock, restrictionServiceMock)
+      reset(userServiceMock, branchesMock)
       when(userServiceMock.getRequestedUser(any(), any(), any())).thenReturn(Future.successful(newIdentity))
 
-      when(userServiceMock.withPermissions(any())).thenAnswer { inv =>
-        Future.successful(inv.getArguments.head.asInstanceOf[User])
+      when(userServiceMock.withPermissions(any())).thenAnswer { user: User =>
+        Future.successful(user)
       }
 
       when(branchesMock.isAuthorized(Branch.ROOT, newIdentity)).thenReturn(Future.successful(true))
 
-      when(userServiceMock.update(any(), any())).thenAnswer { inv =>
-        Future.successful(inv.getArguments.head.asInstanceOf[User])
-      }
-
-      when(restrictionServiceMock.validateLogin(any())).thenAnswer { inv =>
-        Future.successful(inv.getArguments.head.asInstanceOf[Unit])
+      when(userServiceMock.update(any(), any())).thenAnswer { (user: User, b: Boolean) =>
+        Future.successful(user)
       }
 
       val request = FakeRequest(routes.UserController.put(9763319796470982L.toString))
@@ -168,8 +161,8 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
       reset(userServiceMock, branchesMock)
       val branchId = "test11"
       when(userServiceMock.getRequestedUser(any(), any(), any())).thenReturn(Future.successful(newIdentity))
-      when(userServiceMock.withPermissions(any())).thenAnswer { inv =>
-        Future.successful(inv.getArguments.head.asInstanceOf[User])
+      when(userServiceMock.withPermissions(any())).thenAnswer { user: User =>
+        Future.successful(user)
       }
 
       // Need root to be able to edit user
@@ -180,12 +173,8 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
         "test", adminIdentity.uuid, hierarchy = List("test11", "parent"), id = branchId
       ))))
 
-      when(restrictionServiceMock.validateLogin(any())).thenAnswer { inv =>
-        Future.successful(inv.getArguments.head.asInstanceOf[Unit])
-      }
-
-      when(userServiceMock.update(any(), any())).thenAnswer { inv =>
-        Future.successful(inv.getArguments.head.asInstanceOf[User])
+      when(userServiceMock.update(any(), any())).thenAnswer { (user: User, b: Boolean) =>
+        Future.successful(user)
       }
 
       val request = FakeRequest(routes.UserController.put(9763319796470982L.toString))
@@ -224,16 +213,12 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
     }
 
     "fail to assign user to an unauthorized branch" in {
-      reset(userServiceMock, branchesMock, restrictionServiceMock)
+      reset(userServiceMock, branchesMock)
       val branchId = "unknow"
       when(userServiceMock.getRequestedUser(any(), any(), any())).thenReturn(Future.successful(newIdentity))
       when(userServiceMock.getByAnyIdOpt(any())).thenReturn(Future.successful(None))
-      when(userServiceMock.withPermissions(any())).thenAnswer { inv =>
-        Future.successful(inv.getArguments.head.asInstanceOf[User])
-      }
-
-      when(restrictionServiceMock.validateLogin(any())).thenAnswer { inv =>
-        Future.successful(inv.getArguments.head.asInstanceOf[Unit])
+      when(userServiceMock.withPermissions(any())).thenAnswer { u: User =>
+        Future.successful(u)
       }
 
       when(branchesMock.isAuthorized(Branch.ROOT, adminIdentity)).thenReturn(Future.successful(true))
@@ -249,7 +234,7 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
           "version" -> 0
         ))
 
-      assertThrows[AppException[_]] {
+      assertThrows[AppException] {
         val Some(result) = route(app, request)
         status(result) mustBe FORBIDDEN
       }
@@ -284,7 +269,7 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
     val request = FakeRequest(routes.UserController.delete(9763319796470982L.toString, None))
       .withAuthenticator[JwtEnv](LoginInfo(CredentialsProvider.ID, adminIdentity.email.get))
 
-    assertThrows[AppException[_]] {
+    assertThrows[AppException] {
       val Some(res) = route(app, request)
       status(res) mustEqual FORBIDDEN
     }

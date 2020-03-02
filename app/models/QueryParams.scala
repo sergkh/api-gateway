@@ -2,8 +2,7 @@ package models
 
 import java.util.Date
 
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.models.exceptions.AppException
+import ErrorCodes._
 import utils.Settings
 
 /**
@@ -18,13 +17,13 @@ case class QueryParams(private val from: Option[Date] = None,
 
   lazy val (since, until) = {
     for (f <- from; t <- to if f.after(t))
-      throw AppException(ResponseCode.INVALID_REQUEST, "Date periods are invalid")
+      throw AppException(ErrorCodes.INVALID_REQUEST, "Date periods are invalid")
 
     // machines can have time synchronization issues, but I think that a day is enough
     val now = new Date(System.currentTimeMillis + QueryParams.MILLIS_IN_DAY)
 
     for (t <- to if t.after(now))
-      AppException(ResponseCode.INVALID_REQUEST, "Date periods are invalid")
+      AppException(ErrorCodes.INVALID_REQUEST, "Date periods are invalid")
 
     val validTo = to.getOrElse(now)
     val validFrom = from.getOrElse(new Date(validTo.getTime - QueryParams.MILLIS_IN_DAY * 30)) // 30 days before to date

@@ -1,7 +1,6 @@
 package forms
 
-import com.impactua.bouncer.commons.utils.FormConstraints._
-import com.impactua.bouncer.commons.utils.FormMapping._
+import UserForm._
 import models.OAuthAuthorizeRequest
 import play.api.data.Form
 import play.api.data.Forms._

@@ -15,7 +15,7 @@ import com.mohiva.play.silhouette.test._
 import helpers.Context
 import models.JwtEnv
 import net.codingwell.scalaguice.ScalaModule
-import org.scalatest.mockito.MockitoSugar
+import org.mockito.MockitoSugar
 import play.modules.reactivemongo.ReactiveMongoApi
 import security.CustomJWTAuthenticatorService
 import service.fakes.{FakeProxy, FakeSessionsService}

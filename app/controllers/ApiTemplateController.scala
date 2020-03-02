@@ -2,15 +2,14 @@ package controllers
 //scalastyle:off public.methods.have.type
 
 import com.google.inject.Inject
-import com.impactua.bouncer.commons.utils.RichJson._
-import com.impactua.bouncer.commons.utils.RichRequest._
 import com.mohiva.play.silhouette.api.Silhouette
 import forms.{ApiTemplateForm, UserForm}
 import models.{ApiTemplate, JwtEnv}
 import play.api.libs.json.{JsObject, Json}
 import security.WithPermission
 import services.ApiTemplateService
-
+import utils.RichRequest._
+import utils.RichJson._
 import scala.concurrent.ExecutionContext
 
 /**

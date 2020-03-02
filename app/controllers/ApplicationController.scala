@@ -8,12 +8,8 @@ import javax.inject.{Inject, Singleton}
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import com.impactua.bouncer.commons.models.ResponseCode._
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.models.{ResponseCode, User => CommonsUser}
-import com.impactua.bouncer.commons.security.ConfirmationProvider
-import com.impactua.bouncer.commons.utils.JsonHelper
-import com.impactua.bouncer.commons.utils.RichRequest._
+import utils.RichRequest._
+import utils.RichJson._
 import com.mohiva.play.silhouette.api.exceptions.ProviderException
 import com.mohiva.play.silhouette.api.repositories.AuthInfoRepository
 import com.mohiva.play.silhouette.api.services.AuthenticatorService
@@ -27,6 +23,7 @@ import forms.LoginForm.LoginCredentials
 import forms._
 import models.AppEvent._
 import models._
+import ErrorCodes._
 import net.ceedubs.ficus.Ficus._
 import play.api.i18n.{I18nSupport, Messages}
 import play.api.libs.json.Json
@@ -35,6 +32,7 @@ import play.api.Configuration
 import security.{ConfirmationCodeService, CustomJWTAuthenticatorService, WithPermission}
 import services._
 import services.impl.RegistrationFiltersChain
+import utils.JsonHelper
 
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.concurrent.Future
@@ -98,14 +96,14 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
     futureResult.recover {
       case e: IdentityNotFoundException =>
         log.info(s"User: ${credentials.login} not found " + e.getMessage)
-        throw AppException(AUTHORIZATION_FAILED, Messages("invalid.credentials"))
+        throw AppException(ErrorCodes.AUTHORIZATION_FAILED, "Invalid credentials")
       case e: InvalidPasswordException =>
         log.info(s"Password for user: ${credentials.login} not match " + e.getMessage)
-        throw AppException(AUTHORIZATION_FAILED, Messages("invalid.credentials"))
+        throw AppException(ErrorCodes.AUTHORIZATION_FAILED, "Invalid credentials")
       case e: ProviderException =>
         log.info(s"Invalid credentials for user: ${credentials.login} " + e.getMessage)
-        throw AppException(AUTHORIZATION_FAILED, Messages("invalid.credentials"))
-      case e: AppException[_] =>
+        throw AppException(ErrorCodes.AUTHORIZATION_FAILED, "Invalid credentials")
+      case e: AppException =>
         log.info(s"App exception occurred for user: ${credentials.login} " + e.message)
         throw e
     }
@@ -117,7 +115,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
       credentialsProvider.authenticate(Credentials(creds.loginFormatted, pass))
     case None if requirePass =>
       log.warn(s"Password for user ${creds.login} required but not set")
-      throw AppException(INVALID_PASSWORD, "Invalid password")
+      throw AppException(ErrorCodes.AUTHORIZATION_FAILED, "Invalid password")
 
     case None if !requirePass =>
       val credentials = Credentials(creds.loginFormatted, "eternal-pass")
@@ -129,7 +127,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
                                credentials: LoginCredentials)(implicit request: RequestHeader): Future[Result] = optUser match {
     case Some(user) if user.hasFlag(User.FLAG_BLOCKED) =>
       log.warn(s"User ${credentials.login} is blocked")
-      throw AppException(BLOCKED_USER, s"User ${credentials.login} is blocked")
+      throw AppException(ErrorCodes.BLOCKED_USER, s"User ${credentials.login} is blocked")
 
     case Some(user) if credentials.password.nonEmpty && user.flags.contains(User.FLAG_2FACTOR) => // 2-factor authentication, password always required
       val (secret, code) = ConfirmationCode.generatePair(credentials.login, ConfirmationCode.OP_LOGIN, otpLength, None)
@@ -138,7 +136,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
 
       eventBus.publish(OtpGeneration(Some(user.uuidStr), user.email, user.phone, secret, request)) map { _ =>
         log.info("Generated login code for " + user.uuidStr)
-        throw AppException(ResponseCode.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
+        throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
       }
 
     case Some(user) if credentials.password.isEmpty && !user.flags.contains(User.FLAG_2FACTOR) => // passwordless authentication
@@ -147,7 +145,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
 
       eventBus.publish(OtpGeneration(Some(user.uuidStr), user.email, user.phone, secret, request)) map { _ =>
         log.info("Generated passwordless login code for " + user.uuidStr)
-        throw AppException(ResponseCode.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
+        throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
       }
 
     case Some(user)  =>
@@ -166,7 +164,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
 
     case None =>
       log.warn(s"User with login: ${credentials.login} is not found")
-      throw AppException(USER_NOT_FOUND, s"User with login: ${credentials.login} is not found")
+      throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User with login: ${credentials.login} is not found")
   }
 
   def register = silh.UserAwareAction.async(parse.json) { implicit request =>
@@ -189,7 +187,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
 
             eventBus.publish(OtpGeneration(None, data.optEmail, data.optPhone, otp, request)).map {_ =>
               log.info(s"Generated registration code for user login ${data.loginFormatted}")
-              throw AppException(ResponseCode.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
+              throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
             }
           }
         }
@@ -209,7 +207,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
         case Some(code) => sendConfirmed(code, confirmation.code)
         case None =>
           log.info(s"Code $confirmation not found")
-          throw AppException(ResponseCode.CONFIRM_CODE_NOT_FOUND, s"Code for login ${confirmation.login} is not found")
+          throw AppException(ErrorCodes.CONFIRM_CODE_NOT_FOUND, s"Code for login ${confirmation.login} is not found")
       }
   }
 
@@ -269,7 +267,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
         }
       case None =>
         log.info(s"User ${code.login} for code $code not found")
-        throw AppException(ResponseCode.ACCESS_DENIED, s"Access denied for unknown user: ${code.login}")
+        throw AppException(ErrorCodes.ACCESS_DENIED, s"Access denied for unknown user: ${code.login}")
     }
   }
 
@@ -277,7 +275,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
     confirmAction(confirmationCode, action = loginInfo =>
       userService.retrieve(loginInfo).map(_.getOrElse {
           log.info(s"User ${loginInfo.providerKey} not found")
-          throw AppException(ResponseCode.USER_NOT_FOUND, s"User ${loginInfo.providerKey} not found")
+          throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User ${loginInfo.providerKey} not found")
         }
       )
     )
@@ -331,7 +329,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
       userOpt <- codeToUser(codeOpt)
       _       <- if(codeOpt.isEmpty || userOpt.isEmpty) {
                    log.info(s"OTP for user: $login doesn't exist")
-                   throw AppException(ResponseCode.CONFIRM_CODE_NOT_FOUND, s"OTP for user: $login doesn't exist")
+                   throw AppException(ErrorCodes.CONFIRM_CODE_NOT_FOUND, s"OTP for user: $login doesn't exist")
                  } else { Future.unit }
       (otp, newCode) = codeOpt.get.regenerate()
       _ <- eventBus.publish(OtpGeneration(Some(userOpt.get.uuidStr), userOpt.get.email, userOpt.get.phone, otp, request))
@@ -370,10 +368,10 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
             ))
           case None =>
             log.warn(s"Session info ${auth.id} for ${auth.loginInfo} is not found")
-            throw AppException(ResponseCode.ENTITY_NOT_FOUND, "Session not found")
+            throw AppException(ErrorCodes.ENTITY_NOT_FOUND, "Session not found")
         }
       case None =>
-        throw AppException(ResponseCode.ACCESS_DENIED, "Authorization header not specified")
+        throw AppException(ErrorCodes.ACCESS_DENIED, "Authorization header not specified")
     }
   }
 }

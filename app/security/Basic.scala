@@ -1,14 +1,13 @@
 package security
 
 import java.util.Base64
-import javax.inject.Inject
 
+import javax.inject.Inject
 import akka.event.slf4j.Logger
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.models.exceptions.AppException
+import models.{AppException, ErrorCodes}
 import play.api.mvc._
 import play.mvc.Http
-
+import ErrorCodes._
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
@@ -39,16 +38,16 @@ class Basic @Inject()(bodyParser: BodyParsers.Default)(implicit ctx: ExecutionCo
             block(request)
           } else {
             log.warn(s"Wrong basic authorization data on ${request.method} ${request.path} ($login != $basicLogin || $pass != $basicPass)")
-            throw AppException(ResponseCode.AUTHORIZATION_FAILED, MSG_WRONG_AUTH_DATA)
+            throw AppException(ErrorCodes.AUTHORIZATION_FAILED, MSG_WRONG_AUTH_DATA)
           }
 
         case Some(wrongAuth) =>
           log.warn(s"Wrong basic authorization data on ${request.method} ${request.path} with '$wrongAuth'")
-          throw AppException(ResponseCode.ACCESS_DENIED, MSG_WRONG_AUTH_DATA)
+          throw AppException(ErrorCodes.ACCESS_DENIED, MSG_WRONG_AUTH_DATA)
 
         case None =>
           log.info(s"Unauthorized error on ${request.method} ${request.path}")
-          throw AppException(ResponseCode.ACCESS_DENIED, "Authorization required")
+          throw AppException(ErrorCodes.ACCESS_DENIED, "Authorization required")
       }
     }
   }

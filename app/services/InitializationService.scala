@@ -1,6 +1,5 @@
 package services
 
-import com.impactua.bouncer.commons.utils.RandomStringGenerator
 import com.mohiva.play.silhouette.api.util.PasswordHasher
 import javax.inject.Inject
 import models.{ApiTemplate, RolePermissions, ThirdpartyApplication, User}
@@ -8,8 +7,11 @@ import play.api.{Configuration, Logger}
 import play.api.libs.json.Json
 import play.modules.reactivemongo.ReactiveMongoApi
 import reactivemongo.api.indexes.{Index, IndexType}
+
+import reactivemongo.api.indexes.NSIndex
 import reactivemongo.play.json.collection.JSONCollection
 import reactivemongo.play.json._
+import utils.RandomStringGenerator
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
@@ -55,6 +57,8 @@ class InitializationService @Inject()(config: Configuration,
     implicit val userWriter = User.mongoWriter
     val usersCollection = db.map(_.collection[JSONCollection](User.COLLECTION_NAME))
 
+    /*
+
     usersCollection.map(_.indexesManager) map { manager =>
       manager.ensure(Index(Seq("email" -> IndexType.Ascending), background = true, unique = true, sparse = true)).recover {
         case ex: Exception => log.warn("Error while creating email index: ", ex)
@@ -63,7 +67,7 @@ class InitializationService @Inject()(config: Configuration,
         case ex: Exception => log.warn("Error while creating phone index: ", ex)
       }
     }
-
+    */
     val password = RandomStringGenerator.generateSecret(32)
 
     val admin = User(

@@ -5,19 +5,19 @@ import java.util.concurrent.ConcurrentHashMap
 import akka.actor.ActorSystem
 import com.google.inject.{Inject, Singleton}
 import com.iheart.playSwagger.SwaggerSpecGenerator
-import com.impactua.bouncer.commons.utils.Logging
-import com.impactua.bouncer.commons.utils.RichJson.RichJsonObject
 import events.{EventsStream, ServiceDiscovered, ServiceLost, ServicesListUpdate}
 import models.Service
 import play.api.libs.json._
 import play.api.libs.ws.WSClient
 import play.api.{Configuration, Environment, Mode}
 import services.RoutingService.ServiceDescriptor
+import utils.Logging
 import utils.ProxyRoutesParser._
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
+import utils.RichJson._
 
 /**
   * @author faiaz

@@ -1,9 +1,8 @@
 package forms
 
-import com.impactua.bouncer.commons.utils.FormConstraints._
 import play.api.data.Form
 import play.api.data.Forms._
-
+import UserForm._
 /**
   *
   * @author Yaroslav Derman <yaroslav.derman@gmail.com>

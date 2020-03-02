@@ -2,13 +2,10 @@ package services.impl
 
 //scalastyle:off magic.number
 
+import java.security.SecureRandom
+
 import akka.actor.ActorSystem
 import com.fotolog.redis.RedisClient
-import com.impactua.bouncer.commons.models.ResponseCode._
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.models.{ResponseCode, User => CommonUser}
-import com.impactua.bouncer.commons.utils.RandomStringGenerator
-import com.impactua.bouncer.commons.utils.RichRequest._
 import com.mohiva.play.silhouette.api.LoginInfo
 import com.mohiva.play.silhouette.api.util.PasswordHasher
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
@@ -16,7 +13,8 @@ import events.{EventsStream, Signup}
 import forms.RegisterForm
 import javax.inject.Inject
 import models.RegistrationData._
-import models.{OpenRegistrationData, RegistrationData, User}
+import models.{AppException, ErrorCodes, OpenRegistrationData, RegistrationData, User}
+import org.slf4j.LoggerFactory
 import play.api.Configuration
 import play.api.libs.json.Json
 import play.api.mvc.{Request, RequestHeader}
@@ -34,6 +32,8 @@ class OpenRegistrationService @Inject()(config: Configuration,
                                         val userService: UserIdentityService
                                        )(implicit ctx: ExecutionContext, system: ActorSystem) extends RegistrationService {
 
+  val log = LoggerFactory.getLogger(getClass)
+
   val redis = RedisClient(config.get[String]("redis.host"))
 
   final val emailCode = "emailCode:"
@@ -48,19 +48,26 @@ class OpenRegistrationService @Inject()(config: Configuration,
   log.info("Open registration schema enabled")
 
   override def userRegistrationRequest(req: Request[_]): Future[RegistrationData] = {
-    val data = req.asForm(RegisterForm.openForm)
+    val data = RegisterForm.openForm.bindFromRequest()(req).fold(
+      error => throw AppException(ErrorCodes.INVALID_REQUEST, error.toString),
+      data => data
+    )
 
     if (requirePass && data.password.isEmpty) {
       log.warn("Password required but not set")
-      throw AppException(INVALID_PASSWORD, "Invalid password")
+      throw AppException(ErrorCodes.INVALID_REQUEST, "Invalid password")
     }
 
     userService.retrieve(LoginInfo(CredentialsProvider.ID, data.loginFormatted)).flatMap {
       case Some(_) =>
-        throw AppException(ResponseCode.ALREADY_EXISTS, "User with such login already exists")
+        throw AppException(ErrorCodes.ALREADY_EXISTS, "User with such login already exists")
 
       case None =>
-        val passwordInfo = passwordHasher.hash(data.password.getOrElse(RandomStringGenerator.generateSecret(10)))
+        val passwordInfo = passwordHasher.hash(data.password.getOrElse {
+          val random = new Array[Byte](50)
+          new SecureRandom().nextBytes(random)
+          new String(random)
+        })
 
         val (key, ttl) = if (data.loginFormatted.contains("@")) emailCode -> emailTtl else phoneCode -> phoneTtl
 
@@ -70,7 +77,7 @@ class OpenRegistrationService @Inject()(config: Configuration,
           case true => openData
           case false =>
             log.warn("Can't write to redis. Probably this is try to re registering unconfirmed user")
-            throw AppException(ResponseCode.DUPLICATE_REQUEST, "Probably this is a try to re-register unconfirmed user. Use resend-otp endpoint instead")
+            throw AppException(ErrorCodes.DUPLICATE_REQUEST, "Probably this is a try to re-register unconfirmed user. Use resend-otp endpoint instead")
         }
     }
   }
@@ -115,5 +122,4 @@ class OpenRegistrationService @Inject()(config: Configuration,
       case None => throw new RuntimeException("Query not exist for email ")
     }
   }
-
 }

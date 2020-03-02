@@ -2,12 +2,9 @@ package services
 
 import javax.inject.{Inject, Singleton}
 import akka.http.scaladsl.util.FastFuture
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.utils.Logging
 import forms.BranchForm.CreateBranch
-import models.{Branch, User}
-import play.api.Configuration
+import models.{AppException, Branch, ErrorCodes, User}
+import play.api.{Configuration, Logging}
 import play.api.libs.json._
 import play.modules.reactivemongo.ReactiveMongoApi
 import reactivemongo.api.indexes.{Index, IndexType}
@@ -15,7 +12,7 @@ import reactivemongo.api.{Cursor, ReadPreference}
 import reactivemongo.play.json._
 import reactivemongo.core.errors.DatabaseException
 import reactivemongo.play.json.collection.JSONCollection
-
+import ErrorCodes._
 import scala.concurrent.{ExecutionContext, Future}
 
 trait BranchesService {
@@ -34,9 +31,34 @@ class MongoBranchesService @Inject()(conf: Configuration,
 
   private val MAX_TRIES = 5
 
+  /* TODO: ensure indexes
   branches.map(_.indexesManager) map { manager =>
-    manager.ensure(Index(Seq("hierarchy" -> IndexType.Ascending), background = true, unique = false, sparse = true))
-  }
+    val bsonIndex = Index(JSONSerializationPack)(
+      key = Seq("hierarchy" -> IndexType.Ascending),
+      name = Some("hierarchy_idx"),
+      unique = false,
+      background = true,
+      dropDups = false,
+      sparse = true,
+      expireAfterSeconds = None,
+      storageEngine = None,
+      weights = None,
+      defaultLanguage = None,
+      languageOverride = None,
+      textIndexVersion = None,
+      sphereIndexVersion = None,
+      bits = None,
+      min = None,
+      max = None,
+      bucketSize = None,
+      collation = None,
+      wildcardProjection = None,
+      version = None,
+      partialFilter = None,
+      options = BSONDocument.empty)
+
+    manager.ensure(bsonIndex)
+  } */
 
   implicit val format = Branch.mongoFormat
 
@@ -83,7 +105,7 @@ class MongoBranchesService @Inject()(conf: Configuration,
             uCollection.update(selector, pull, multi = true)
           }
           oldBranch -> updateBranch
-        case _ => throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Branch $id isn't found")
+        case _ => throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Branch $id isn't found")
       }
     }
   }
@@ -113,10 +135,10 @@ class MongoBranchesService @Inject()(conf: Configuration,
       assignedUsers <- uCollection.count(Some(Json.obj("hierarchy.0" -> id)))
       childBranches <- bCollection.count(Some(Json.obj("hierarchy.1" -> id)))
     } yield {
-      if (childBranches > 0) { throw AppException(ResponseCode.NON_EMPTY_SET, s"Branch $id containing at least one child branch!") }
-      else if (assignedUsers > 0) { throw AppException(ResponseCode.NON_EMPTY_SET, s"Branch $id containing at least one user!") }
+      if (childBranches > 0) { throw AppException(ErrorCodes.NON_EMPTY_SET, s"Branch $id containing at least one child branch!") }
+      else if (assignedUsers > 0) { throw AppException(ErrorCodes.NON_EMPTY_SET, s"Branch $id containing at least one user!") }
       else { bCollection.findAndRemove(byId(id)).map(_.result[Branch]).map (
-        _.getOrElse(throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Branch $id isn't found"))
+        _.getOrElse(throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Branch $id isn't found"))
       ) }
     }
     futureResult.flatten
@@ -135,7 +157,7 @@ class MongoBranchesService @Inject()(conf: Configuration,
   }
 
   private def getOrFail(id: String): Future[Branch] = get(id).map(_.getOrElse {
-    throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Branch $id is not found")
+    throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Branch $id is not found")
   })
 
   private def createSafe(branch: Branch, tries: Int): Future[Branch] = {

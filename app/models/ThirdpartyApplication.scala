@@ -1,11 +1,10 @@
 package models
 
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.models.exceptions.AppException
 import play.api.libs.functional.syntax._
 import play.api.libs.json.{JsPath, OWrites, Reads}
 import services.CodeGenerator
 import utils.UuidGenerator
+import ErrorCodes._
 
 /**
   * Describes new Thirdarty application that can access user data via OAuth2 tokens.
@@ -46,7 +45,7 @@ case class ThirdpartyApplication(
 
   def checkSecret(otherSecret: String): Unit = {
     if (secret != otherSecret) {
-      throw AppException(ResponseCode.INVALID_APPLICATION_SECRET, s"Application secret don't match")
+      throw AppException(ErrorCodes.INVALID_REQUEST, s"Application secret don't match")
     }
   }
 

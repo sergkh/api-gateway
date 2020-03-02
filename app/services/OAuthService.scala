@@ -4,9 +4,6 @@ import java.util.Base64
 
 import akka.actor.ActorSystem
 import javax.inject.{Inject, Singleton}
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.utils.{JsonHelper, Logging}
 import com.mohiva.play.silhouette.api.Authenticator.Implicits._
 import com.mohiva.play.silhouette.api.{EventBus, LoginInfo}
 import com.mohiva.play.silhouette.api.repositories.AuthenticatorRepository
@@ -30,11 +27,12 @@ import reactivemongo.play.json.collection.JSONCollection
 import security.CustomJWTAuthenticatorService
 import utils.Responses._
 import utils.Settings._
-import utils.MongoErrorHandler
+import utils.{JsonHelper, Logging, MongoErrorHandler}
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
+import ErrorCodes._
 
 /**
   * @author Yaroslav Derman <yaroslav.derman@gmail.com>.
@@ -56,7 +54,7 @@ class OAuthService @Inject()(userService: UserService,
 
   override def update(authenticator: JWTAuthenticator): Future[JWTAuthenticator] = {
     tokensCollection.flatMap(_.findAndUpdate(byId(authenticator.id), authenticator, true).map(
-      _.result[JWTAuthenticator].getOrElse(throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Authenticator ${authenticator.id} not found in mongo"))
+      _.result[JWTAuthenticator].getOrElse(throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Authenticator ${authenticator.id} not found in mongo"))
     ))
   }
 
@@ -101,7 +99,7 @@ class OAuthService @Inject()(userService: UserService,
           (ETERNAL_TOKEN_TTL, LoginInfo(CredentialsProvider.ID, user.uuidStr))
 
         case unknown: Any =>
-          throw AppException(ResponseCode.INVALID_REQUEST, "Unknown response type: " + unknown)
+          throw AppException(ErrorCodes.INVALID_REQUEST, "Unknown response type: " + unknown)
       }
 
       oauthAuthenticator(authService, loginInfo, tokenClaims, ttl).flatMap { authenticator =>
@@ -127,7 +125,7 @@ class OAuthService @Inject()(userService: UserService,
             case _: Exception =>
               authenticatorService.discard(jwtAuthenticator, Results.Forbidden)
               log.info("Invalid token claims for token: " + json)
-              throw AppException(ResponseCode.INVALID_TOKEN_CLAIMS, "Invalid external data for token ")
+              throw AppException(ErrorCodes.INVALID_TOKEN_CLAIMS, "Invalid external data for token ")
           }
 
           val ttl = ETERNAL_TOKEN_TTL
@@ -156,12 +154,12 @@ class OAuthService @Inject()(userService: UserService,
 
         case None =>
           log.info("Oauth token doesn't have required claims")
-          throw AppException(ResponseCode.ENTITY_NOT_FOUND, "Temporary token claims not found")
+          throw AppException(ErrorCodes.ENTITY_NOT_FOUND, "Temporary token claims not found")
       }
 
       case None =>
         log.info(s"Temporary oauth token $code doesn't found")
-        throw AppException(ResponseCode.ENTITY_NOT_FOUND, "Temporary token not found")
+        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, "Temporary token not found")
     }
   }
 
@@ -207,11 +205,11 @@ class OAuthService @Inject()(userService: UserService,
   def getApp4user(appId: Long, userId: Long): Future[ThirdpartyApplication] = {
     val selector = Json.obj("_id" -> appId, "userId" -> userId)
     appsCollection.flatMap(_.find(selector).one[ThirdpartyApplication])
-      .map(_.getOrElse(throw AppException(ResponseCode.APPLICATION_NOT_FOUND, s"Application $appId for user $userId not found")))
+      .map(_.getOrElse(throw AppException(ErrorCodes.APPLICATION_NOT_FOUND, s"Application $appId for user $userId not found")))
   }
 
   def getApp(appId: Long): Future[ThirdpartyApplication] = appsCollection.flatMap(_.find(Json.obj("_id" -> appId)).one[ThirdpartyApplication])
-    .map(_.getOrElse(throw AppException(ResponseCode.APPLICATION_NOT_FOUND, s"Application $appId not found")))
+    .map(_.getOrElse(throw AppException(ErrorCodes.APPLICATION_NOT_FOUND, s"Application $appId not found")))
 
   def getApps(userId: Long, limit: Int, offset: Int): Future[List[ThirdpartyApplication]] = {
     val criteria = Json.obj("userId" -> userId)
@@ -255,7 +253,7 @@ class OAuthService @Inject()(userService: UserService,
 
   private def findAndUpdate(selector: JsObject, update: JsObject, id: Long): Future[ThirdpartyApplication] = {
     appsCollection.flatMap(_.findAndUpdate(selector, update, true).map(
-      _.result[ThirdpartyApplication].getOrElse(throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Thirdparty application $id not found"))
+      _.result[ThirdpartyApplication].getOrElse(throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Thirdparty application $id not found"))
     ))
   }
 

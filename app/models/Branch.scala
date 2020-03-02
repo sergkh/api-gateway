@@ -1,8 +1,8 @@
 package models
 
-import com.impactua.bouncer.commons.utils.RandomStringGenerator
 import play.api.libs.json._
 import play.api.libs.functional.syntax._
+import utils.RandomStringGenerator
 
 case class Branch(name: String,
                   createdBy: Long,

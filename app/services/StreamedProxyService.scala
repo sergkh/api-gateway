@@ -4,14 +4,14 @@ import javax.inject.{Inject, Singleton}
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import com.impactua.bouncer.commons.utils.Logging
 import models.User
-import pdi.jwt.{Jwt, JwtAlgorithm}
 import play.api.Configuration
 import play.api.http.{HeaderNames, HttpEntity}
 import play.api.libs.json.Json
 import play.api.libs.ws._
 import play.api.mvc._
+import utils.Logging
+import pdi.jwt.{Jwt, JwtAlgorithm}
 
 import scala.concurrent.{ExecutionContext, Future}
 

@@ -222,9 +222,6 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
     new CredentialsProvider(authInfoRepository, passwordHasherRegistry)
   }
 
-
-
-
   @Provides
   def provideOAuth1TokenSecretProvider(configuration: Configuration,
                                        @Named("authenticator-signer") cookieSigner: Signer,
@@ -237,7 +234,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
   @Provides
   @Named("auth2-cookie-signer")
   def provideOAuth2StageCookieSigner(configuration: Configuration): Signer = {
-    val config = configuration.underlying.as[JcaSignerSettings]("silhouette.oauth2StateProvider.cookie.signer")
+    val config = configuration.underlying.as[JcaSignerSettings]("silhouette.authenticator.signer")
     new JcaSigner(config)
   }
 

@@ -7,13 +7,15 @@ import play.api.libs.json.JsValue
 import services.RegistrationFilter
 import java.util.{Set => JSet}
 
-import com.impactua.bouncer.commons.utils.Logging
+import org.slf4j.LoggerFactory
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.collection.JavaConverters._
 
 @Singleton
-class RegistrationFiltersChain @Inject() (filtersSet: JSet[RegistrationFilter], config: Configuration)(implicit ec: ExecutionContext) extends Logging{
+class RegistrationFiltersChain @Inject() (filtersSet: JSet[RegistrationFilter], config: Configuration)(implicit ec: ExecutionContext) {
+
+  val log = LoggerFactory.getLogger(getClass)
 
   val filters = filtersSet.asScala.toSeq
 

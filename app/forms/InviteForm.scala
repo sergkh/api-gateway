@@ -1,6 +1,5 @@
 package forms
 
-import com.impactua.bouncer.commons.utils.FormConstraints.emailAddress
 import play.api.data.Form
 import play.api.data.Forms.{mapping, nonEmptyText}
 
@@ -13,8 +12,8 @@ object InviteForm {
 
   val form = Form(
     mapping(
-      "email" -> nonEmptyText.verifying(emailAddress),
-      "url" ->nonEmptyText
+      "email" -> UserForm.email,
+      "url" -> nonEmptyText
     )(Invite.apply)(Invite.unapply)
   )
 

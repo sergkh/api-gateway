@@ -1,11 +1,9 @@
 package models
 
 import java.security.BasicPermission
-
-import com.impactua.bouncer.commons.utils.JsonHelper
-import com.impactua.bouncer.commons.models.{User => CommonsUser}
 import play.api.libs.functional.syntax._
 import play.api.libs.json.{JsObject, JsPath, OWrites, Reads}
+import utils.JsonHelper
 
 case class UserPermission(name: String) extends BasicPermission(name.toUpperCase)
 

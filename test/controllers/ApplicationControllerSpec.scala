@@ -10,14 +10,10 @@ import modules.FakeModule
 import modules.FakeModule._
 import net.codingwell.scalaguice.ScalaModule
 import org.mockito.ArgumentMatchers._
-import org.mockito.Mockito.when
-import org.mockito.invocation.InvocationOnMock
-import org.mockito.stubbing.Answer
-import org.scalatest.mockito.MockitoSugar
+import org.mockito.MockitoSugar
 import org.scalatestplus.play.PlaySpec
 import org.scalatestplus.play.guice.GuiceOneAppPerSuite
 import play.api.inject.guice.GuiceApplicationBuilder
-import play.api.libs.json.Json
 import play.api.mvc.Results
 import play.api.test.Helpers._
 import play.api.test._
@@ -34,13 +30,9 @@ class ApplicationControllerSpec extends PlaySpec with GuiceOneAppPerSuite with R
   private val userServiceMock: UserService = {
     val m = mock[UserService]
 
-    when(m.updateFlags(any[User]()))
-      .thenAnswer(new Answer[Future[User]] {
-        override def answer(invocation: InvocationOnMock): Future[User] =
-          Future.successful(
-            invocation.getArguments.head.asInstanceOf[User]
-          )
-      })
+    when(m.updateFlags(any[User]())) thenAnswer { (u: User) =>
+      Future.successful(u)
+    }
 
     m
   }

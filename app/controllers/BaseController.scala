@@ -2,7 +2,6 @@ package controllers
 
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import com.impactua.bouncer.commons.utils.Logging
 import com.mohiva.play.silhouette.api.actions.SecuredRequest
 import models.JwtEnv
 import play.api.http.{ContentTypeOf, ContentTypes, Writeable}
@@ -12,11 +11,14 @@ import play.api.mvc._
 import services.StreamedProxyRequest
 
 import scala.language.implicitConversions
+import play.api.Logger
 
 /**
   * Created by sergeykhruschak on 12/9/15.
   */
-trait BaseController extends Logging with InjectedController {
+trait BaseController extends InjectedController {
+
+  val log = Logger(this.getClass.getName)
 
   implicit def contentTypeOfSeqJsValue(implicit codec: Codec): ContentTypeOf[Seq[JsValue]] = {
     ContentTypeOf[Seq[JsValue]](Some(ContentTypes.JSON))

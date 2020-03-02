@@ -1,10 +1,9 @@
 package module
 
 import com.google.inject.multibindings.Multibinder
-import com.google.inject.name.Names
 import net.codingwell.scalaguice.ScalaModule
 import play.api.{Configuration, Environment}
-import services.impl.{OpenRegistrationService, ReferralRegistrationService, RegistrationFiltersChain}
+import services.impl.{OpenRegistrationService, RegistrationFiltersChain}
 import services.{ExtendedUserInfoService, _}
 
 /**
@@ -26,12 +25,7 @@ class RegistrationModule(environment: Environment,
     }
 
     bind[RegistrationFiltersChain].asEagerSingleton()
-
-    configuration.getOptional[String]("registration.schema").getOrElse("open") match {
-      case "open" => bind[RegistrationService].to[OpenRegistrationService].asEagerSingleton()
-      case "referral" => bind[RegistrationService].to[ReferralRegistrationService].asEagerSingleton()
-      case _ => bind[RegistrationService].to[OpenRegistrationService].asEagerSingleton()
-    }
+    bind[RegistrationService].to[OpenRegistrationService].asEagerSingleton()
   }
 
 

@@ -1,6 +1,5 @@
 package helpers
 
-import com.impactua.bouncer.commons.models.{User => CommonsUser}
 import models.User
 import utils.UuidGenerator
 

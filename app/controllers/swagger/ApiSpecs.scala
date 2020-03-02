@@ -3,16 +3,14 @@ package controllers.swagger
 //scalastyle:off public.methods.have.type
 
 import javax.inject.{Inject, Singleton}
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.utils.Logging
 import controllers.Assets
 import models.ApiTemplate
-import play.api.cache.{NamedCache, SyncCacheApi}
-import play.api.libs.json.{JsObject, JsValue}
+import play.api.libs.json.JsObject
 import play.api.libs.ws.WSClient
 import play.api.mvc.{BaseController, ControllerComponents}
 import play.api.{Configuration, Environment}
 import services.{ApiTemplateService, RoutingService}
+import utils.Logging
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._

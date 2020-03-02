@@ -8,11 +8,6 @@ import akka.actor.ActorSystem
 import akka.util.ByteString
 import javax.inject.{Inject, Singleton}
 import akka.http.scaladsl.util.FastFuture
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.security.ConfirmationProvider
-import com.impactua.bouncer.commons.utils.RichJson._
-import com.impactua.bouncer.commons.utils.RichRequest._
 import utils.StringHelpers._
 import com.mohiva.play.silhouette.api.actions.SecuredRequest
 import com.mohiva.play.silhouette.api.util.{PasswordHasher, PasswordInfo}
@@ -33,14 +28,17 @@ import play.api.libs.json._
 import play.api.mvc.{RequestHeader, Result}
 import reactivemongo.play.json._
 import security.{ConfirmationCodeService, WithAnyPermission, WithUser}
-import services.{BranchesService, ExtendedUserInfoService, RestrictionService, UserService}
+import services.{BranchesService, ConfirmationProvider, ExtendedUserInfoService, UserService}
 import utils.Responses._
-import gnieh.diffson._
-import gnieh.diffson.playJson._
-import com.impactua.bouncer.commons.utils.FutureUtil._
+import diffson.playJson._
+import diffson.jsonpatch._
+import diffson.jsonpatch.lcsdiff._
+import utils.RichRequest._
+import utils.RichJson._
+import ErrorCodes._
 
 import scala.concurrent.{ExecutionContext, Future}
-
+import utils.FutureUtils._
 /**
   * Created by yaroslav on 29/11/15.
   */
@@ -55,8 +53,7 @@ class UserController @Inject()(
                                 confirmationService: ConfirmationCodeService,
                                 confirmationValidator: ConfirmationProvider,
                                 extendedInfoService: ExtendedUserInfoService,
-                                branches: BranchesService,
-                                restrictions: RestrictionService
+                                branches: BranchesService
                               )(implicit exec: ExecutionContext, system: ActorSystem)
   extends BaseController {
 
@@ -102,7 +99,7 @@ class UserController @Inject()(
       case Some(user) => Future.successful(user)
       case None => data.login match {
         case Some(login) => userService.getByAnyId(login)
-        case None => throw AppException(ResponseCode.USER_NOT_FOUND, s"User not found")
+        case None => throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User not found")
       }
     }
 
@@ -128,7 +125,7 @@ class UserController @Inject()(
             }
           } else {
             log.info(s"User $user try to change password but passwords don't match")
-            throw AppException(ResponseCode.ACCESS_DENIED, s"Old password is wrong")
+            throw AppException(ErrorCodes.ACCESS_DENIED, s"Old password is wrong")
           }
         case None if data.login.isEmpty =>
           passDao.update(loginInfo, PasswordInfo(BCryptPasswordHasher.ID, updUser.passHash)).flatMap { _ =>
@@ -140,7 +137,7 @@ class UserController @Inject()(
 
         case other =>
           log.info(s"Password info doens't match request: $other for pass change")
-          throw AppException(ResponseCode.USER_NOT_FOUND, s"User ${user.identifier} not found")
+          throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User ${user.identifier} not found")
       }
     }
   }
@@ -181,7 +178,7 @@ class UserController @Inject()(
           NoContent
         }
       case None =>
-        throw AppException(ResponseCode.USER_NOT_FOUND, s"User $login not found")
+        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User $login not found")
     }
   }
 
@@ -207,7 +204,7 @@ class UserController @Inject()(
               case Some(u) =>
                 if (!u.identifier.equals(reqUserId)) {
                   log.info(s"Code $confirmCode not found for login $reqLogin")
-                  throw AppException(ResponseCode.USER_NOT_FOUND, s"User ${code.login} not found")
+                  throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User ${code.login} not found")
                 } else {
                   val updUser = u.copy(passHash = passwordHasher.hash(data.password).password)
 
@@ -222,12 +219,12 @@ class UserController @Inject()(
                 }
               case _ =>
                 log.info(s"User ${code.login} doesn't found")
-                throw AppException(ResponseCode.USER_NOT_FOUND, s"User ${code.login} not found")
+                throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User ${code.login} not found")
             }
           }
         case _ =>
           log.info(s"Code $confirmCode not found")
-          throw AppException(ResponseCode.CONFIRM_CODE_NOT_FOUND, s"Code $confirmCode not found")
+          throw AppException(ErrorCodes.CONFIRM_CODE_NOT_FOUND, s"Code $confirmCode not found")
       }
     }
   }
@@ -270,7 +267,7 @@ class UserController @Inject()(
 
       if (user.email.isEmpty && user.phone.isEmpty) {
         log.info("Nor phone or email specified for user " + user.uuid)
-        throw AppException(ResponseCode.IDENTIFIER_REQUIRED, "Nor phone nor email specified")
+        throw AppException(ErrorCodes.IDENTIFIER_REQUIRED, "Nor phone nor email specified")
       }
 
       for {
@@ -330,7 +327,7 @@ class UserController @Inject()(
   def checkExistence(key: String) = Action.async { implicit request =>
     userService.getByAnyIdOpt(key) map { _.map(_ => NoContent).getOrElse {
         log.info(s"User with identifier:$key doesn't exist")
-        throw AppException(ResponseCode.USER_NOT_FOUND, s"User with identifier:`$key` doesn't exist")
+        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User with identifier:`$key` doesn't exist")
       }
     }
   }
@@ -381,7 +378,7 @@ class UserController @Inject()(
 
       if (update.isEmpty) {
         log.info(s"Update object contain only service fields: ${ExtendedUser.serviceFields}")
-        throw AppException(ResponseCode.INVALID_REQUEST, "Nothing to update")
+        throw AppException(ErrorCodes.INVALID_REQUEST, "Nothing to update")
       }
 
       val updateObj = Json.obj("$set" -> JsObject(update))
@@ -392,7 +389,7 @@ class UserController @Inject()(
           Ok(info)
         case None =>
           log.warn(s"Extended info for user ${user.uuidStr} not found")
-          throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Extended info for user ${user.uuidStr} not found")
+          throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Extended info for user ${user.uuidStr} not found")
       }
     }
   }
@@ -426,34 +423,34 @@ class UserController @Inject()(
 
       case None =>
         log.warn(s"Extended info for user ${user.uuidStr} not found")
-        throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Extended info for user ${user.uuidStr} not found")
+        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Extended info for user ${user.uuidStr} not found")
     }
   }
 
   private def validateUpdate(update: User, oldUser: User, editor: User): Future[Unit] = {
     for {
       _ <- conditionalFail(oldUser.version != update.version,
-                           ResponseCode.CONCURRENT_MODIFICATION,
+                  ErrorCodes.CONCURRENT_MODIFICATION,
                   s"Concurrent modification: current user version is ${oldUser.version} while provided one is ${oldUser.version}"
       )
       _ <- conditional(update.email.isDefined && update.email != oldUser.email,
-        restrictions.validateLogin(update.email) << userService.getByAnyIdOpt(update.email.get).map { oldOpt =>
-          conditionalFail(oldOpt.exists(_.uuid != oldUser.uuid), ResponseCode.ALREADY_EXISTS, "Email already used by another user")
+        userService.getByAnyIdOpt(update.email.get).map { oldOpt =>
+          conditionalFail(oldOpt.exists(_.uuid != oldUser.uuid), ErrorCodes.ALREADY_EXISTS, "Email already used by another user")
         })
 
       _ <- conditional(update.phone.isDefined && update.phone != oldUser.phone,
-        restrictions.validateLogin(update.phone) << userService.getByAnyIdOpt(update.phone.get).map { oldOpt =>
-          conditionalFail(oldOpt.exists(_.uuid != oldUser.uuid), ResponseCode.ALREADY_EXISTS, "Phone already used by another user")
+        userService.getByAnyIdOpt(update.phone.get).map { oldOpt =>
+          conditionalFail(oldOpt.exists(_.uuid != oldUser.uuid), ErrorCodes.ALREADY_EXISTS, "Phone already used by another user")
         })
     } yield {
       val flagsChanged = update.flags.toSet != oldUser.flags.toSet
 
       if (flagsChanged && !editor.hasPermission("users:edit")) {
-        throw AppException(ResponseCode.ACCESS_DENIED, "User cannot change admin flags")
+        throw AppException(ErrorCodes.ACCESS_DENIED, "User cannot change admin flags")
       }
 
       if ((update.roles.sorted != oldUser.roles) && !editor.hasPermission("users:edit")) {
-        throw AppException(ResponseCode.ACCESS_DENIED, "User cannot change roles")
+        throw AppException(ErrorCodes.ACCESS_DENIED, "User cannot change roles")
       }
     }
   }
@@ -478,7 +475,7 @@ class UserController @Inject()(
 
       eventBus.publish(OtpGeneration(Some(newUser.uuidStr), None, newUser.phone, otp, request)) map { _ =>
         log.info(s"Sending phone confirmation code to ${newUser.uuid}")
-        throw AppException(ResponseCode.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
+        throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
       }
     } else if (editUser.email != newUser.email && newUser.email.isDefined && !confirmationValidator.verifyConfirmed(request)) {
       val (otp, code) = ConfirmationCode.generatePair(
@@ -491,7 +488,7 @@ class UserController @Inject()(
 
       eventBus.publish(OtpGeneration(Some(newUser.uuidStr), newUser.email, None, otp, request)) map { _ =>
         log.info(s"Sending email confirmation code to ${newUser.uuid}")
-        throw AppException(ResponseCode.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
+        throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
       }
     } else {
       Future.unit
@@ -507,18 +504,18 @@ class UserController @Inject()(
           case Some(branch) =>
             newUser.copy(hierarchy = branch.hierarchy)
           case None =>
-            throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Branch $branchId is not found")
+            throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Branch $branchId is not found")
         }
       case true =>
         FastFuture.successful(newUser)
       case false =>
-        throw AppException(ResponseCode.ACCESS_DENIED, s"Denied access to branch: $branchId")
+        throw AppException(ErrorCodes.ACCESS_DENIED, s"Denied access to branch: $branchId")
     }
   }
 
   private def validateBranchAccess(branchId: Option[String], user: User): Future[Unit] = {
     branches.isAuthorized(branchId.getOrElse(Branch.ROOT), user) map {
-      case false => throw AppException(ResponseCode.ACCESS_DENIED, s"Denied access to branch: $branchId")
+      case false => throw AppException(ErrorCodes.ACCESS_DENIED, s"Denied access to branch: $branchId")
       case true => ()
     }
   }

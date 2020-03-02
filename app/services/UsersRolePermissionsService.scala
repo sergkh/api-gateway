@@ -1,7 +1,6 @@
 package services
 
 import com.google.inject.Inject
-import com.impactua.bouncer.commons.utils.Logging
 import models.RolePermissions
 import play.api.libs.json._
 import play.modules.reactivemongo.ReactiveMongoApi
@@ -9,6 +8,7 @@ import reactivemongo.api.commands.UpdateWriteResult
 import reactivemongo.play.json._
 import reactivemongo.api.{Cursor, ReadPreference}
 import reactivemongo.play.json.collection.JSONCollection
+import utils.Logging
 import utils.MongoErrorHandler._
 
 import scala.concurrent.{ExecutionContext, Future}

@@ -5,6 +5,7 @@ import javax.inject.Inject
 import models.AppEvent._
 import models.Session
 import play.api.libs.json.{Json, OFormat}
+import play.api.mvc.RequestHeader
 import play.modules.reactivemongo.ReactiveMongoApi
 import reactivemongo.play.json._
 import reactivemongo.play.json.collection.JSONCollection
@@ -77,13 +78,28 @@ class MongoSessionsService @Inject()(reactiveMongoApi: ReactiveMongoApi)
 trait SessionEventProcessor
 
 case class EventBusSessionEventProcessor @Inject() (sessionsService: SessionsService, eventsStream: EventsStream) extends SessionEventProcessor {
-  import com.impactua.bouncer.commons.utils.RichRequest._
+  val HTTP_IP_HEADERS = Seq(
+    "X-Forwarded-For", "X-Real-IP", "Proxy-Client-IP", "HTTP_CLIENT_IP", "HTTP_X_FORWARDED_FOR", "WL-Proxy-Client-IP"
+  )
 
   eventsStream.subscribe[Login](login => sessionsService.store(
-    Session(login.sessionId, login.userId.toLong, login.expirationTime, login.token, login.request.clientAgent, login.request.clientIp)
+    Session(login.sessionId, login.userId.toLong, login.expirationTime, login.token, clientAgent(login.request), clientIp(login.request))
   ))
 
   eventsStream.subscribe[Logout](logout => sessionsService.finish(logout.sessionId))
+
+  def clientIp(r: RequestHeader): String = {
+    val header = HTTP_IP_HEADERS.find(name => r.headers.get(name).exists(h => h.nonEmpty && !h.equalsIgnoreCase("unknown")))
+
+    header match {
+      case Some(name) =>
+        val header = r.headers(name)
+        if (header.contains(",")) header.split(",").head else header
+      case None       => r.remoteAddress
+    }
+  }
+
+  def clientAgent(r: RequestHeader): String = r.headers.get("User-Agent").getOrElse("not set")
 }
 
 object SessionJson {

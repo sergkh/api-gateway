@@ -1,10 +1,7 @@
 package services
 
 import javax.inject.Inject
-
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import models.{ApiTemplate, QueryParams}
+import models.{ApiTemplate, AppException, ErrorCodes, QueryParams}
 import play.api.Logger
 import play.api.libs.json.{JsObject, Json}
 import play.modules.reactivemongo.ReactiveMongoApi
@@ -12,7 +9,7 @@ import reactivemongo.api.{Cursor, QueryOpts, ReadPreference}
 import reactivemongo.play.json._
 import reactivemongo.play.json.collection.JSONCollection
 import utils.MongoErrorHandler
-
+import ErrorCodes._
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
@@ -32,7 +29,7 @@ class ApiTemplateService @Inject()(reactiveMongoApi: ReactiveMongoApi)(implicit 
   def retrieve(name: String): Future[ApiTemplate] = {
     apiCollection.flatMap(
       _.find(Json.obj(id -> name)).one[ApiTemplate]
-        .map(_.getOrElse(throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Api specs '$name' not found in db")))
+        .map(_.getOrElse(throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Api specs '$name' not found in db")))
     )
   }
 
@@ -46,14 +43,14 @@ class ApiTemplateService @Inject()(reactiveMongoApi: ReactiveMongoApi)(implicit 
   def update(name: String, newTemplate: ApiTemplate): Future[ApiTemplate] = {
     apiCollection.flatMap(
       _.findAndUpdate(Json.obj(id -> name), newTemplate, true)
-        .map(res => res.result[ApiTemplate].getOrElse(throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Api specs '$name' not found in db")))
+        .map(res => res.result[ApiTemplate].getOrElse(throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Api specs '$name' not found in db")))
     )
   }
 
   def remove(name: String): Future[ApiTemplate] = {
     apiCollection.flatMap(
       _.findAndRemove(Json.obj(id -> name))
-        .map(res => res.result[ApiTemplate].getOrElse(throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Api specs '$name' not found in db")))
+        .map(res => res.result[ApiTemplate].getOrElse(throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Api specs '$name' not found in db")))
     )
   }
 

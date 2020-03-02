@@ -1,20 +1,19 @@
 package security
 
 import java.util.Base64
-import javax.inject.Inject
 
+import javax.inject.Inject
 import akka.event.slf4j.Logger
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.models.ResponseCode
 import utils.StringHelpers._
-import models.ThirdpartyApplication
+import models.{AppException, ErrorCodes, ThirdpartyApplication}
 import play.api.libs.json.Json
 import play.api.mvc._
 import play.modules.reactivemongo.ReactiveMongoApi
 import play.mvc.Http
 import reactivemongo.play.json._
-import reactivemongo.play.json.collection.JSONCollection
+import reactivemongo.play.json.collection._
 import services.UserService
+import models.ErrorCodes._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -46,7 +45,7 @@ class Oauth @Inject()(mongo: ReactiveMongoApi,
 
           if (!isNumberString(appId)) {
             log.info("Invalid application id: " + appId)
-            throw AppException(ResponseCode.INVALID_REQUEST, "Invalid application id")
+            throw AppException(ErrorCodes.INVALID_REQUEST, "Invalid application id")
           }
 
           appsCollection.flatMap(_.find(Json.obj("_id" -> appId)).one[ThirdpartyApplication]).flatMap {
@@ -58,7 +57,7 @@ class Oauth @Inject()(mongo: ReactiveMongoApi,
                 block(request)
               }
 
-            case None => throw AppException(ResponseCode.APPLICATION_NOT_FOUND, s"Application $appId not found")
+            case None => throw AppException(ErrorCodes.APPLICATION_NOT_FOUND, s"Application $appId not found")
           }
 
         case Some(wrongAuth) =>

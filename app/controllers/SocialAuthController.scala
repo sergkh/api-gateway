@@ -3,18 +3,16 @@ package controllers
 //scalastyle:off public.methods.have.type
 
 import javax.inject.Inject
-
 import _root_.services.UserService
 import _root_.services.social.{CustomSocialProfile, CustomSocialProfileBuilder}
-import com.impactua.bouncer.commons.models.ResponseCode.AUTHORIZATION_FAILED
-import com.impactua.bouncer.commons.models.exceptions.AppException
 import com.mohiva.play.silhouette.api._
 import com.mohiva.play.silhouette.api.exceptions.ProviderException
 import com.mohiva.play.silhouette.api.repositories.AuthInfoRepository
 import com.mohiva.play.silhouette.impl.providers._
-import models.{JwtEnv, User}
-import play.api.i18n.{I18nSupport, Messages, MessagesApi}
+import models.{AppException, ErrorCodes, JwtEnv, User}
+import play.api.i18n.I18nSupport
 import play.api.libs.json.Json
+import ErrorCodes._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -60,7 +58,7 @@ class SocialAuthController @Inject()(
     }) recover {
       case ex: ProviderException =>
         log.warn("Oauth provider exception:" + ex.getMessage, ex.getCause)
-        throw AppException(AUTHORIZATION_FAILED, Messages("invalid.credentials"))
+        throw AppException(ErrorCodes.AUTHORIZATION_FAILED, "Invalid credentials")
     }
   }
 

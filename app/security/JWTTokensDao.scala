@@ -1,17 +1,16 @@
 package security
 
 import com.fotolog.redis.{BinaryConverter, RedisClient}
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.utils.Logging
 import com.mohiva.play.silhouette.api.crypto.AuthenticatorEncoder
 import com.mohiva.play.silhouette.api.repositories.AuthenticatorRepository
 import com.mohiva.play.silhouette.impl.authenticators.{JWTAuthenticator, JWTAuthenticatorSettings}
+import models.{AppException, ErrorCodes}
 import net.ceedubs.ficus.Ficus._
 import play.api.Configuration
 import services.SessionsService
+import utils.Logging
 import utils.Responses._
-
+import ErrorCodes._
 import scala.compat.Platform
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -44,7 +43,7 @@ class JWTTokensDao(settings: JWTAuthenticatorSettings, encoder: AuthenticatorEnc
     redis.ttlAsync(authenticator.id) flatMap {
       case -2 | -1 =>
         log.debug(s"Authenticator ${authenticator.id} not found in redis")
-        Future.failed(AppException(ResponseCode.ACCESS_DENIED, "Authenticator not found"))
+        Future.failed(AppException(ErrorCodes.ACCESS_DENIED, "Authenticator not found"))
       case ttl if authenticator.isOauth && !authenticator.isExpired =>
         log.debug(s"Don't update oauth authenticator ${authenticator.id} with ttl $ttl")
         Future.successful(authenticator)
@@ -57,12 +56,12 @@ class JWTTokensDao(settings: JWTAuthenticatorSettings, encoder: AuthenticatorEnc
             sessionsService.updateExpiration(authenticator.id, expirationTime)
             authenticator
           case false =>
-            throw AppException(ResponseCode.INTERNAL_SERVER_ERROR, "Error occurred on authenticator saving")
+            throw AppException(ErrorCodes.INTERNAL_SERVER_ERROR, "Error occurred on authenticator saving")
         }
       case ttl if !authenticator.isExpired =>
         log.debug(s"Don't update authenticator ${authenticator.id}(isOauth ${authenticator.isOauth}) with ttl $ttl")
         Future.successful(authenticator)
-      case _ if authenticator.isExpired => Future.failed(AppException(ResponseCode.ACCESS_DENIED, "Session expired"))
+      case _ if authenticator.isExpired => Future.failed(AppException(ErrorCodes.ACCESS_DENIED, "Session expired"))
     }
   }
 

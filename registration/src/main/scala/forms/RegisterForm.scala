@@ -1,8 +1,8 @@
 package forms
 
-import com.impactua.bouncer.commons.utils.FormConstraints._
 import play.api.data.Form
 import play.api.data.Forms._
+import FormConstraints._
 
 /**
   * The form which handles the sign up process.

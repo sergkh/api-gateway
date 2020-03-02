@@ -1,6 +1,5 @@
 package security
 
-import com.impactua.bouncer.commons.utils.Logging
 import com.mohiva.play.silhouette.api.crypto.AuthenticatorEncoder
 import com.mohiva.play.silhouette.api.exceptions.AuthenticatorRetrievalException
 import com.mohiva.play.silhouette.api.repositories.AuthenticatorRepository
@@ -9,6 +8,7 @@ import com.mohiva.play.silhouette.api.util.{Clock, ExtractableRequest, IDGenerat
 import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator._
 import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticatorService.ID
 import com.mohiva.play.silhouette.impl.authenticators.{JWTAuthenticator, JWTAuthenticatorService, JWTAuthenticatorSettings}
+import utils.Logging
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.{implicitConversions, postfixOps}

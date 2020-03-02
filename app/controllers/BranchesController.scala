@@ -4,17 +4,15 @@ package controllers
 
 import akka.actor.ActorSystem
 import javax.inject.{Inject, Singleton}
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.utils.RichRequest._
 import com.mohiva.play.silhouette.api.Silhouette
 import events.EventsStream
 import forms.BranchForm
 import models.AppEvent._
-import models.JwtEnv
+import models.{AppException, ErrorCodes, JwtEnv}
 import play.api.libs.json.Json
 import security.{WithAnyPermission, WithBranchPermission}
 import services.BranchesService
+import utils.RichRequest._
 
 import scala.concurrent.ExecutionContext
 
@@ -25,7 +23,7 @@ class BranchesController @Inject()(
                                    branches: BranchesService
                                   )(implicit exec: ExecutionContext, system: ActorSystem)
  extends BaseController {
-
+  import ErrorCodes._
   implicit val branchesService = branches
 
   val editPerm = WithAnyPermission("branches:edit")
@@ -44,7 +42,7 @@ class BranchesController @Inject()(
         }
       case false =>
         log.info(s"User $user not allowed to access parent branch $create")
-        throw AppException(ResponseCode.ACCESS_DENIED, s"User cannot access parent branch")
+        throw AppException(ErrorCodes.ACCESS_DENIED, s"User cannot access parent branch")
     }
   }
 
@@ -63,7 +61,7 @@ class BranchesController @Inject()(
         }
       case false =>
         log.info(s"User $user not allowed to access parent branch $update")
-        throw AppException(ResponseCode.ACCESS_DENIED, s"User cannot access parent branch")
+        throw AppException(ErrorCodes.ACCESS_DENIED, s"User cannot access parent branch")
     }
   }
 
@@ -74,7 +72,7 @@ class BranchesController @Inject()(
         Ok(Json.toJson(branch))
       case None =>
         log.info(s"Branch $branchId is not found by ${request.identity}")
-        throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Branch is not found $branchId")
+        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Branch is not found $branchId")
     }
   }
 

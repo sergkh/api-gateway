@@ -4,19 +4,17 @@ package controllers
 
 import akka.actor.ActorSystem
 import com.google.inject.Inject
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.utils.Logging
-import com.impactua.bouncer.commons.utils.RichRequest._
 import com.mohiva.play.silhouette.api.Silhouette
 import events.EventsStream
 import forms.UserPermissionForm._
 import models.AppEvent.{RoleCreated, RoleDeleted, RoleUpdated}
-import models.{JwtEnv, RolePermissions}
+import models.{AppException, ErrorCodes, JwtEnv, RolePermissions}
 import play.api.libs.json.Json
 import security.WithPermission
 import services.{UserService, UsersRolePermissionsService}
-
+import utils.RichJson._
+import utils.RichRequest._
+import ErrorCodes._
 import scala.concurrent.ExecutionContext.Implicits.global
 
 
@@ -27,7 +25,7 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoleP
                                              usersService: UserService,
                                              eventBus: EventsStream,
                                              silh: Silhouette[JwtEnv])
-                                            (implicit system: ActorSystem) extends BaseController with Logging {
+                                            (implicit system: ActorSystem) extends BaseController {
 
 
   val editPerm = WithPermission("permissions:edit")
@@ -39,7 +37,7 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoleP
     usersPermissionsService.get(role.role.toString) flatMap {
       case Some(job) =>
         log.info(s"Permissions for role ${role.role} already exist")
-        throw AppException(ResponseCode.ALREADY_EXISTS, s"Role ${role.role} already exist")
+        throw AppException(ErrorCodes.ALREADY_EXISTS, s"Role ${role.role} already exist")
 
       case None =>
         for {
@@ -60,7 +58,7 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoleP
 
       case None =>
         log.info(s"Permissions for $role not found")
-        throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Permissions for $role not found")
+        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Permissions for $role not found")
     }
   }
 
@@ -87,7 +85,7 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoleP
           NoContent.withHeaders("Content-Type" -> "application/json")
         }
       case None =>
-        throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Permissions for $role not found")
+        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Permissions for $role not found")
     }
   }
 
