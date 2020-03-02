@@ -10,7 +10,6 @@ resolvers += Resolver.bintrayRepo("yarosman", "maven")
 publish := {}
 
 libraryDependencies ++= Seq(
-  "com.typesafe.play" %% "play"               % "2.6.20" % Provided,
-  "com.impactua"      %% "kafka-restartable"  % kafkaRestartableVersion,
-  "net.codingwell"    %% "scala-guice"        % Dependencies.guiceVersion
+  // "com.typesafe.play" %% "play"               % "2.7.4" % Provided,
+  // "net.codingwell"    %% "scala-guice"        % Dependencies.guiceVersion
 )

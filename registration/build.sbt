@@ -7,9 +7,8 @@ resolvers += Resolver.bintrayRepo("sergkh", "maven")
 publish := {}
 
 libraryDependencies ++= Seq(
-  "com.typesafe.play" %% "play-json" % "2.6.10" % Provided,
-  "com.typesafe.play" %% "play" % "2.6.20" % Provided,
-  "com.impactua" %% "play2-auth" % Dependencies.authVersion % Provided,
+  "com.typesafe.play" %% "play-json" % "2.7.4" % Provided,
+  "com.typesafe.play" %% "play" % "2.7.4" % Provided,
   "com.impactua" %% "redis-scala" % Dependencies.redisVersion % Provided,
   "net.codingwell" %% "scala-guice" % Dependencies.guiceVersion,
   "com.mohiva" %% "play-silhouette" % Dependencies.silhouetteVersion % Provided,

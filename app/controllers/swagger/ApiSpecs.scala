@@ -21,6 +21,7 @@ class ApiSpecs @Inject()(val controllerComponents: ControllerComponents,
                          ws: WSClient,
                          config: Configuration,
                          router: RoutingService,
+                         assets: Assets,
                          apiTemplateService: ApiTemplateService)(implicit ctx: ExecutionContext) extends BaseController with Logging {
 
   val swaggerConf = config.get[Configuration]("swagger")
@@ -44,7 +45,7 @@ class ApiSpecs @Inject()(val controllerComponents: ControllerComponents,
     }
   }
 
-  def docsResources(file: String) = Assets.at("/public/lib/swagger-ui", file)
+  def docsResources(file: String) = assets.at("/public/lib/swagger-ui", file)
 
   def filterSwaggerPaths(filter: ApiTemplate)(fullPaths: JsObject): JsObject = {
     val paths = fullPaths.fields

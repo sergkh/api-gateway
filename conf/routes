@@ -1237,9 +1237,6 @@ GET           /version                                            @controllers.A
 ###
 GET           /discovery/services                                 @controllers.ProxyController.listServices
 
-### NoDocs ###
-GET           /metrics                                            @controllers.PrometheusController.metrics()
-
 # Map static resources from the /public folder to the /assets URL path
 
 ### NoDocs ###

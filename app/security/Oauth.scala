@@ -25,7 +25,7 @@ class Oauth @Inject()(mongo: ReactiveMongoApi,
                       bodyParser: BodyParsers.Default,
                       userService: UserService)(implicit ctx: ExecutionContext) {
 
-  def appsCollection = mongo.database.map(_.collection[JSONCollection](ThirdpartyApplication.COLLECTION_NAME))
+  def appsCollection: Future[JSONCollection] = mongo.database.map(_.collection[JSONCollection](ThirdpartyApplication.COLLECTION_NAME))
 
   object Secured extends ActionBuilder[Request, AnyContent] {
 

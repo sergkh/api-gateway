@@ -1,12 +1,10 @@
 name := """etcd-discovery"""
 
-resolvers += Resolver.bintrayRepo("yarosman", "maven")
-
 publish := {}
 
 libraryDependencies ++= Seq(
-  "com.typesafe.play"         %% "play"                 % "2.6.20" % Provided,
-  "com.typesafe.play"         %% "play-json"            % "2.6.10" % Provided,
+  "com.typesafe.play"         %% "play"                 % "2.7.4" % Provided,
+  "com.typesafe.play"         %% "play-json"            % "2.7.4" % Provided,
   ws                                                    % Provided,
   "net.codingwell"            %% "scala-guice"          % Dependencies.guiceVersion % Provided,
   "org.scalatest"             %% "scalatest"            % "3.0.5"  % Test,

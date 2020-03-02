@@ -241,7 +241,9 @@ class UserController @Inject()(
     }
   }
 
-  def patch(id: String)= silh.SecuredAction(editPerm || WithUser(id)).async(parse.json) { implicit request =>
+  // TODO: needs to be fixed first
+  def patch(id: String)= TODO
+  /* silh.SecuredAction(editPerm || WithUser(id)).async(parse.json) { implicit request =>
     log.info(s"Updating user: ${request.body}")
 
     val patch = request.body.as[JsonPatch]
@@ -253,7 +255,7 @@ class UserController @Inject()(
       updateUserInternal(request, oldUser, update, editor)
     }
 
-  }
+  } */
 
   private def updateUserInternal(request: SecuredRequest[JwtEnv, JsValue], oldUser: User, update: User, editor: User): Future[Result] = {
     val updatedUserFuture = for {
