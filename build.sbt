@@ -14,7 +14,7 @@ lazy val etcdDiscovery = (project in file("./modules/etcd-discovery")).settings(
 lazy val kafka = (project in file("./modules/kafka")).settings(commonSettings: _*).dependsOn(`base-models`)
 
 lazy val root = (project in file("."))
-  .enablePlugins(PlayScala, JavaAgent, SbtNativePackager, BuildInfoPlugin, SwaggerPlugin)
+  .enablePlugins(PlayScala, JavaAgent, SbtNativePackager, BuildInfoPlugin)
   .aggregate(`base-models`, registration, etcdDiscovery, kafka)
   .dependsOn(`base-models`, registration, etcdDiscovery, kafka)
   .settings(commonSettings: _*)
@@ -32,13 +32,13 @@ dockerExposedPorts in Docker := Seq(9000)
 dockerBaseImage := "anapsix/alpine-java:8_server-jre_unlimited"
 dockerUsername := Some(sys.env.getOrElse("REGISTRY_USER_NAME", "sergkh"))
 dockerRepository := Some(sys.env.getOrElse("REGISTRY_NAME", "repo.treescale.com"))
-// TODO: (stage in Docker) := { (stage in Docker).dependsOn(swagger) }
 dockerUpdateLatest := true
 
 buildInfoKeys := Seq[BuildInfoKey](name,  version in ThisBuild, scalaVersion, sbtVersion)
 buildInfoPackage := "utils"
 buildInfoUsePackageAsPath := true
 buildInfoOptions += BuildInfoOption.ToJson
+
 
 libraryDependencies ++= Seq(  
   ehcache,
@@ -52,6 +52,7 @@ libraryDependencies ++= Seq(
   "com.pauldijou"     %% "jwt-core"                         % "4.3.0",
   "com.iheart"        %% "ficus"                            % "1.4.7",
   "org.reactivemongo" %% "play2-reactivemongo"              % "0.20.3-play28",
+  "com.iheart"        %% "play-swagger"                     % "0.9.1-PLAY2.8",
   "com.twitter"       %% "chill"                            % "0.9.5",
   "org.gnieh"         %% "diffson-play-json"                % "4.0.2",
   "com.impactua"      %% "redis-scala"                      % redisVersion,

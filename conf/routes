@@ -830,6 +830,23 @@ POST          /users/oauth-apps                                 @controllers.OAu
 GET           /oauth/tokens                                       @controllers.OAuthController.getAuthenticators
 
 ###
+# summary: Returns list certificates used to sign the token
+# tags:
+#   - OAuth
+# operationId: getCertificates
+# parameters:
+#   - name: realm
+#     in: path
+#     type: string
+#     required: true
+#     description: Realm name
+# responses:
+#   200:
+#     description: Certificates object
+###
+GET          /auth/realms/:realm/protocol/openid-connect/certs    @controllers.TokenController.certs(realm)
+
+###
 # summary: Removes OAuth token specified in the URL
 # tags:
 #   - OAuth
@@ -1241,6 +1258,7 @@ GET           /discovery/services                                 @controllers.P
 
 ### NoDocs ###
 GET           /api/assets/*file                                   controllers.Assets.at(path="/public", file)
+
 ### NoDocs ###
 GET           /assets/*file                                       controllers.Assets.at(path="/public", file)
 

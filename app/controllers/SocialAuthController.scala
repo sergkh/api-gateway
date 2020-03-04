@@ -32,7 +32,7 @@ class SocialAuthController @Inject()(
   extends BaseController with I18nSupport {
 
   /**
-    * Authenticates a user against a social provider.
+    * Authenticates a user using a social provider.
     *
     * @param provider The ID of the provider to authenticate against.
     * @return The result to display.

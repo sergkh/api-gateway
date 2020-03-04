@@ -4,7 +4,6 @@
     description: >
                   Most of the requests require authorization token to be sent in `X-Auth-Token`.
                   To start working with API use `POST /users` to create an account and `POST /login` to retrieve an authorization token.
-    version: "1.1.0"
   consumes:
     - application/json
   produces:
