@@ -24,7 +24,6 @@ import forms._
 import models.AppEvent._
 import models._
 import ErrorCodes._
-import net.ceedubs.ficus.Ficus._
 import play.api.i18n.{I18nSupport, Messages}
 import play.api.libs.json.Json
 import play.api.mvc.{Headers, Request, RequestHeader, Result}
@@ -63,9 +62,6 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
   val baseUrl = config.get[String]("app.basePath").stripSuffix("/")
 
   val createUserPermission = "users:create"
-
-  private val ETERNAL_TOKEN_TTL = config.underlying.as[FiniteDuration]("oauth.ttl")
-
   val internalWebPermission = "internal_web"
 
   implicit def toService(authService: AuthenticatorService[JWTAuthenticator]): CustomJWTAuthenticatorService =

@@ -7,7 +7,6 @@ import javax.inject.{Inject, Singleton}
 import com.mohiva.play.silhouette.api.util.PasswordInfo
 import com.mohiva.play.silhouette.api.{AuthInfo, LoginInfo}
 import models.{AppException, ErrorCodes, QueryParams, RolePermissions, User}
-import net.ceedubs.ficus.Ficus._
 import play.api.Configuration
 import play.api.cache.{AsyncCacheApi, NamedCache}
 import play.api.libs.json._
@@ -41,7 +40,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
 
   private[this] final val futureNoneUser: Future[Option[User]] = FastFuture.successful(None)
 
-  val cachedTime = conf.underlying.as[FiniteDuration]("session.cache")
+  val cachedTime = conf.get[FiniteDuration]("session.cache")
 
   private def db = reactiveMongoApi.database
 

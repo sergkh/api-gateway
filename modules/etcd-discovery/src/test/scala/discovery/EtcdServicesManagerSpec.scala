@@ -5,14 +5,14 @@ import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
 import play.api.Configuration
 import play.api.libs.json._
-import play.api.mvc.Action
 import play.api.mvc.Results.Ok
 import models._
 import events._
-import mockws.MockWS
-import org.scalatest.{Matchers, WordSpecLike}
+import mockws.{MockWS, MockWSHelpers}
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpecLike
 
-class EtcdServicesManagerSpec extends TestKit(ActorSystem("RoutingServiceSpec")) with WordSpecLike with Matchers {
+class EtcdServicesManagerSpec extends TestKit(ActorSystem("RoutingServiceSpec")) with MockWSHelpers with AnyWordSpecLike with Matchers {
 
   val json = Json.parse(
     """{

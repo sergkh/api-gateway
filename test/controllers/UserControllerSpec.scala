@@ -5,14 +5,12 @@ import java.util.Date
 import com.mohiva.play.silhouette.api.LoginInfo
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import com.mohiva.play.silhouette.test._
-import helpers.AnswerSugar
 import models.{AppException, Branch, JwtEnv, User}
 import module.{GeneralModule, InitializationModule}
 import modules.FakeModule
 import modules.FakeModule._
 import net.codingwell.scalaguice.ScalaModule
 import org.mockito.ArgumentMatchers._
-import org.mockito.Mockito._
 import org.mockito.MockitoSugar
 import org.scalatest.Inside
 import org.scalatestplus.play.PlaySpec
@@ -35,7 +33,7 @@ import scala.concurrent.Future
   * Test case for the [[controllers.UserController]] class.
   */
 class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
-  with Results with MockitoSugar with AnswerSugar with Inside {
+  with Results with MockitoSugar with Inside {
 
   val userServiceMock = mock[UserService]
   val branchesMock = mock[BranchesService]
@@ -277,4 +275,5 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
     verify(userServiceMock, times(0)).delete(newIdentity)
   }
 
+  def future[T](v: T): Future[T] = Future.successful(v)
 }

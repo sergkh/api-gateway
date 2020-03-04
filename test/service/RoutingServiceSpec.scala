@@ -2,25 +2,25 @@ package service
 
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
-import com.mohiva.play.silhouette.api.EventBus
 import com.typesafe.config.ConfigFactory
-import mockws.MockWS
+import mockws.{MockWS, MockWSHelpers}
 import events.ServiceDiscovered
 import models.Service
+import org.mockito.MockitoSugar
 import org.scalatest.concurrent.Eventually
-import org.scalatest.{MustMatchers, WordSpecLike}
+import org.scalatest.matchers.must.Matchers
 import play.api.{Configuration, Environment}
 import play.api.libs.json.{JsObject, JsValue, Json}
-import play.api.mvc.Action
 import play.api.mvc.Results._
 import services.{ApiTemplateService, RoutingService}
-import org.scalatest.mockito.MockitoSugar
 import org.scalatest.time.{Seconds, Span}
+import org.scalatest.wordspec.AnyWordSpecLike
 import service.fakes.FakeEventsStream
 
 class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
-  with WordSpecLike
-  with MustMatchers
+  with AnyWordSpecLike
+  with Matchers
+  with MockWSHelpers
   with Eventually
   with MockitoSugar {
 

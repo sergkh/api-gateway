@@ -13,7 +13,6 @@ import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import models.AppEvent._
 import models.TokenClaims._
 import models._
-import net.ceedubs.ficus.Ficus._
 import org.joda.time.DateTime
 import play.api.Configuration
 import play.api.libs.functional.syntax._
@@ -181,7 +180,7 @@ class OAuthService @Inject()(userService: UserService,
 
   final val IVALID_LOGIN_INFO_PROVIDER = "oauth.application"
 
-  private val ETERNAL_TOKEN_TTL = config.underlying.as[FiniteDuration]("oauth.ttl")
+  private val ETERNAL_TOKEN_TTL = config.get[FiniteDuration]("oauth.ttl")
 
   private def oauthAuthenticator(
                                   authenticatorService: JWTAuthenticatorService,

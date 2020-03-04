@@ -32,7 +32,7 @@ class ErrorHandler @Inject()(env: Environment,
       case ex: FormValidationException[_] =>
         processFormValidationException(request, timestamp, ex)
 
-      case ae: AppException[_] =>
+      case ae: AppException =>
         processAppException(request, timestamp, ae)
 
       case jsEx@JsResultException(errors) =>
@@ -92,7 +92,7 @@ class ErrorHandler @Inject()(env: Environment,
   }
 
   @inline
-  private def processAppException(request: RequestHeader, timestamp: Long, ae: AppException[_]): Future[Result] = {
+  private def processAppException(request: RequestHeader, timestamp: Long, ae: AppException): Future[Result] = {
     if (log.isDebugEnabled) {
       log.debug(s"App Exception occurred on ${request.method} ${request.path}, at $timestamp, msg: ${ae.getMessage}", ae)
     } else {

@@ -6,7 +6,6 @@ import com.mohiva.play.silhouette.api.util.PasswordInfo
 import com.mohiva.play.silhouette.api.{EventBus, LoginInfo}
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import com.typesafe.config.ConfigFactory
-import helpers.AnswerSugar
 import models.AppEvent.OtpGeneration
 import models.{AppException, ErrorCodes, User}
 import module.{GeneralModule, InitializationModule}
@@ -36,8 +35,7 @@ import scala.concurrent.Future
 class OpenRegistrationSpec extends PlaySpec
   with GuiceOneAppPerSuite
   with Results
-  with MockitoSugar
-  with AnswerSugar {
+  with MockitoSugar {
 
   import helpers.EventBusHelpers._
 

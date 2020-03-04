@@ -8,8 +8,3 @@ resolvers += Resolver.jcenterRepo
 resolvers += Resolver.bintrayRepo("yarosman", "maven")
 
 publish := {}
-
-libraryDependencies ++= Seq(
-  // "com.typesafe.play" %% "play"               % "2.7.4" % Provided,
-  // "net.codingwell"    %% "scala-guice"        % Dependencies.guiceVersion
-)

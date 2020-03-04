@@ -4,7 +4,6 @@ import java.util.concurrent.ConcurrentHashMap
 
 import akka.actor.ActorSystem
 import com.google.inject.{Inject, Singleton}
-import com.iheart.playSwagger.SwaggerSpecGenerator
 import events.{EventsStream, ServiceDiscovered, ServiceLost, ServicesListUpdate}
 import models.Service
 import play.api.libs.json._
@@ -37,7 +36,8 @@ class RoutingService @Inject()(ws: WSClient,
   private val cfg = config.get[Configuration]("swagger")
 
   private val serviceDescriptors = new ConcurrentHashMap[Service, ServiceDescriptor]()
-  private val baseSwagger = SwaggerSpecGenerator(cfg.get[Boolean]("swaggerV3"), "forms", "models").generate().get
+  private val baseSwagger = Json.parse("public/swagger.json")
+                                      .as[JsObject] //SwaggerSpecGenerator(cfg.get[Boolean]("swaggerV3"), "forms", "models").generate().get
   private val localDescriptor: ServiceDescriptor = ServiceDescriptor.fromSwagger(Service("api"), baseSwagger)
 
   private val info = (baseSwagger \ "info").as[JsObject] ++ Json.obj(
