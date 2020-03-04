@@ -17,6 +17,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
 import utils.RichJson._
+import com.iheart.playSwagger.SwaggerSpecGenerator
 
 /**
   * @author faiaz
@@ -36,8 +37,10 @@ class RoutingService @Inject()(ws: WSClient,
   private val cfg = config.get[Configuration]("swagger")
 
   private val serviceDescriptors = new ConcurrentHashMap[Service, ServiceDescriptor]()
-  private val baseSwagger = Json.parse("public/swagger.json")
-                                      .as[JsObject] //SwaggerSpecGenerator(cfg.get[Boolean]("swaggerV3"), "forms", "models").generate().get
+  private val baseSwagger = SwaggerSpecGenerator(cfg.get[Boolean]("swaggerV3"), "forms", "models").generate().get
+
+  log.warn("Swagger: " + baseSwagger)
+                 
   private val localDescriptor: ServiceDescriptor = ServiceDescriptor.fromSwagger(Service("api"), baseSwagger)
 
   private val info = (baseSwagger \ "info").as[JsObject] ++ Json.obj(
