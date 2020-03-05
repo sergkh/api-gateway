@@ -16,12 +16,13 @@ import reactivemongo.core.errors.DatabaseException
 import reactivemongo.play.json._
 import reactivemongo.play.json.collection.JSONCollection
 import services.auth.SocialAuthService
-import services.social.CustomSocialProfile
 import utils.{Logging, UuidGenerator}
 import utils.RichJson._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
+import com.mohiva.play.silhouette.impl.providers.SocialProfile
+import com.mohiva.play.silhouette.impl.providers.CommonSocialProfile
 
 /**
   * Handles actions to users.
@@ -123,28 +124,13 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     * @param profile The social profile to save.
     * @return The user for whom the profile was saved.
     */
-  def save(profile: CustomSocialProfile, authInfo: AuthInfo): Future[User] = {
+  def save(profile: CommonSocialProfile, authInfo: AuthInfo): Future[User] = {
     val providerKey = profile.loginInfo.providerKey
 
-    (profile.email, profile.phone) match {
-
-      //  if both exists
-      case (Some(email), Some(phone)) => getByAnyIdOpt(email) flatMap {
-        case Some(user) => updateUserBySocialProfile(user, profile, authInfo)
-        case None => getByAnyIdOpt(phone) flatMap {
-          case Some(user) => updateUserBySocialProfile(user, profile, authInfo)
-          case None => initByProviderKey(providerKey, profile, authInfo)
-        }
-      }
+    profile.email match {
 
       //  if only email exist
-      case (Some(email), None) => getByAnyIdOpt(email) flatMap {
-        case Some(user) => updateUserBySocialProfile(user, profile, authInfo)
-        case None => initByProviderKey(providerKey, profile, authInfo)
-      }
-
-      //  if only phone exist
-      case (None, Some(phone)) => getByAnyIdOpt(phone) flatMap {
+      case Some(email) => getByAnyIdOpt(email) flatMap {
         case Some(user) => updateUserBySocialProfile(user, profile, authInfo)
         case None => initByProviderKey(providerKey, profile, authInfo)
       }
@@ -154,19 +140,18 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     }
   }
 
-  private def initByProviderKey(providerKey: String, profile: CustomSocialProfile, authInfo: => AuthInfo): Future[User] = {
+  private def initByProviderKey(providerKey: String, profile: CommonSocialProfile, authInfo: => AuthInfo): Future[User] = {
     getByAnyIdOpt(providerKey) flatMap {
       case Some(user) => updateUserBySocialProfile(user, profile, authInfo)
       case None => saveUserBySocialProfile(profile, authInfo)
     }
   }
 
-  def updateUserBySocialProfile(user: User, profile: CustomSocialProfile, authInfo: AuthInfo): Future[User] = {
+  def updateUserBySocialProfile(user: User, profile: CommonSocialProfile, authInfo: AuthInfo): Future[User] = {
     val updUser = user.copy(
       firstName = user.firstName orElse profile.firstName,
       lastName = user.lastName orElse profile.lastName,
-      email = user.email orElse profile.email,
-      phone = user.phone orElse profile.phone
+      email = user.email orElse profile.email
     )
 
     authService.update(user.uuid, profile.loginInfo, authInfo)
@@ -182,11 +167,10 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     }
   }
 
-  def saveUserBySocialProfile(profile: CustomSocialProfile, authInfo: AuthInfo): Future[User] = {
+  def saveUserBySocialProfile(profile: CommonSocialProfile, authInfo: AuthInfo): Future[User] = {
     val user = User(
       uuid = UuidGenerator.generateId,
       email = profile.email,
-      phone = profile.phone,
       passHash = "",
       firstName = profile.firstName,
       lastName = profile.lastName

@@ -20,6 +20,12 @@ object UserForm {
   private final val ERROR_PASSWORD_FORMAT = "error.password.format"
   private final val ERROR_PHONE_EMPTY = "error.phone.empty"
 
+  val limit = number(min = 1, max = 100)
+  val offset = number(min = 0)
+  val longUuid = longNumber
+  val email = nonEmptyText.verifying(_.contains("@"))
+  val password = nonEmptyText(minLength = MIN_PASSWORD_LENGTH).verifying(passwordConstraint)
+  
   val updatePass = Form(
     mapping(
       TAG_PASS -> optional(password),
@@ -63,11 +69,6 @@ object UserForm {
       TAG_OFFSET -> optional(offset)
     )(QueryParams.apply)(QueryParams.unapply)
   )
-
-  val limit = number(min = 1, max = 100)
-  val offset = number(min = 0)
-  val longUuid = longNumber
-  val email = nonEmptyText.verifying(_.contains("@"))
 
   val blockUser = Form(
     mapping(
@@ -114,8 +115,6 @@ object UserForm {
       case None        => Invalid(ValidationError(ERROR_PHONE_EMPTY))
     }
   }
-
-  val password = nonEmptyText(minLength = MIN_PASSWORD_LENGTH).verifying(passwordConstraint)
 
   private val allNumbers = """\d*""".r
   private val allLetters = """[A-Za-z]*""".r

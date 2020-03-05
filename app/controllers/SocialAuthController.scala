@@ -4,7 +4,6 @@ package controllers
 
 import javax.inject.Inject
 import _root_.services.UserService
-import _root_.services.social.{CustomSocialProfile, CustomSocialProfileBuilder}
 import com.mohiva.play.silhouette.api._
 import com.mohiva.play.silhouette.api.exceptions.ProviderException
 import com.mohiva.play.silhouette.api.repositories.AuthInfoRepository
@@ -23,7 +22,6 @@ import scala.concurrent.{ExecutionContext, Future}
   * @param authInfoRepository The auth info service implementation.
   * @param socialProviderRegistry The social provider registry.
   */
-
 class SocialAuthController @Inject()(
                                       silh: Silhouette[JwtEnv],
                                       userService: UserService,
@@ -38,8 +36,11 @@ class SocialAuthController @Inject()(
     * @return The result to display.
     */
   def authenticate(provider: String) = silh.UserAwareAction.async { implicit request =>
+    
+    log.info(s"Starting auth using $provider")
+    
     (socialProviderRegistry.get[SocialProvider](provider) match {
-      case Some(p: SocialProvider with CustomSocialProfileBuilder) =>
+      case Some(p: SocialProvider with CommonSocialProfileBuilder) =>
         p.authenticate() flatMap {
           case Left(result) => Future.successful(result)
           case Right(authInfo) => for {
@@ -62,7 +63,7 @@ class SocialAuthController @Inject()(
     }
   }
 
-  private def initUser(userOpt: Option[User], profile: CustomSocialProfile, authInfo: AuthInfo): Future[User] = {
+  private def initUser(userOpt: Option[User], profile: CommonSocialProfile, authInfo: AuthInfo): Future[User] = {
     userOpt match {
       case Some(user) => userService.updateUserBySocialProfile(user, profile, authInfo)
       case None => userService.save(profile, authInfo)

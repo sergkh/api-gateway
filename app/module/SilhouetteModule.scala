@@ -1,5 +1,6 @@
 package module
 
+import scala.collection.JavaConverters._
 import javax.inject.Singleton
 import _root_.services._
 import com.google.inject.name.Named
@@ -17,6 +18,7 @@ import com.mohiva.play.silhouette.impl.providers.oauth1.secrets.{CookieSecretPro
 import com.mohiva.play.silhouette.impl.providers.state.{CsrfStateItemHandler, CsrfStateSettings}
 import com.mohiva.play.silhouette.impl.services._
 import com.mohiva.play.silhouette.impl.util._
+import com.mohiva.play.silhouette.impl.providers.oauth2._
 import com.mohiva.play.silhouette.password.BCryptPasswordHasher
 import com.mohiva.play.silhouette.persistence.daos.DelegableAuthInfoDAO
 import com.mohiva.play.silhouette.persistence.repositories.DelegableAuthInfoRepository
@@ -31,15 +33,25 @@ import play.api.Configuration
 import play.api.libs.ws.WSClient
 import play.api.mvc.Cookie
 import security.{CustomJWTAuthenticatorService, JWTTokensDao, JWTTokensDaoWrapper}
-import services.social.providers.CustomFacebookProvider
 import utils.{CustomEventBus, ServerErrorHandler}
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import com.mohiva.play.silhouette.impl.providers.oauth1.TwitterProvider
+import com.mohiva.play.silhouette.impl.providers.oauth1.services.PlayOAuth1Service
+import com.mohiva.play.silhouette.impl.providers.oauth1.XingProvider
+import com.mohiva.play.silhouette.impl.providers.openid.YahooProvider
+import com.mohiva.play.silhouette.impl.providers.openid.services.PlayOpenIDService
+import play.api.libs.openid.OpenIdClient
+import com.typesafe.config.ConfigObject
+import org.slf4j.LoggerFactory
+
 
 /**
   * The Guice module which wires all Silhouette dependencies.
   */
 class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationReader {
+
+  val log = LoggerFactory.getLogger(getClass())
 
   implicit val cookieSamesiteReader = new ValueReader[Cookie.SameSite] {
     def read(config: Config, path: String) = Cookie.SameSite.parse(config.getString(path)).getOrElse {
@@ -99,17 +111,44 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
     * @return The Silhouette environment.
     */
   @Provides
-  def provideSocialProviderRegistry(facebookProvider: CustomFacebookProvider): SocialProviderRegistry = {
-    SocialProviderRegistry(Seq(facebookProvider))
-  }
+  def provideSocialProviderRegistry(httpLayer: HTTPLayer,
+                                    stateHandler: SocialStateHandler,
+                                    tokenSecretProvider: OAuth1TokenSecretProvider,
+                                    client: OpenIdClient,
+                                    conf: Configuration): SocialProviderRegistry = {
 
-  @Provides
-  def provideFacebookProvider(httpLayer: HTTPLayer,
-                              stateHandler: SocialStateHandler,
-                              configuration: Configuration): CustomFacebookProvider = {
+    // TODO: make loading dynamic
+    val socialConfigs = conf.underlying.getConfigList("silhouette.social").asScala
+    
+    val providers = socialConfigs.flatMap {
+      case cfg: Config =>
+        Some(cfg.getString("type") -> cfg).filter(_._2.getBoolean("enabled"))
+    }
+    .flatMap {
+      case ("facebook", cfg) =>
+        log.debug(s"Adding Facebook social provider")
+        Some(new FacebookProvider(httpLayer, stateHandler, cfg.as[OAuth2Settings]))
+      case ("google", cfg) =>
+        log.debug(s"Adding Google social provider")
+        Some(new GoogleProvider(httpLayer, stateHandler, cfg.as[OAuth2Settings]))
+      case ("twitter", cfg) =>
+        log.debug(s"Adding Twitter social provider")
+        val settings = cfg.as[OAuth1Settings]
+        Some(new TwitterProvider(httpLayer, new PlayOAuth1Service(settings), tokenSecretProvider, settings))
+      case ("xing", cfg) =>
+        log.debug(s"Adding Xing social provider")
+        val settings = cfg.as[OAuth1Settings]
+        Some(new XingProvider(httpLayer, new PlayOAuth1Service(settings), tokenSecretProvider, settings))
+      case ("yahoo", cfg) =>
+        log.debug(s"Adding Yahoo social provider")
+        val settings = cfg.as[OpenIDSettings]
+        Some(new YahooProvider(httpLayer, new PlayOpenIDService(client, settings), settings))      
+      case (provider, _) =>
+        log.warn(s"Ignoring provider configuration: $provider")
+        None
+    }
 
-    val settings = configuration.underlying.as[OAuth2Settings]("silhouette.facebook")
-    new CustomFacebookProvider(httpLayer, stateHandler, settings)
+    SocialProviderRegistry(providers)
   }
 
   /**
