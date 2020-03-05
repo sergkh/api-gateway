@@ -41,8 +41,8 @@ class RoutingService @Inject()(ws: WSClient,
   private val localDescriptor: ServiceDescriptor = ServiceDescriptor.fromSwagger(Service("api"), baseSwagger)
 
   private val info = (baseSwagger \ "info").as[JsObject] ++ Json.obj(
-    "title" -> cfg.get[String]("appName") //,
-    // "version" -> utils.BuildInfo.version
+    "title" -> cfg.get[String]("appName"),
+    "version" -> utils.BuildInfo.version
   )
   private val path = cfg.get[String]("path")
   private val host = cfg.get[String]("host")

@@ -12,11 +12,8 @@ import scala.reflect.ClassTag
 import scala.reflect.runtime.universe._
 import ErrorCodes._
 
-/**
-  * Created by faiaz on 15.05.17.
-  */
-class SocialAuthDao[A <: AuthInfo](userService: UserService,
-                                   authService: SocialAuthService)(implicit val tt: TypeTag[A], ct: ClassTag[A]) extends DelegableAuthInfoDAO[A] {
+class BaseSocialAuthDao[A <: AuthInfo](userService: UserService,
+                                       authService: SocialAuthService)(implicit val tt: TypeTag[A], ct: ClassTag[A]) extends DelegableAuthInfoDAO[A] {
 
   override def find(loginInfo: LoginInfo): Future[Option[A]] = {
     userService.retrieve(loginInfo) flatMap {

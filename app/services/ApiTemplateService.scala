@@ -15,7 +15,6 @@ import scala.concurrent.{ExecutionContext, Future}
 /**
   * @author Vasyl Zalizetskyi
   */
-
 class ApiTemplateService @Inject()(reactiveMongoApi: ReactiveMongoApi)(implicit ctx: ExecutionContext) {
 
   val log = Logger(getClass.getName)

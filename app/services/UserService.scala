@@ -124,63 +124,70 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     * @param profile The social profile to save.
     * @return The user for whom the profile was saved.
     */
-  def save(profile: CommonSocialProfile, authInfo: AuthInfo): Future[User] = {
+  def findOrCreateSocialUser(profile: CommonSocialProfile, authInfo: AuthInfo): Future[User] = {
     val providerKey = profile.loginInfo.providerKey
 
-    profile.email match {
-
-      //  if only email exist
-      case Some(email) => getByAnyIdOpt(email) flatMap {
-        case Some(user) => updateUserBySocialProfile(user, profile, authInfo)
-        case None => initByProviderKey(providerKey, profile, authInfo)
-      }
-
-      //  if none one exist
-      case _ => initByProviderKey(providerKey, profile, authInfo)
-    }
+    for {
+      userOpt <- profile.email.map(getByAnyIdOpt) getOrElse Future.successful(None)
+      _       <- Future.successful(log.info(s"User $userOpt"))
+      user    <- userOpt.map(Future.successful).getOrElse(createUserFromSocialProfile(providerKey, profile, authInfo))
+    } yield user
   }
 
-  private def initByProviderKey(providerKey: String, profile: CommonSocialProfile, authInfo: => AuthInfo): Future[User] = {
-    getByAnyIdOpt(providerKey) flatMap {
-      case Some(user) => updateUserBySocialProfile(user, profile, authInfo)
-      case None => saveUserBySocialProfile(profile, authInfo)
-    }
-  }
-
-  def updateUserBySocialProfile(user: User, profile: CommonSocialProfile, authInfo: AuthInfo): Future[User] = {
-    val updUser = user.copy(
-      firstName = user.firstName orElse profile.firstName,
-      lastName = user.lastName orElse profile.lastName,
-      email = user.email orElse profile.email
-    )
-
-    authService.update(user.uuid, profile.loginInfo, authInfo)
-
-    usersCollection.flatMap { users =>
-      users.update(
-        Json.obj("_id" -> user.uuid),
-        Json.obj(
-          "$set" -> transformToDbUser(updUser),
-          "$inc" ->  Json.obj("version" -> 1)
-        )
-      ).map(_ => updUser).recover(processUserDbEx[User](user.uuid))
-    }
-  }
-
-  def saveUserBySocialProfile(profile: CommonSocialProfile, authInfo: AuthInfo): Future[User] = {
+  private def createUserFromSocialProfile(providerKey: String, profile: CommonSocialProfile, authInfo: => AuthInfo): Future[User] = {
+      
     val user = User(
       uuid = UuidGenerator.generateId,
-      email = profile.email,
+      email = profile.email.map(_.toLowerCase()),
       passHash = "",
       firstName = profile.firstName,
       lastName = profile.lastName
     )
 
-    authService.save(user.uuid, profile.loginInfo, authInfo)
+    log.info(s"Creating a new user for a social profile: $user")
 
-    usersCollection.flatMap(_.insert(transformToDbUser(user)).map(_ => user).recover(processUserDbEx[User](user.uuid)))
+    for {
+      _ <- Future.successful(log.info("Saving social profile"))
+      _ <- authService.save(user.uuid, profile.loginInfo, authInfo)
+      _ <- Future.successful(log.info("Saved social profile"))
+      _ <- usersCollection.flatMap(_.insert.one(transformToDbUser(user)).recover(processUserDbEx[User](user.uuid)))
+    } yield user
   }
 
+  def updateUserBySocialProfile(user: User, profile: CommonSocialProfile, authInfo: AuthInfo): Future[User] = {
+    val needUpdate = (user.firstName.isEmpty && profile.firstName.nonEmpty) || 
+                     (user.lastName.isEmpty && profile.lastName.nonEmpty) || 
+                     (user.email.isEmpty && profile.email.nonEmpty)
+
+    if (needUpdate) {
+      log.info(s"Updating user by social profile: $user, $profile, $authInfo")
+
+      val updUser = user.copy(
+        firstName = user.firstName orElse profile.firstName,
+        lastName = user.lastName orElse profile.lastName,
+        email = user.email orElse profile.email.map(_.toLowerCase())
+      )
+
+      log.info(s"Updating user on auth service")
+
+      authService.update(user.uuid, profile.loginInfo, authInfo)
+
+      log.info(s"Updating users collection")
+
+      usersCollection.flatMap { users =>
+        users.update.one(
+          Json.obj("_id" -> user.uuid),
+          Json.obj(
+            "$set" -> Json.obj("firstName" -> updUser.firstName, "lastName" -> updUser.lastName, "email" -> updUser.email),
+            "$inc" ->  Json.obj("version" -> 1)
+          )
+        ).recover(processUserDbEx[User](user.uuid))
+      }.map(_ => updUser)
+    } else {
+      log.info(s"Skipping user update by social profile $user")
+      Future.successful(user)
+    }
+  }
 
   def updatePassHash(login: String, pass: PasswordInfo): Future[Unit] = {
     usersCollection.flatMap { users =>
@@ -261,8 +268,14 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
 
   def getByAnyIdOpt(id: String): Future[Option[User]] = {
     val user = id match {
-      case uuid: String if User.checkUuid(uuid) => usersCollection.flatMap(_.find(Json.obj("_id" -> uuid.toLong)).one[User])
-      case email: String if User.checkEmail(email) => usersCollection.flatMap(_.find(Json.obj("email" -> email.toLowerCase)).one[User])
+      case uuid: String if User.checkUuid(uuid) => 
+        usersCollection.flatMap(_.find(Json.obj("_id" -> uuid.toLong)).one[User])
+      case email: String if User.checkEmail(email) => 
+        log.info(s"Getting user by email: '$email'")
+        usersCollection.flatMap(_.find(Json.obj("email" -> email.toLowerCase)).one[User]).map { user =>
+          log.info(s"User found $user")
+          user
+        }
       case phone: String if User.checkPhone(phone) => usersCollection.flatMap(_.find(Json.obj("phone" -> phone)).one[User])
       case socialId: String if User.checkSocialProviderKey(socialId) => authService.findUserUuid(socialId) flatMap {
         case Some(uuid) => usersCollection.flatMap(_.find(Json.obj("_id" -> uuid)).one[User])

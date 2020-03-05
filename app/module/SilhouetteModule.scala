@@ -223,7 +223,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
   @Provides
   def provideAuthInfoRepository(passwordInfoDAO: DelegableAuthInfoDAO[PasswordInfo],
                                 oAuth1InfoDao: DelegableAuthInfoDAO[OAuth1Info],
-                                oAuth2InfoDao: DelegableAuthInfoDAO[OAuth2Info]): AuthInfoRepository = {
+                                oAuth2InfoDao: DelegableAuthInfoDAO[OAuth2Info]): AuthInfoRepository = { 
     new DelegableAuthInfoRepository(passwordInfoDAO, oAuth1InfoDao, oAuth2InfoDao)
   }
 

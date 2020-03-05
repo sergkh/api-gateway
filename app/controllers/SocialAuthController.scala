@@ -42,20 +42,32 @@ class SocialAuthController @Inject()(
     (socialProviderRegistry.get[SocialProvider](provider) match {
       case Some(p: SocialProvider with CommonSocialProfileBuilder) =>
         p.authenticate() flatMap {
-          case Left(result) => Future.successful(result)
-          case Right(authInfo) => for {
-              profile <- p.retrieveProfile(authInfo)
-              user <- initUser(request.identity, profile, authInfo)
-              _ <- authInfoRepository.save(profile.loginInfo, authInfo)
+          case Left(result) => 
+            log.info(s"Social auth redirect: $result")
+            Future.successful(result)
+          case Right(authInfo) => 
+            log.info(s"Returned auth info $authInfo")
+            for {
+              profile       <- p.retrieveProfile(authInfo)
+              _             <- Future.successful(log.info(s"Obtained profile $profile"))
+              user          <- initUser(request.identity, profile, authInfo)
+              _             <- Future.successful(log.info(s"User initialized $user"))
+              _             <- authInfoRepository.save(profile.loginInfo, authInfo)
+              _             <- Future.successful(log.info(s"Info saved"))              
               authenticator <- silh.env.authenticatorService.create(profile.loginInfo)
-              value <- silh.env.authenticatorService.init(authenticator)
-              result <- Future.successful(Ok(Json.obj("token" -> value)))
+              _             <- Future.successful(log.info(s"Created new authenticator: $authenticator"))
+              value         <- silh.env.authenticatorService.init(authenticator)
+              _             <- Future.successful(log.info(s"Authenticator initialized : $value"))
+              result        <- Future.successful(Ok(Json.obj("token" -> value)))
             } yield {
               silh.env.eventBus.publish(LoginEvent(user, request))
+              log.info(s"User $user authenticated though $provider")
               result
             }
         }
-      case _ => Future.failed(new ProviderException(s"Cannot authenticate with unexpected social provider $provider"))
+      case _ => 
+        log.warn(s"Cannot authenticate with unexpected social provider $provider")
+        Future.failed(throw AppException(ErrorCodes.AUTHORIZATION_FAILED, s"Unsupported authentication provider $provider") )
     }) recover {
       case ex: ProviderException =>
         log.warn("Oauth provider exception:" + ex.getMessage, ex.getCause)
@@ -65,8 +77,12 @@ class SocialAuthController @Inject()(
 
   private def initUser(userOpt: Option[User], profile: CommonSocialProfile, authInfo: AuthInfo): Future[User] = {
     userOpt match {
-      case Some(user) => userService.updateUserBySocialProfile(user, profile, authInfo)
-      case None => userService.save(profile, authInfo)
+      case Some(user) => 
+        // User is logged in and adding a social profile, update his info
+        userService.updateUserBySocialProfile(user, profile, authInfo)
+      case None =>
+        // User is new or not logged in. Find/create a user with profile info
+        userService.findOrCreateSocialUser(profile, authInfo)
     }
   }
 }

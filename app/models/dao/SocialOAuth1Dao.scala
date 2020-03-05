@@ -8,4 +8,4 @@ import services.auth.SocialAuthService
 /**
   * Created by faiaz on 15.05.17.
   */
-class SocialOAuth1Dao @Inject()(userService: UserService, authService: SocialAuthService) extends SocialAuthDao[OAuth1Info](userService, authService)
+class SocialOAuth1Dao @Inject()(userService: UserService, authService: SocialAuthService) extends BaseSocialAuthDao[OAuth1Info](userService, authService)

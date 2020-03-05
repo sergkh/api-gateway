@@ -18,6 +18,7 @@ object UserAuthInfo {
   final val COLLECTION_NAME = "auth"
   final val OAUTH1 = "auth1Info"
   final val OAUTH2 = "auth2Info"
+  
   implicit val loginFmt: OFormat[LoginInfo] = Json.format[LoginInfo]
   implicit val auth1fmt: OFormat[OAuth1Info] = Json.format[OAuth1Info]
   implicit val auth2fmt: OFormat[OAuth2Info] = Json.format[OAuth2Info]
