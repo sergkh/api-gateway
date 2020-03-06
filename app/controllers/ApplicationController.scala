@@ -232,7 +232,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
     val data = request.asForm(InviteForm.form)
 
     eventBus.publish(UserInvitation(data.email, data.url, request.identity)) map {_ =>
-      log.info(s"User ${request.identity.uuid} try to invite ${data.email}")
+      log.info(s"User ${request.identity.id} try to invite ${data.email}")
       NoContent
     }
   }

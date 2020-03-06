@@ -38,8 +38,8 @@ object AppEvent {
   case class ApplicationUpdated(userId: String, app: ThirdpartyApplication, request: RequestHeader)
     extends OAuthAppEvent("application_updated", app.id.toString)
 
-  case class ApplicationRemoved(userId: String, appId: Long, request: RequestHeader)
-    extends OAuthAppEvent("application_removed", appId.toString)
+  case class ApplicationRemoved(userId: String, appId: String, request: RequestHeader)
+    extends OAuthAppEvent("application_removed", appId)
 
   case class OauthTokenCreated(userId: String, oauthId: String, token: String, request: RequestHeader)
     extends BaseAppEvent("oauth_token_created", userId)

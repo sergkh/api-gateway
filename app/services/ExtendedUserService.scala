@@ -23,14 +23,14 @@ class ExtendedUserService @Inject()(mongoApi: ReactiveMongoApi)(implicit ctx: Ex
 
   //TODO: recover mongo db exception
   override def create(info: JsObject): Future[JsObject] = {
-    coll.flatMap(_.insert(info).map(_ => info))
+    coll.flatMap(_.insert.one(info).map(_ => info))
   }
 
   override def create(info: ExtendedUser): Future[ExtendedUser] = {
-    coll.flatMap(_.insert(info).map(_ => info))
+    coll.flatMap(_.insert.one(info).map(_ => info))
   }
 
-  def retrieve4user(userId: Long): Future[Option[JsObject]] = {
+  def retrieve4user(userId: String): Future[Option[JsObject]] = {
     coll.flatMap(_.find(Json.obj("_id" -> userId)).one[JsObject])
   }
 

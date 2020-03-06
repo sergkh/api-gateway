@@ -44,7 +44,7 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoleP
           userPerm <- usersPermissionsService.save(role)
           _ <- eventBus.publish(RoleCreated(role))
         } yield {
-          log.info(s"Created permissions obj $userPerm by ${request.identity.uuid}")
+          log.info(s"Created permissions obj $userPerm by ${request.identity.id}")
           Ok(Json.toJson(userPerm))
         }
     }
@@ -53,7 +53,7 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoleP
   def get(role: String) = silh.SecuredAction(readPerm).async { implicit request =>
     usersPermissionsService.get(role).map {
       case Some(rolePerm) =>
-        log.info(s"Retrieve permissions for $role requested by ${request.identity.uuid}")
+        log.info(s"Retrieve permissions for $role requested by ${request.identity.id}")
         Ok(Json.toJson(rolePerm))
 
       case None =>
@@ -71,13 +71,13 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoleP
       _ <- eventBus.publish(RoleUpdated(rolePerms))
       _ <- usersService.clearUserCaches()
     } yield {
-      log.info(s"Permission for $role was updated by ${request.identity.uuid}")
+      log.info(s"Permission for $role was updated by ${request.identity.id}")
       NoContent.withHeaders("Content-Type" -> "application/json")
     }
   }
 
   def remove(role: String) = silh.SecuredAction(editPerm).async { request =>
-    log.info(s"Removing role $role by ${request.identity.uuid}")
+    log.info(s"Removing role $role by ${request.identity.id}")
 
     usersPermissionsService.remove(role).flatMap {
       case Some(r) =>
@@ -90,7 +90,7 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoleP
   }
 
   def listRoles = silh.SecuredAction(readPerm).async { request =>
-    log.info(s"Obtained list of all roles by ${request.identity.uuid}")
+    log.info(s"Obtained list of all roles by ${request.identity.id}")
     usersPermissionsService.getAvailableRoles.map(lst => Ok(Json.obj("items" -> lst)))
   }
 }

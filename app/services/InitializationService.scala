@@ -2,15 +2,10 @@ package services
 
 import com.mohiva.play.silhouette.api.util.PasswordHasher
 import javax.inject.Inject
-import models.{ApiTemplate, RolePermissions, ThirdpartyApplication, User}
+import models.{RolePermissions, ThirdpartyApplication, User}
 import play.api.{Configuration, Logger}
-import play.api.libs.json.Json
 import play.modules.reactivemongo.ReactiveMongoApi
-import reactivemongo.api.indexes.{Index, IndexType}
-
-import reactivemongo.api.indexes.NSIndex
 import reactivemongo.play.json.collection.JSONCollection
-import reactivemongo.play.json._
 import utils.RandomStringGenerator
 
 import scala.concurrent.ExecutionContext
@@ -39,7 +34,6 @@ class InitializationService @Inject()(config: Configuration,
   }
 
   def init(): Unit = {
-    initSwagger()
     initRoles()
     val admin = initAdminUser()
     initDefaultOAuthApp(admin)
@@ -88,16 +82,6 @@ class InitializationService @Inject()(config: Configuration,
     usersCollection.flatMap(_.insert(admin))
 
     admin
-  }
-
-  def initSwagger(): Unit = {
-    // Init swagger
-    val swaggerCollection = db.map(_.collection[JSONCollection]("swagger"))
-    val defaultApi = ApiTemplate("api")
-
-    swaggerCollection.flatMap( col =>
-      col.find(Json.obj("_id" -> defaultApi.name)).one[ApiTemplate].map(_.getOrElse(col.insert(defaultApi)))
-    )
   }
 
   def initDefaultOAuthApp(user: User): Unit = {

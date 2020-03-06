@@ -30,7 +30,7 @@ class OAuthUIController @Inject()(oauth: Oauth,
   implicit def toService(authService: AuthenticatorService[JWTAuthenticator]): CustomJWTAuthenticatorService =
     authService.asInstanceOf[CustomJWTAuthenticatorService]
 
-  def displayAuthorize(clientId: Long, scopes: String) = silh.UserAwareAction.async { implicit request =>
+  def displayAuthorize(clientId: String, scopes: String) = silh.UserAwareAction.async { implicit request =>
     val permissions = scopes.split(' ')
 
     request.identity match {

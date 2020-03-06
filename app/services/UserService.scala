@@ -16,12 +16,11 @@ import reactivemongo.core.errors.DatabaseException
 import reactivemongo.play.json._
 import reactivemongo.play.json.collection.JSONCollection
 import services.auth.SocialAuthService
-import utils.{Logging, UuidGenerator}
+import utils.Logging
 import utils.RichJson._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
-import com.mohiva.play.silhouette.impl.providers.SocialProfile
 import com.mohiva.play.silhouette.impl.providers.CommonSocialProfile
 import scala.util.Try
 
@@ -37,8 +36,6 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
                             reactiveMongoApi: ReactiveMongoApi,
                             authService: SocialAuthService,
                             conf: Configuration)(implicit exec: ExecutionContext) extends UserIdentityService with Logging {
-
-  import ErrorCodes._
 
   private[this] final val futureNoneUser: Future[Option[User]] = FastFuture.successful(None)
 
@@ -61,6 +58,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     */
   def retrieve(login: LoginInfo): Future[Option[User]] = {
     log.debug(s"Getting user: $login")
+
     getFromCacheByAnyId(login.providerKey) flatMap {
       case Some(user) =>
         FastFuture.successful(Some(user))
@@ -77,18 +75,6 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     }
   }
 
-  private def getFromCacheByAnyId(id: String): Future[Option[User]] = id match {
-    case uuid: String if User.checkUuid(uuid) =>
-      usersCache.get[User](uuid)
-    case email: String if User.checkEmail(email) =>
-      emailsCache.get[String](email).flatMap(_.map(usersCache.get[User]).getOrElse(futureNoneUser))
-    case phone: String if User.checkPhone(phone) =>
-      phonesCache.get[String](phone).flatMap(_.map(usersCache.get[User]).getOrElse(futureNoneUser))
-    case socialId: String if User.checkSocialProviderKey(socialId) =>
-      socialCache.get[String](socialId).flatMap(_.map(usersCache.get[User]).getOrElse(futureNoneUser))
-    case _ => futureNoneUser
-  }
-
   def retrieve(selector: JsObject): Future[Option[JsObject]] = {
     usersCollection.flatMap(_.find(selector).one[JsObject])
   }
@@ -101,14 +87,14 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     */
   def save(user: User): Future[User] = {
     removeFromCaches(user)
-    usersCollection.flatMap(_.insert(user))
+    usersCollection.flatMap(_.insert.one(user))
                    .map(_ => user)
                    .recover(processUserDbEx[User](user.id))
   }
 
   def updateFlags(user: User): Future[User] = {
     removeFromCaches(user)
-    usersCollection.flatMap(_.update(
+    usersCollection.flatMap(_.update.one(
       Json.obj("_id" -> user.id),
       Json.obj(
         "$set" -> Json.obj("flags" -> user.flags),
@@ -337,6 +323,18 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   private def errorHandler[T] = Cursor.ContOnError[List[T]]((v: List[T], ex: Throwable) => {
     log.warn("Error occurred on users reading", ex)
   })
+
+  private def getFromCacheByAnyId(id: String): Future[Option[User]] = id match {
+    case uuid: String if User.checkUuid(uuid) =>
+      usersCache.get[User](uuid)
+    case email: String if User.checkEmail(email) =>
+      emailsCache.get[String](email).flatMap(_.map(usersCache.get[User]).getOrElse(futureNoneUser))
+    case phone: String if User.checkPhone(phone) =>
+      phonesCache.get[String](phone).flatMap(_.map(usersCache.get[User]).getOrElse(futureNoneUser))
+    case socialId: String if User.checkSocialProviderKey(socialId) =>
+      socialCache.get[String](socialId).flatMap(_.map(usersCache.get[User]).getOrElse(futureNoneUser))
+    case _ => futureNoneUser
+  }
 
   private def cacheUser(user: User): User = {
     usersCache.set(user.uuidStr, user, cachedTime)

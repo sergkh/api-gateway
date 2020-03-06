@@ -72,10 +72,10 @@ object TokenGeneration {
     )
 
     val tokenClaims = TokenClaims(
-      claims.getLongClaim("userId"),
+      claims.getStringClaim("userId"),
       Option(claims.getStringClaim("userEmail")),
       Option(claims.getStringClaim("userPhone")),
-      claims.getLongClaim("clientId"),
+      claims.getStringClaim("clientId"),
       claims.getStringListClaim("permissions").asScala.toList
     )
 

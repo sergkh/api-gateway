@@ -15,10 +15,6 @@ import scala.concurrent.duration._
 import scala.language.postfixOps
 import scala.util.Try
 
-/**
-  * @author Sergey Khruschak
-  */
-
 @ImplementedBy(classOf[HmacConfirmationProvider])
 trait ConfirmationProvider {
   def confirmationHeader(code: String, secret: String): (String, String)

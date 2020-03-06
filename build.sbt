@@ -52,6 +52,7 @@ libraryDependencies ++= Seq(
   "com.pauldijou"     %% "jwt-core"                         % "4.3.0",
   "com.iheart"        %% "ficus"                            % "1.4.7",
   "org.reactivemongo" %% "play2-reactivemongo"              % "0.20.3-play28",
+//  "org.mongodb.scala" %% "mongo-scala-driver"               % "2.8.0", ???
   "com.iheart"        %% "play-swagger"                     % "0.9.1-PLAY2.8",
   "com.twitter"       %% "chill"                            % "0.9.5",
   "org.gnieh"         %% "diffson-play-json"                % "4.0.2",

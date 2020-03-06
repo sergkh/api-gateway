@@ -28,8 +28,7 @@ class RoutingService @Inject()(ws: WSClient,
                                config: Configuration,
                                eventBus: EventsStream,
                                system: ActorSystem,
-                               playEnv: Environment,
-                               docService: ApiTemplateService) extends Logging {
+                               playEnv: Environment) extends Logging {
 
   implicit val cl = getClass.getClassLoader
   implicit val executor = system.dispatcher

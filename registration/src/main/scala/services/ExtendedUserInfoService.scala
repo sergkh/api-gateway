@@ -15,7 +15,7 @@ trait ExtendedUserInfoService {
 
   def create(info: ExtendedUser): Future[ExtendedUser]
 
-  def retrieve4user(userId: Long): Future[Option[JsObject]]
+  def retrieve4user(userId: String): Future[Option[JsObject]]
 
   def retrieve(selector: JsObject, projectionKeys: String*): Future[Option[JsObject]]
 

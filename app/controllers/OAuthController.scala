@@ -88,7 +88,7 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
           _ <- eventBus.publish(OauthTokenRemoved(user.uuidStr, authenticator.id, token, req))
           _ <- eventBus.publish(Logout(user, token, req, authenticator.id))
         } yield {
-          log.info(s"Remove oauth token $token by ${req.identity.uuid}")
+          log.info(s"Remove oauth token $token by ${req.identity.id}")
           NoContent
         }
       case None =>
@@ -103,7 +103,7 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
     val offset = data.limit.getOrElse(DEFAULT_OFFSET)
 
     oauthService.list(data.userId, data.accountId, data.appId, limit, offset).map { tokens =>
-      log.info(s"Get oauth tokens for user: ${data.userId}, accountId: ${data.accountId}, clientId: ${data.appId} by ${req.identity.uuid}")
+      log.info(s"Get oauth tokens for user: ${data.userId}, accountId: ${data.accountId}, clientId: ${data.appId} by ${req.identity.id}")
       Ok(Json.toJson(tokens))
     }
   }
@@ -111,7 +111,7 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
   def createApp = silh.SecuredAction(editPerm && NotOauth).async(parse.json) { req =>
     val data = req.asForm(ThirdPartyAppForm.create)
 
-    val app = ThirdpartyApplication(req.identity.uuid, data.name, data.description, data.logo, data.url, data.contacts, data.redirectUrlPattern)
+    val app = ThirdpartyApplication(req.identity.id, data.name, data.description, data.logo, data.url, data.contacts, data.redirectUrlPattern)
 
     for {
       thirdApp <- oauthService.createApp(app)
@@ -122,30 +122,30 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
     }
   }
 
-  def updateApp(userId: String, id: Long) = silh.SecuredAction(NotOauth && (editPerm || WithUser(userId))).async(parse.json) { req =>
+  def updateApp(userId: String, id: String) = silh.SecuredAction(NotOauth && (editPerm || WithUser(userId))).async(parse.json) { req =>
     val data = req.asForm(ThirdPartyAppForm.update)
     for {
       user <- userService.getRequestedUser(userId, req.identity)
-      app <- oauthService.getApp4user(id, user.uuid)
+      app <- oauthService.getApp4user(id, user.id)
       newApp = app.toNonEmptyApplication(data.enabled, data.name, data.description, data.logo, data.url, data.contacts, data.redirectUrlPattern)
       _ <- oauthService.updateApp(id, newApp)
       _ <- eventBus.publish(ApplicationUpdated(req.identity.uuidStr, app, req))
     } yield {
-      log.info("Updating thirdparty application " + id + ", for user: " + user.uuid)
+      log.info("Updating thirdparty application " + id + ", for user: " + user.id)
       Ok(toJson(app))
     }
   }
 
-  def getApp(userId: String, id: Long) = silh.SecuredAction(NotOauth && (readPerm || WithUser(userId))).async { req =>
+  def getApp(userId: String, id: String) = silh.SecuredAction(NotOauth && (readPerm || WithUser(userId))).async { req =>
     userService.getRequestedUser(userId, req.identity).flatMap { user =>
-      oauthService.getApp4user(id, user.uuid).map { app =>
+      oauthService.getApp4user(id, user.id).map { app =>
         log.info("Getting thirdparty application info " + id)
         Ok(toJson(app))
       }
     }
   }
 
-  def getAppById(id: Long) = Action.async { request =>
+  def getAppById(id: String) = Action.async { request =>
       oauthService.getApp(id).map { app =>
         log.info("Getting thirdparty application info " + id)
         Ok(toJson(app).without("secret"))
@@ -158,26 +158,26 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
     userService.getRequestedUser(userId, req.identity).flatMap { user =>
       val data = req.asForm(ThirdPartyAppForm.filter)
 
-      val fApps = oauthService.getApps(user.uuid, data.limit, data.offset)
-      val fCount = oauthService.countApp(Some(user.uuid))
+      val fApps = oauthService.getApps(user.id, data.limit, data.offset)
+      val fCount = oauthService.countApp(Some(user.id))
 
       for {
         apps <- fApps
         count <- fCount
       } yield {
-        log.info("Getting thirdparty application list for user: " + user.uuid + ", count: " + count)
+        log.info("Getting thirdparty application list for user: " + user.id + ", count: " + count)
         Ok(Json.obj("items" -> apps.map(toJson), "count" -> count))
       }
     }
   }
 
-  def removeApp(userId: String, id: Long) = silh.SecuredAction(NotOauth && (editPerm || WithUser(userId))).async { implicit req =>
+  def removeApp(userId: String, id: String) = silh.SecuredAction(NotOauth && (editPerm || WithUser(userId))).async { implicit req =>
     userService.getRequestedUser(userId, req.identity).flatMap { user =>
 
       oauthService.removeApp(id, user, silh.env.authenticatorService)
 
       eventBus.publish(ApplicationRemoved(user.uuidStr, id, req)) map { _ =>
-        log.info("Disable thirdparty application " + id + ", for user: " + user.uuid)
+        log.info("Disable thirdparty application " + id + ", for user: " + user.id)
         NoContent
       }
     }

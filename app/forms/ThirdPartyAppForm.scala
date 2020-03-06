@@ -39,7 +39,7 @@ object ThirdPartyAppForm {
 
   val authorize = Form[OAuthAuthorizeRequest](
     mapping(
-      "clientId" -> longNumber,
+      "clientId" -> nonEmptyText,
       "permissions" -> list(nonEmptyText),
       "responseType" -> enum(OAuthAuthorizeRequest.Type),
       "redirectUrl" -> optional(nonEmptyText)

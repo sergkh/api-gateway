@@ -174,7 +174,7 @@ class UserController @Inject()(
         confirmationService.create(code)
 
         eventBus.publish(PasswordReset(user, otp, request, request2lang)) map { _ =>
-          log.info(s"Generate reset password code for user: ${user.uuid} ($login)")
+          log.info(s"Generate reset password code for user: ${user.id} ($login)")
           NoContent
         }
       case None =>
@@ -268,7 +268,7 @@ class UserController @Inject()(
     updatedUserFuture.flatMap { user =>
 
       if (user.email.isEmpty && user.phone.isEmpty) {
-        log.info("Nor phone or email specified for user " + user.uuid)
+        log.info("Nor phone or email specified for user " + user.id)
         throw AppException(ErrorCodes.IDENTIFIER_REQUIRED, "Nor phone nor email specified")
       }
 
@@ -278,7 +278,7 @@ class UserController @Inject()(
         storedUser <- userService.update(user, true)
         _ <- notifyUserUpdate(oldUser, storedUser, request)
       } yield {
-        log.info(s"User $user was updated by ${request.identity.uuid}")
+        log.info(s"User $user was updated by ${request.identity.id}")
         Ok(Json.toJson(storedUser))
       }
     }
@@ -289,7 +289,7 @@ class UserController @Inject()(
       user <- userService.getRequestedUser(id, request.identity)
       _ <- validateBranchAccess(user.branch, request.identity)
       _ <- userService.delete(user)
-      - <- extendedInfoService.delete(Json.obj("_id" -> user.uuid))
+      - <- extendedInfoService.delete(Json.obj("_id" -> user.id))
       _ <- eventBus.publish(UserDelete(user, comment, request, request2lang))
     } yield {
       log.info(s"User $user was deleted by $id ${comment.map(c => "with comment: " + c ).getOrElse("without comment")}")
@@ -350,31 +350,31 @@ class UserController @Inject()(
       user <- userService.updateFlags(updateUser(blockFlag, editUser))
       _ <- eventBus.publish(if(blockFlag) UserBlocked(user, request, request2lang) else UserUnblocked(user, request, request2lang))
     } yield {
-      log.info(s"User $user was ${if(blockFlag) "blocked" else "unblocked" } by ${request.identity.uuid}")
+      log.info(s"User $user was ${if(blockFlag) "blocked" else "unblocked" } by ${request.identity.id}")
       NoContent
     }
   }
 
   def retrieveExtendedInfo(anyId: String) = silh.SecuredAction(editPerm || WithUser(anyId)).async { implicit request =>
     userService.getRequestedUser(anyId, request.identity).flatMap { user =>
-      extendedInfoService.retrieve4user(user.uuid).map { optInfo =>
-        log.info(s"Obtained extended user info for ${user.uuid} by ${request.identity.uuid}")
+      extendedInfoService.retrieve4user(user.id).map { optInfo =>
+        log.info(s"Obtained extended user info for ${user.id} by ${request.identity.id}")
         Ok(optInfo.map(_.rename("_id", "uuid")).getOrElse(JsObject(Nil)))
       }
     }
   }
 
   def createExtendedInfo(anyId: String) = silh.SecuredAction(WithUser(anyId)).async(parse.json) { implicit request =>
-    val extendedInfo = Json.obj("_id" -> request.identity.uuid) ++ request.body.as[JsObject]
+    val extendedInfo = Json.obj("_id" -> request.identity.id) ++ request.body.as[JsObject]
     extendedInfoService.create(extendedInfo).map { info =>
-      log.info(s"Save extended user info for ${request.identity.uuid} with $info")
+      log.info(s"Save extended user info for ${request.identity.id} with $info")
       Ok(info)
     }
   }
 
   def updateExtendedInfo(anyId: String) = silh.SecuredAction(editPerm || WithUser(anyId)).async(parse.json) { implicit request =>
     userService.getRequestedUser(anyId, request.identity).flatMap { user =>
-      val selector = Json.obj("_id" -> user.uuid)
+      val selector = Json.obj("_id" -> user.id)
 
       val update = request.body.as[JsObject].without("uuid").fields.filter(kv => !ExtendedUser.serviceFields.contains(kv._1))
 
@@ -387,7 +387,7 @@ class UserController @Inject()(
 
       extendedInfoService.update(selector, updateObj).map {
         case Some(info) =>
-          log.info(s"Update extended user info for ${user.uuid} by ${request.identity.uuid} with $info")
+          log.info(s"Update extended user info for ${user.id} by ${request.identity.id} with $info")
           Ok(info)
         case None =>
           log.warn(s"Extended info for user ${user.uuidStr} not found")
@@ -400,7 +400,7 @@ class UserController @Inject()(
     val user = request.identity
     val queryParams = request.asForm(UserForm.queryUser)
 
-    extendedInfoService.retrieve4user(user.uuid).flatMap {
+    extendedInfoService.retrieve4user(user.id).flatMap {
       case Some(info) =>
         val referralCode = (info \ "invitationCode").as[String]
         val selector = Json.obj(
@@ -419,7 +419,7 @@ class UserController @Inject()(
           users <- userService.list(Some(criteria), queryParams)
         } yield {
           val usersJson = users.map(u => Json.toJson(u).as[JsObject].without("permissions", "flags"))
-          log.info(s"Obtained own user structure for ${user.uuid}")
+          log.info(s"Obtained own user structure for ${user.id}")
           Ok(Json.obj("items" -> usersJson, "count" -> count))
         }
 
@@ -437,12 +437,12 @@ class UserController @Inject()(
       )
       _ <- conditional(update.email.isDefined && update.email != oldUser.email,
         userService.getByAnyIdOpt(update.email.get).map { oldOpt =>
-          conditionalFail(oldOpt.exists(_.uuid != oldUser.uuid), ErrorCodes.ALREADY_EXISTS, "Email already used by another user")
+          conditionalFail(oldOpt.exists(_.id != oldUser.id), ErrorCodes.ALREADY_EXISTS, "Email already used by another user")
         })
 
       _ <- conditional(update.phone.isDefined && update.phone != oldUser.phone,
         userService.getByAnyIdOpt(update.phone.get).map { oldOpt =>
-          conditionalFail(oldOpt.exists(_.uuid != oldUser.uuid), ErrorCodes.ALREADY_EXISTS, "Phone already used by another user")
+          conditionalFail(oldOpt.exists(_.id != oldUser.id), ErrorCodes.ALREADY_EXISTS, "Phone already used by another user")
         })
     } yield {
       val flagsChanged = update.flags.toSet != oldUser.flags.toSet
@@ -476,7 +476,7 @@ class UserController @Inject()(
       confirmationService.create(code.copy(login = editUser.phone.get))
 
       eventBus.publish(OtpGeneration(Some(newUser.uuidStr), None, newUser.phone, otp, request)) map { _ =>
-        log.info(s"Sending phone confirmation code to ${newUser.uuid}")
+        log.info(s"Sending phone confirmation code to ${newUser.id}")
         throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
       }
     } else if (editUser.email != newUser.email && newUser.email.isDefined && !confirmationValidator.verifyConfirmed(request)) {
@@ -489,7 +489,7 @@ class UserController @Inject()(
       confirmationService.create(code.copy(login = newUser.email.get), ttl = Some(optEmailTTLSeconds))
 
       eventBus.publish(OtpGeneration(Some(newUser.uuidStr), newUser.email, None, otp, request)) map { _ =>
-        log.info(s"Sending email confirmation code to ${newUser.uuid}")
+        log.info(s"Sending email confirmation code to ${newUser.id}")
         throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
       }
     } else {

@@ -36,7 +36,7 @@ object Responses {
 
     def hasAnyOauthPermission(permissions: String*): Boolean = oauthPermissions.exists(permissions.contains)
 
-    def oauthUser: Option[User] = jwt.customClaims.map(_.as[TokenClaims]).map(t => User(t.userId, t.userEmail, t.userPhone, null))
+    def oauthUser: Option[User] = jwt.customClaims.map(_.as[TokenClaims]).map(t => User(t.userEmail, t.userPhone, "", id = t.userId))
 
     def checkOauthUser(anyId: String): Boolean = oauthUser.exists(_.checkId(anyId))
   }
