@@ -25,7 +25,7 @@ class SocialAuthService @Inject()(reactiveMongoApi: ReactiveMongoApi) {
 
   private def collection = reactiveMongoApi.database.map(_.collection[JSONCollection](UserAuthInfo.COLLECTION_NAME))
 
-  def retrieve[A <: AuthInfo: TypeTag](uuid: Long, loginInfo: LoginInfo): Future[Option[AuthInfo]] = {
+  def retrieve[A <: AuthInfo: TypeTag](uuid: String, loginInfo: LoginInfo): Future[Option[AuthInfo]] = {
     collection.flatMap(_.find(byId(uuid)).one[UserAuthInfo]) map {
       case Some(userInfo) => typeOf[A] match {
         case _: OAuth1Info => userInfo.auth1Info.find(_.loginInfo == loginInfo).map(_.auth)
@@ -35,11 +35,11 @@ class SocialAuthService @Inject()(reactiveMongoApi: ReactiveMongoApi) {
     }
   }
 
-  def save(uuid: Long, loginInfo: LoginInfo, auth: AuthInfo): Future[AuthInfo] = {
+  def save(uuid: String, loginInfo: LoginInfo, auth: AuthInfo): Future[AuthInfo] = {
     collection.flatMap(_.update.one(byId(uuid), saveQuery(uuid, loginInfo, auth), upsert = true)).map(_ => auth)
   }
 
-  def update(uuid: Long, loginInfo: LoginInfo, auth: AuthInfo): Future[AuthInfo] = {
+  def update(uuid: String, loginInfo: LoginInfo, auth: AuthInfo): Future[AuthInfo] = {
     isExist(uuid, loginInfo) flatMap  {
       case None => collection.flatMap(_.update.one(byId(uuid), updateQuery(loginInfo, auth))).map(_ => auth)
       case Some(_) => Future.successful(auth)
@@ -47,7 +47,7 @@ class SocialAuthService @Inject()(reactiveMongoApi: ReactiveMongoApi) {
   }
 
 
-  def findUserUuid(socId: String): Future[Option[Long]] = {
+  def findUserUuid(socId: String): Future[Option[String]] = {
     collection.flatMap(_.find(
       Json.obj("$or" -> Seq(
         findByProviderKeyQuery(socId, UserAuthInfo.OAUTH1),
@@ -56,14 +56,14 @@ class SocialAuthService @Inject()(reactiveMongoApi: ReactiveMongoApi) {
     ).one[UserAuthInfo]).map(_.map(_.uuid))
   }
 
-  def retrieveAllSocialInfo(uuid: Long): Future[List[String]] = {
+  def retrieveAllSocialInfo(uuid: String): Future[List[String]] = {
     collection.flatMap(_.find(byId(uuid)).one[UserAuthInfo]) map {
       case Some(userInfo) => userInfo.auth1Info.map(_.loginInfo.providerKey) ::: userInfo.auth2Info.map(_.loginInfo.providerKey)
       case _ => Nil
     }
   }
 
-  def removeOne[A <: AuthInfo: TypeTag](uuid: Long, loginInfo: LoginInfo): Future[Unit] = {
+  def removeOne[A <: AuthInfo: TypeTag](uuid: String, loginInfo: LoginInfo): Future[Unit] = {
     val removeObj = typeOf[A] match {
       case _: OAuth1Info => removeOneQuery(loginInfo, UserAuthInfo.OAUTH1)
       case _: OAuth2Info => removeOneQuery(loginInfo, UserAuthInfo.OAUTH1)
@@ -71,11 +71,11 @@ class SocialAuthService @Inject()(reactiveMongoApi: ReactiveMongoApi) {
     collection.flatMap(_.update(byId(uuid), removeObj)).map(_ => {})
   }
 
-  def removeAll(uuid: Long): Future[Unit] = {
+  def removeAll(uuid: String): Future[Unit] = {
     collection.flatMap(_.remove(byId(uuid))).map(_ => {})
   }
 
-  private def isExist(uuid: Long, loginInfo: LoginInfo): Future[Option[UserAuthInfo]] = {
+  private def isExist(uuid: String, loginInfo: LoginInfo): Future[Option[UserAuthInfo]] = {
     collection.flatMap(_.find(byId(uuid)).one[UserAuthInfo] map {
         case Some(userInfo) =>
           val exist = userInfo.auth1Info.exists(_.loginInfo == loginInfo) || userInfo.auth2Info.exists(_.loginInfo == loginInfo)
@@ -85,7 +85,7 @@ class SocialAuthService @Inject()(reactiveMongoApi: ReactiveMongoApi) {
     }
 
 
-  def byId(uuid: Long): JsObject = Json.obj("_id" -> uuid)
+  def byId(uuid: String): JsObject = Json.obj("_id" -> uuid)
 
   def updateQuery(loginInfo: LoginInfo, auth: AuthInfo): JsObject = {
     val jsValue = auth match {
@@ -95,7 +95,7 @@ class SocialAuthService @Inject()(reactiveMongoApi: ReactiveMongoApi) {
     Json.obj("$push" -> jsValue)
   }
 
-  def saveQuery(uuid: Long, loginInfo: LoginInfo, auth: AuthInfo): JsObject = {
+  def saveQuery(uuid: String, loginInfo: LoginInfo, auth: AuthInfo): JsObject = {
     auth match {
       case oauth1: OAuth1Info => Json.toJson(UserAuthInfo(uuid, auth1Info = List(SocialOAuth1(loginInfo, oauth1)))).as[JsObject]
       case oauth2: OAuth2Info => Json.toJson(UserAuthInfo(uuid, auth2Info = List(SocialOAuth2(loginInfo, oauth2)))).as[JsObject]

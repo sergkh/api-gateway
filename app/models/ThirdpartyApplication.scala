@@ -14,7 +14,7 @@ import ErrorCodes._
   *         Created on 1/22/16.
   */
 case class ThirdpartyApplication(
-                                  userId: Long,
+                                  userId: String,
                                   name: String,
                                   description: String,
                                   logo: String,
@@ -22,7 +22,7 @@ case class ThirdpartyApplication(
                                   contacts: String,
                                   redirectUrlPattern: String,
                                   enabled: Boolean = true,
-                                  id: Long = UuidGenerator.generateId,
+                                  id: String = UuidGenerator.generateId,
                                   secret: String = CodeGenerator.generateSecret(ThirdpartyApplication.SECRET_LENGTH)) {
 
   def toNonEmptyApplication(appEnabled: Option[Boolean],
@@ -57,7 +57,7 @@ object ThirdpartyApplication {
   final val COLLECTION_NAME = "thirdparty_apps"
 
   implicit val appReads: Reads[ThirdpartyApplication] = (
-    (JsPath \ "userId").read[Long] and
+    (JsPath \ "userId").read[String] and
       (JsPath \ "name").read[String] and
       (JsPath \ "description").read[String] and
       (JsPath \ "logo").read[String] and
@@ -65,12 +65,12 @@ object ThirdpartyApplication {
       (JsPath \ "contacts").read[String] and
       (JsPath \ "redirectUrlPattern").read[String] and
       (JsPath \ "enabled").read[Boolean] and
-      (JsPath \ "_id").read[Long] and
+      (JsPath \ "_id").read[String] and
       (JsPath \ "secret").read[String]
     ) (ThirdpartyApplication.apply _)
 
   implicit val appWrites: OWrites[ThirdpartyApplication] = (
-    (JsPath \ "userId").write[Long] and
+    (JsPath \ "userId").write[String] and
       (JsPath \ "name").write[String] and
       (JsPath \ "description").write[String] and
       (JsPath \ "logo").write[String] and
@@ -78,7 +78,7 @@ object ThirdpartyApplication {
       (JsPath \ "contacts").write[String] and
       (JsPath \ "redirectUrlPattern").write[String] and
       (JsPath \ "enabled").write[Boolean] and
-      (JsPath \ "_id").write[Long] and
+      (JsPath \ "_id").write[String] and
       (JsPath \ "secret").write[String]
     ) (unlift(ThirdpartyApplication.unapply))
 

@@ -5,7 +5,7 @@ import play.api.libs.functional.syntax._
 import utils.RandomStringGenerator
 
 case class Branch(name: String,
-                  createdBy: Long,
+                  createdBy: String,
                   description: Option[String] = None,
                   hierarchy: List[String] = Nil,
                   id: String = Branch.nextId) {
@@ -28,7 +28,7 @@ object Branch {
 
   val mongoFormat: OFormat[Branch] = (
     (JsPath \ "name").format[String] and
-    (JsPath \ "createdBy").format[Long] and
+    (JsPath \ "createdBy").format[String] and
     (JsPath \ "description").formatNullable[String] and
     (JsPath \ "hierarchy").format[List[String]] and
     (JsPath \ "_id").format[String]

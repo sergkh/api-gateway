@@ -131,7 +131,7 @@ class OAuthService @Inject()(userService: UserService,
           val expire = authenticatorService.clock.now + ttl
           val Array(appId, secret) = new String(Base64.getDecoder.decode(req.headers(Http.HeaderNames.AUTHORIZATION).replaceFirst("Basic ", ""))).split(":")
 
-          getApp(appId.toLong).flatMap { app =>
+          getApp(appId).flatMap { app =>
             app.checkSecret(secret)
 
             val loginInfo = LoginInfo(CredentialsProvider.ID, app.userId.toString)
@@ -201,16 +201,16 @@ class OAuthService @Inject()(userService: UserService,
   def createApp(app: ThirdpartyApplication): Future[ThirdpartyApplication] =
     appsCollection.flatMap(_.insert(app).map(_ => app).recover(MongoErrorHandler.processError[ThirdpartyApplication]))
 
-  def getApp4user(appId: Long, userId: Long): Future[ThirdpartyApplication] = {
+  def getApp4user(appId: String, userId: String): Future[ThirdpartyApplication] = {
     val selector = Json.obj("_id" -> appId, "userId" -> userId)
     appsCollection.flatMap(_.find(selector).one[ThirdpartyApplication])
       .map(_.getOrElse(throw AppException(ErrorCodes.APPLICATION_NOT_FOUND, s"Application $appId for user $userId not found")))
   }
 
-  def getApp(appId: Long): Future[ThirdpartyApplication] = appsCollection.flatMap(_.find(Json.obj("_id" -> appId)).one[ThirdpartyApplication])
+  def getApp(appId: String): Future[ThirdpartyApplication] = appsCollection.flatMap(_.find(Json.obj("_id" -> appId)).one[ThirdpartyApplication])
     .map(_.getOrElse(throw AppException(ErrorCodes.APPLICATION_NOT_FOUND, s"Application $appId not found")))
 
-  def getApps(userId: Long, limit: Int, offset: Int): Future[List[ThirdpartyApplication]] = {
+  def getApps(userId: String, limit: Int, offset: Int): Future[List[ThirdpartyApplication]] = {
     val criteria = Json.obj("userId" -> userId)
     val opts = QueryOpts(skipN = offset)
 
@@ -218,26 +218,26 @@ class OAuthService @Inject()(userService: UserService,
       .cursor[ThirdpartyApplication](ReadPreference.secondaryPreferred).collect[List](limit, errorHandler[ThirdpartyApplication]))
   }
 
-  def countApp(userId: Option[Long]): Future[Int] = {
+  def countApp(userId: Option[String]): Future[Int] = {
     val criteria = userId.map(u => Json.obj("userId" -> u))
 
     appsCollection.flatMap(_.count(criteria))
   }
 
-  def updateApp(id: Long, app: ThirdpartyApplication): Future[ThirdpartyApplication] = {
+  def updateApp(id: String, app: ThirdpartyApplication): Future[ThirdpartyApplication] = {
     findAndUpdate(Json.obj("_id" -> id), Json.toJson(app).as[JsObject], id)
   }
 
-  def removeApp(appId: Long, user: User, jwtAuthService: CustomJWTAuthenticatorService)
+  def removeApp(appId: String, user: User, jwtAuthService: CustomJWTAuthenticatorService)
                (implicit req: Request[AnyContent]): Unit = {
 
     appsCollection.flatMap(_.update(
-      Json.obj("_id" -> appId, "userId" -> user.uuid),
+      Json.obj("_id" -> appId, "userId" -> user.id),
       Json.obj("$set" -> Json.obj("enabled" -> false))
     ))
 
     tokensCollection.flatMap { tokens =>
-      tokens.find(Json.obj("customClaims.clientId" -> appId, "customClaims.userId" -> user.uuid))
+      tokens.find(Json.obj("customClaims.clientId" -> appId, "customClaims.userId" -> user.id))
         .cursor[JWTAuthenticator](ReadPreference.secondaryPreferred).collect[List](-1, errorHandler[JWTAuthenticator]).map { ts =>
         ts.map(_.id).foreach { sessionId =>
           sessionsService.finish(sessionId)
@@ -250,7 +250,7 @@ class OAuthService @Inject()(userService: UserService,
 
   private def appsCollection = mongo.database.map(_.collection[JSONCollection](ThirdpartyApplication.COLLECTION_NAME))
 
-  private def findAndUpdate(selector: JsObject, update: JsObject, id: Long): Future[ThirdpartyApplication] = {
+  private def findAndUpdate(selector: JsObject, update: JsObject, id: String): Future[ThirdpartyApplication] = {
     appsCollection.flatMap(_.findAndUpdate(selector, update, true).map(
       _.result[ThirdpartyApplication].getOrElse(throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Thirdparty application $id not found"))
     ))

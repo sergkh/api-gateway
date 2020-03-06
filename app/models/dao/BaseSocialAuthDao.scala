@@ -17,7 +17,7 @@ class BaseSocialAuthDao[A <: AuthInfo](userService: UserService,
 
   override def find(loginInfo: LoginInfo): Future[Option[A]] = {
     userService.retrieve(loginInfo) flatMap {
-      case Some(user) => authService.retrieve[A](user.uuid, loginInfo) map {
+      case Some(user) => authService.retrieve[A](user.id, loginInfo) map {
         case Some(auth) => Some(auth.asInstanceOf[A])
         case _ => None
       }
@@ -27,28 +27,28 @@ class BaseSocialAuthDao[A <: AuthInfo](userService: UserService,
 
   override def add(loginInfo: LoginInfo, authInfo: A): Future[A] = {
     userService.retrieve(loginInfo) flatMap {
-      case Some(user) => authService.save(user.uuid, loginInfo, authInfo).map(_ => authInfo.asInstanceOf[A])
+      case Some(user) => authService.save(user.id, loginInfo, authInfo).map(_ => authInfo.asInstanceOf[A])
       case _ => throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User with login info: $loginInfo is not found")
     }
   }
 
   override def update(loginInfo: LoginInfo, authInfo: A): Future[A] = {
     userService.retrieve(loginInfo) flatMap {
-      case Some(user) => authService.update(user.uuid, loginInfo, authInfo).map(_ => authInfo.asInstanceOf[A])
+      case Some(user) => authService.update(user.id, loginInfo, authInfo).map(_ => authInfo.asInstanceOf[A])
       case _ => throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User with login info: $loginInfo is not found")
     }
   }
 
   override def save(loginInfo: LoginInfo, authInfo: A): Future[A] = {
     userService.retrieve(loginInfo) flatMap {
-      case Some(user) => authService.update(user.uuid, loginInfo, authInfo).map(_ => authInfo.asInstanceOf[A])
+      case Some(user) => authService.update(user.id, loginInfo, authInfo).map(_ => authInfo.asInstanceOf[A])
       case _ => throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User with login info: $loginInfo is not found")
     }
   }
 
   override def remove(loginInfo: LoginInfo): Future[Unit] = {
     userService.retrieve(loginInfo) flatMap {
-      case Some(user) => authService.removeOne[A](user.uuid, loginInfo)
+      case Some(user) => authService.removeOne[A](user.id, loginInfo)
       case _ => throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User with login info: $loginInfo is not found")
     }
   }

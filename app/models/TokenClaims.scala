@@ -8,10 +8,10 @@ import utils.StringHelpers
   * @author Yaroslav Derman <yaroslav.derman@gmail.com>.
   */
 case class TokenClaims(
-                        userId: Long,
+                        userId: String,
                         userEmail: Option[String],
                         userPhone: Option[String],
-                        clientId: Long,
+                        clientId: String,
                         permissions: List[String]
                       )
 
@@ -21,9 +21,9 @@ object TokenClaims {
 
   def apply(
              user: User,
-             clientId: Long,
+             clientId: String,
              permissions: List[String]
-           ): TokenClaims = new TokenClaims(user.uuid, user.email, user.phone, clientId, permissions)
+           ): TokenClaims = new TokenClaims(user.id, user.email, user.phone, clientId, permissions)
 
   type Type = Type.Value
 
@@ -36,7 +36,7 @@ object TokenClaims {
 
 }
 
-case class OAuthAuthorizeRequest(clientId: Long, permissions: List[String], responseType: OAuthAuthorizeRequest.Type, redirectUrl: Option[String] = None)
+case class OAuthAuthorizeRequest(clientId: String, permissions: List[String], responseType: OAuthAuthorizeRequest.Type, redirectUrl: Option[String] = None)
 
 object OAuthAuthorizeRequest {
   type Type = Type.Value

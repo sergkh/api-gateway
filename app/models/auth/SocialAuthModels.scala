@@ -12,7 +12,7 @@ import play.api.libs.json._
 case class SocialOAuth1(loginInfo: LoginInfo, auth: OAuth1Info)
 case class SocialOAuth2(loginInfo: LoginInfo, auth: OAuth2Info)
 
-case class UserAuthInfo(uuid: Long, auth1Info: List[SocialOAuth1] = Nil, auth2Info: List[SocialOAuth2] = Nil)
+case class UserAuthInfo(uuid: String, auth1Info: List[SocialOAuth1] = Nil, auth2Info: List[SocialOAuth2] = Nil)
 
 object UserAuthInfo {
   final val COLLECTION_NAME = "auth"
@@ -27,7 +27,7 @@ object UserAuthInfo {
 
 
   implicit val reads: Reads[UserAuthInfo] = (
-      (JsPath \ "_id").read[Long] and
+      (JsPath \ "_id").read[String] and
       (JsPath \ OAUTH1).read[List[SocialOAuth1]] and
       (JsPath \ OAUTH2).read[List[SocialOAuth2]]
     )(UserAuthInfo.apply _)

@@ -67,11 +67,11 @@ class MongoBranchesService @Inject()(conf: Configuration,
     val branchFuture = create.parentOrRoot match {
       case Branch.ROOT =>
         Future.successful(
-          Branch(create.name, user.uuid, create.description, id :: Nil, id)
+          Branch(create.name, user.id, create.description, id :: Nil, id)
         )
       case parentId: String =>
         getOrFail(parentId) map { parent =>
-          Branch(create.name, user.uuid, create.description, id :: parent.hierarchy, id)
+          Branch(create.name, user.id, create.description, id :: parent.hierarchy, id)
         }
     }
 
@@ -89,7 +89,7 @@ class MongoBranchesService @Inject()(conf: Configuration,
       }
       uCollection <- users
       bCollection <- branches
-      updateBranch = Branch(update.name, user.uuid, update.description, id :: newParentHierarchy, id)
+      updateBranch = Branch(update.name, user.id, update.description, id :: newParentHierarchy, id)
       optionalOldBranch <- bCollection.findAndUpdate(byId(id), updateBranch, false).map(_.result[Branch])
     } yield {
       optionalOldBranch match {

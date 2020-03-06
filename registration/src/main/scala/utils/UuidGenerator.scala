@@ -14,17 +14,8 @@ object UuidGenerator {
   private final val UID_BASE = 1000000000000000L
   private final val ARRAY_SIZE = 8
   private final val DIGIT_MAX = 9
-  private final val JS_SAFE_MAX = 9007199254740992L
 
-  def generateId: Long = {
-    val id = generateIdUnsafe
-
-    if (id < JS_SAFE_MAX) {
-      id
-    } else {
-      generateId
-    }
-  }
+  def generateId: String = generateIdUnsafe.toString()
 
   private def generateIdUnsafe: Long = {
     val ng = numberGenerator
@@ -47,9 +38,5 @@ object UuidGenerator {
     val rndDigit = 1 + random.nextInt(DIGIT_MAX)
 
     (rndDigit * UID_BASE) + (normUid % UID_BASE)
-  }
-
-  def main(args: Array[String]) {
-    println("New id:" + generateId)
   }
 }

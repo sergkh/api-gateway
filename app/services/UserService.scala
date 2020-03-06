@@ -23,6 +23,7 @@ import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
 import com.mohiva.play.silhouette.impl.providers.SocialProfile
 import com.mohiva.play.silhouette.impl.providers.CommonSocialProfile
+import scala.util.Try
 
 /**
   * Handles actions to users.
@@ -102,18 +103,18 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     removeFromCaches(user)
     usersCollection.flatMap(_.insert(user))
                    .map(_ => user)
-                   .recover(processUserDbEx[User](user.uuid))
+                   .recover(processUserDbEx[User](user.id))
   }
 
   def updateFlags(user: User): Future[User] = {
     removeFromCaches(user)
     usersCollection.flatMap(_.update(
-      Json.obj("_id" -> user.uuid),
+      Json.obj("_id" -> user.id),
       Json.obj(
         "$set" -> Json.obj("flags" -> user.flags),
         "$inc" -> Json.obj("version" -> 1)
       )
-    ).map(_ => user).recover(processUserDbEx[User](user.uuid)))
+    ).map(_ => user).recover(processUserDbEx[User](user.id)))
   }
 
   /**
@@ -137,7 +138,6 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   private def createUserFromSocialProfile(providerKey: String, profile: CommonSocialProfile, authInfo: => AuthInfo): Future[User] = {
       
     val user = User(
-      uuid = UuidGenerator.generateId,
       email = profile.email.map(_.toLowerCase()),
       passHash = "",
       firstName = profile.firstName,
@@ -148,9 +148,9 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
 
     for {
       _ <- Future.successful(log.info("Saving social profile"))
-      _ <- authService.save(user.uuid, profile.loginInfo, authInfo)
+      _ <- authService.save(user.id, profile.loginInfo, authInfo)
       _ <- Future.successful(log.info("Saved social profile"))
-      _ <- usersCollection.flatMap(_.insert.one(transformToDbUser(user)).recover(processUserDbEx[User](user.uuid)))
+      _ <- usersCollection.flatMap(_.insert.one(transformToDbUser(user)).recover(processUserDbEx[User](user.id)))
     } yield user
   }
 
@@ -170,18 +170,18 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
 
       log.info(s"Updating user on auth service")
 
-      authService.update(user.uuid, profile.loginInfo, authInfo)
+      authService.update(user.id, profile.loginInfo, authInfo)
 
       log.info(s"Updating users collection")
 
       usersCollection.flatMap { users =>
         users.update.one(
-          Json.obj("_id" -> user.uuid),
+          Json.obj("_id" -> user.id),
           Json.obj(
             "$set" -> Json.obj("firstName" -> updUser.firstName, "lastName" -> updUser.lastName, "email" -> updUser.email),
             "$inc" ->  Json.obj("version" -> 1)
           )
-        ).recover(processUserDbEx[User](user.uuid))
+        ).recover(processUserDbEx[User](user.id))
       }.map(_ => updUser)
     } else {
       log.info(s"Skipping user update by social profile $user")
@@ -209,12 +209,12 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
 
   def updatePassTTL(user: User): Future[User] = {
     usersCollection.flatMap(_.update(
-      Json.obj("_id" -> user.uuid),
+      Json.obj("_id" -> user.id),
       Json.obj(
         "$set" -> Json.obj("passTTL" -> user.passTtl, "flags" -> user.flags),
         "$inc" -> Json.obj("version" -> 1)
       )
-    ).map(_ => user).recover(processUserDbEx[User](user.uuid)))
+    ).map(_ => user).recover(processUserDbEx[User](user.id)))
   }
 
   def update(user4update: User, replaceDoc: Boolean = false): Future[User] = {
@@ -225,9 +225,9 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
         Json.obj("$set" -> transformToDbUser(user4update))
       }
 
-      users.findAndUpdate(versionedSelector(user4update), obj, true).recover(processUserDbEx(user4update.uuid)).map { res =>
+      users.findAndUpdate(versionedSelector(user4update), obj, true).recover(processUserDbEx(user4update.id)).map { res =>
         res.result[User].getOrElse {
-          log.error(s"Concurrent modification exception occurred on user ${user4update.uuid} updating")
+          log.error(s"Concurrent modification exception occurred on user ${user4update.id} updating")
           throw AppException(ErrorCodes.CONCURRENT_MODIFICATION, s"User exists, but version is conflicts")
         }
       }
@@ -237,11 +237,11 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   def delete(user: User): Future[Unit] = {
     usersCollection.map { users =>
 
-      users.delete(true).one(Json.obj("_id" -> user.uuid))
+      users.delete(true).one(Json.obj("_id" -> user.id))
 
       removeFromCaches(user)
 
-      authService.removeAll(user.uuid)
+      authService.removeAll(user.id)
     }
   }
 
@@ -269,12 +269,12 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   def getByAnyIdOpt(id: String): Future[Option[User]] = {
     val user = id match {
       case uuid: String if User.checkUuid(uuid) => 
-        usersCollection.flatMap(_.find(Json.obj("_id" -> uuid.toLong)).one[User])
+        usersCollection.flatMap(_.find(Json.obj("_id" -> uuid)).one[User])
       case email: String if User.checkEmail(email) => 
         log.info(s"Getting user by email: '$email'")
-        usersCollection.flatMap(_.find(Json.obj("email" -> email.toLowerCase)).one[User]).map { user =>
-          log.info(s"User found $user")
-          user
+        usersCollection.flatMap(_.find(Json.obj("email" -> email.toLowerCase)).one[JsObject]).map { user =>
+          log.info(s"User found $user: ${Try(user.map(_.as[User]))}")
+          user.map(_.as[User])
         }
       case phone: String if User.checkPhone(phone) => usersCollection.flatMap(_.find(Json.obj("phone" -> phone)).one[User])
       case socialId: String if User.checkSocialProviderKey(socialId) => authService.findUserUuid(socialId) flatMap {
@@ -308,7 +308,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     )
   }
 
-  private def processUserDbEx[T](userId: Long): PartialFunction[Throwable, T] = {
+  private def processUserDbEx[T](userId: String): PartialFunction[Throwable, T] = {
     case ex: DatabaseException if ex.code.exists(c => c == 11000 || c == 11001) =>
       log.error(s"Error occurred on user $userId updating (duplicate identifier) ", ex)
       throw AppException(ErrorCodes.ALREADY_EXISTS, "Email or phone already exists")
@@ -327,7 +327,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   private def transformToDbUser(userJson: JsObject): JsObject = userJson.without("permissions")
 
   private def versionedSelector(user4update: User): JsObject = Json.obj(
-    "_id" -> user4update.uuid,
+    "_id" -> user4update.id,
     "$or" -> Json.arr(
       Json.obj("version" -> Json.obj("$exists" -> false)),
       Json.obj("version" -> user4update.version)
@@ -349,7 +349,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
       phonesCache.set(phone, user.uuidStr, cachedTime)
     }
 
-    authService.retrieveAllSocialInfo(user.uuid) map { socialIdLst =>
+    authService.retrieveAllSocialInfo(user.id) map { socialIdLst =>
       for (socialId <- socialIdLst) {
         socialCache.set(socialId, user.uuidStr, cachedTime)
       }
