@@ -390,29 +390,6 @@ PUT         /users/:userId                                        @controllers.U
 PATCH         /users/:userId                                        @controllers.UserController.patch(userId: String)
 
 ###
-# summary: Change password expiration
-# tags:
-#   - Users
-# operationId: updatePasswordTTL
-# security:
-#   - oauth: ['users:edit']
-#   - api_key: ['users:edit']
-# parameters:
-#   - name: userId
-#     in: path
-#     type: string
-#     required: true
-#     description: User identifier (email/phone/uuid) or 'me' to identify self
-#   - name: body
-#     schema:
-#      $ref: '#/definitions/forms.UserForm.PasswordTTL'
-# responses:
-#   204:
-#     description: Password expiration successfully changed
-###
-PUT         /users/:userId/password-tll                                        @controllers.UserController.changePasswordTTL(userId: String)
-
-###
 # summary: Block or unblock specified user by admin
 # tags:
 #   - Users

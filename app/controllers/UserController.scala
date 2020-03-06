@@ -108,8 +108,7 @@ class UserController @Inject()(
       val loginInfo = LoginInfo(CredentialsProvider.ID, user.identifier)
 
       val updUser = user.copy(
-        passHash = passwordHasher.hash(data.newPass).password,
-        passUpdated = new Date()
+        passHash = passwordHasher.hash(data.newPass).password
       )
 
       passDao.find(loginInfo).flatMap {
@@ -138,28 +137,6 @@ class UserController @Inject()(
         case other =>
           log.info(s"Password info doens't match request: $other for pass change")
           throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User ${user.identifier} not found")
-      }
-    }
-  }
-
-  def changePasswordTTL(id: String) = silh.SecuredAction(editPerm).async(parse.json) { implicit request =>
-    val data = request.asForm(UserForm.passwordTTL)
-
-    userService.getRequestedUser(id, request.identity).flatMap { editedUser =>
-
-      val newFlags = data.expireOnce match {
-        case Some(true) => (User.FLAG_EXPIRED_PASSWORD +: editedUser.flags).distinct
-        case Some(false) => editedUser.flags.filterNot(_ == User.FLAG_EXPIRED_PASSWORD)
-        case None => editedUser.flags
-      }
-
-      val updatedUser = editedUser.copy(passTtl = data.passTTL, flags = newFlags)
-
-      userService.updatePassTTL(updatedUser).flatMap { _ =>
-        eventBus.publish(PasswordTTLChange(updatedUser, request, request2lang)) map { _ =>
-          log.info(s"Updating pass expiration for ${updatedUser.identifier} to $data")
-          NoContent
-        }
       }
     }
   }

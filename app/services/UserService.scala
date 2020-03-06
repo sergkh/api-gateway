@@ -67,7 +67,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
         getByAnyIdOpt(login.providerKey) map {
           case Some(u) if u.hasFlag(User.FLAG_BLOCKED) =>
             throw AppException(ErrorCodes.BLOCKED_USER, s"User ${u.identifier} is blocked")
-          case Some(u) if u.hasExpiredPassword =>
+          case Some(u) if u.hasFlag(User.FLAG_PASSWORD_EXP) =>
             throw AppException(ErrorCodes.EXPIRED_PASSWORD, s"User ${u.identifier} has expired password! Please change it.")
           case Some(u) => Some(cacheUser(u))
           case None => None
@@ -184,23 +184,12 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
       }
 
       val obj = Json.obj(
-        "$set" -> Json.obj("passHash" -> pass.password, "passUpdated" -> new Date()),
-        "$inc" ->  Json.obj("version" -> 1),
-        "$pull" -> Json.obj("flags" -> User.FLAG_EXPIRED_PASSWORD) // remove flag if any
+        "$set" -> Json.obj("passHash" -> pass.password),
+        "$inc" ->  Json.obj("version" -> 1)
       )
 
       users.update(criteria, obj).map(Function.const(()))
     }
-  }
-
-  def updatePassTTL(user: User): Future[User] = {
-    usersCollection.flatMap(_.update(
-      Json.obj("_id" -> user.id),
-      Json.obj(
-        "$set" -> Json.obj("passTTL" -> user.passTtl, "flags" -> user.flags),
-        "$inc" -> Json.obj("version" -> 1)
-      )
-    ).map(_ => user).recover(processUserDbEx[User](user.id)))
   }
 
   def update(user4update: User, replaceDoc: Boolean = false): Future[User] = {
@@ -254,15 +243,9 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
 
   def getByAnyIdOpt(id: String): Future[Option[User]] = {
     val user = id match {
-      case uuid: String if User.checkUuid(uuid) => 
-        usersCollection.flatMap(_.find(Json.obj("_id" -> uuid)).one[User])
-      case email: String if User.checkEmail(email) => 
-        log.info(s"Getting user by email: '$email'")
-        usersCollection.flatMap(_.find(Json.obj("email" -> email.toLowerCase)).one[JsObject]).map { user =>
-          log.info(s"User found $user: ${Try(user.map(_.as[User]))}")
-          user.map(_.as[User])
-        }
-      case phone: String if User.checkPhone(phone) => usersCollection.flatMap(_.find(Json.obj("phone" -> phone)).one[User])
+      case uuid: String if User.checkUuid(uuid)    => usersCollection.flatMap(_.find(Json.obj("_id" -> uuid)).one[User])
+      case email: String if User.checkEmail(email) => usersCollection.flatMap(_.find(Json.obj("email" -> email.toLowerCase)).one[User])
+      case phone: String if User.checkPhone(phone) => usersCollection.flatMap(_.find(Json.obj("phone" -> phone)).one[User]) 
       case socialId: String if User.checkSocialProviderKey(socialId) => authService.findUserUuid(socialId) flatMap {
         case Some(uuid) => usersCollection.flatMap(_.find(Json.obj("_id" -> uuid)).one[User])
         case None => Future.successful(None)

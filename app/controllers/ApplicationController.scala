@@ -151,9 +151,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
           log.info(s"Succeed user authentication ${userIdLoginInfo.providerKey}")
 
           eventBus.publish(Login(user.uuidStr, token, request, authenticator.id, authenticator.expirationDateTime.getMillis)).flatMap { _ =>
-            silh.env.authenticatorService.embed(token, Ok(JsonHelper.toNonemptyJson(
-              "passExpiration" -> user.passwordExpiration.map(_.toString), "token" -> token)
-            ))
+            silh.env.authenticatorService.embed(token, Ok(JsonHelper.toNonemptyJson("token" -> token)))
           }
         }
       }

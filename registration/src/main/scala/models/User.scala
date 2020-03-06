@@ -1,6 +1,5 @@
 package models
 
-import java.security.{Permission, Permissions}
 import java.util.Date
 
 import com.mohiva.play.silhouette.api.Identity
@@ -18,8 +17,6 @@ import utils.StringHelpers._
 case class User(email: Option[String] = None,
                 phone: Option[String] = None,
                 passHash: String,
-                passTtl: Option[Long] = None,
-                passUpdated: Date = new Date(),
                 flags: Seq[String] = Nil,
                 roles: Seq[String] = Nil,
                 permissions: Seq[String] = Nil,
@@ -36,7 +33,7 @@ case class User(email: Option[String] = None,
     } yield first + " " + last
   }
 
-  val uuidStr = id.toString
+  val uuidStr = id
 
   def identifier: String = email getOrElse (phone getOrElse id).toString
 
@@ -58,10 +55,6 @@ case class User(email: Option[String] = None,
 
   def hasFlag(flag: String): Boolean = flags.contains(flag)
 
-  def hasExpiredPassword: Boolean = hasFlag(User.FLAG_EXPIRED_PASSWORD) || passwordExpiration.exists(_.before(new Date()))
-
-  def passwordExpiration: Option[Date] = passTtl.map(ttl => new Date(passUpdated.getTime + ttl))
-
   def branch: Option[String] = hierarchy.headOption
 
   override def toString =
@@ -82,7 +75,7 @@ object User {
   val COLLECTION_NAME = "users"
   val EXTENDED_COLLECTION_NAME = "extended-users"
 
-  val FLAG_EXPIRED_PASSWORD = "pass_exp"
+  val FLAG_PASSWORD_EXP = "pass_exp"
   val FLAG_BLOCKED = "blocked"
   val FLAG_2FACTOR = "2factor"
 
@@ -101,8 +94,6 @@ object User {
       (JsPath \ "email").readNullable[String] and
       (JsPath \ "phone").readNullable[String] and
       (JsPath \ "passHash").read[String].orElse(Reads.pure("")) and
-      (JsPath \ "passTtl").readNullable[Long] and
-      (JsPath \ "passUpdated").read[Date].orElse(Reads.pure(new Date(0L))) and
       (JsPath \ "flags").read[Seq[String]].orElse(Reads.pure(Nil)) and
       (JsPath \ "roles").read[Seq[String]].orElse(Reads.pure(Nil)) and
       (JsPath \ "permissions").read[Seq[String]].orElse(Reads.pure(Nil)) and
@@ -118,7 +109,6 @@ object User {
       "id" -> u.id,
       "email" -> u.email,
       "phone" -> u.phone,
-      "passTtl" -> u.passTtl,
       "flags" -> Option(u.flags).filterNot(_.isEmpty),
       "roles" -> Option(u.roles).filterNot(_.isEmpty),
       "permissions" -> Option(u.permissions).filterNot(_.isEmpty),
@@ -134,8 +124,6 @@ object User {
     (JsPath \ "email").readNullable[String] and
     (JsPath \ "phone").readNullable[String] and
     (JsPath \ "passHash").read[String].orElse(Reads.pure("")) and
-    (JsPath \ "passTtl").readNullable[Long] and
-    (JsPath \ "passUpdated").read[Date].orElse(Reads.pure(new Date(0L))) and
     (JsPath \ "flags").read[Seq[String]].orElse(Reads.pure(Nil)) and
     (JsPath \ "roles").read[Seq[String]].orElse(Reads.pure(Nil)) and
     Reads.pure(Nil) and
@@ -153,8 +141,6 @@ object User {
         "email" -> u.email,
         "phone" -> u.phone,
         "passHash" -> u.passHash,
-        "passTtl" -> u.passTtl,
-        "passUpdated" -> u.passUpdated,
         "flags" -> u.flags,
         "roles" -> u.roles,
         "hierarchy" -> u.hierarchy,

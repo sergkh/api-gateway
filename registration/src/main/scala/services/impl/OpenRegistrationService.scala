@@ -43,9 +43,6 @@ class OpenRegistrationService @Inject()(config: Configuration,
   final val phoneTtl = 10 * 60
 
   val requirePass = config.get[Boolean]("app.requirePassword")
-  val passwordPeriod = config.getOptional[Duration]("app.passwordPeriod").map(_.toMillis)
-
-  log.info("Open registration schema enabled")
 
   override def userRegistrationRequest(req: Request[_]): Future[RegistrationData] = {
     val data = RegisterForm.openForm.bindFromRequest()(req).fold(
@@ -108,8 +105,7 @@ class OpenRegistrationService @Inject()(config: Configuration,
         val user = User(
           email = registerData.optEmail.map(_.toLowerCase),
           phone = registerData.optPhone,
-          passHash = registerData.passHash,
-          passTtl = passwordPeriod
+          passHash = registerData.passHash
         )
 
         userService.save(user).flatMap { u =>

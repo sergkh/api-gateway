@@ -15,7 +15,7 @@ object UuidGenerator {
   private final val ARRAY_SIZE = 8
   private final val DIGIT_MAX = 9
 
-  def generateId: String = generateIdUnsafe.toString()
+  def generateId: String = generateIdUnsafe.toString
 
   private def generateIdUnsafe: Long = {
     val ng = numberGenerator
