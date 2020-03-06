@@ -14,7 +14,7 @@ import play.modules.reactivemongo.ReactiveMongoApi
 import reactivemongo.api.{Cursor, QueryOpts, ReadPreference}
 import reactivemongo.core.errors.DatabaseException
 import reactivemongo.play.json._
-import reactivemongo.play.json.collection.JSONCollection
+import reactivemongo.play.json.collection._
 import services.auth.SocialAuthService
 import utils.Logging
 import utils.RichJson._
@@ -23,7 +23,11 @@ import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
 import com.mohiva.play.silhouette.impl.providers.CommonSocialProfile
 import scala.util.Try
+import reactivemongo.api.collections.bson.BSONCollection
 
+import reactivemongo.bson._
+import services.formats.MongoFormats._
+import reactivemongo.api.bson.collection._
 /**
   * Handles actions to users.
   */
@@ -35,7 +39,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
                             rolesCache: AsyncCacheApi,
                             reactiveMongoApi: ReactiveMongoApi,
                             authService: SocialAuthService,
-                            conf: Configuration)(implicit exec: ExecutionContext) extends UserIdentityService with Logging {
+                            conf: Configuration)(implicit ec: ExecutionContext) extends UserIdentityService with Logging {
 
   private[this] final val futureNoneUser: Future[Option[User]] = FastFuture.successful(None)
 
@@ -43,12 +47,9 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
 
   private def db = reactiveMongoApi.database
 
-  private def usersCollection = db.map(_.collection[JSONCollection](User.COLLECTION_NAME))
+  private def usersCollection = db.map(_.collection[BSONCollection]("users"))
 
-  private def rolesCollection = db.map(_.collection[JSONCollection](RolePermissions.COLLECTION_NAME))
-
-  implicit val userReader = User.mongoReader
-  implicit val userWriter = User.mongoWriter
+  private def rolesCollection = db.map(_.collection[BSONCollection]("user_permissions"))
 
   /**
     * Retrieves a user that matches the specified login info.
@@ -87,6 +88,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     */
   def save(user: User): Future[User] = {
     removeFromCaches(user)
+  
     usersCollection.flatMap(_.insert.one(user))
                    .map(_ => user)
                    .recover(processUserDbEx[User](user.id))
@@ -94,11 +96,12 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
 
   def updateFlags(user: User): Future[User] = {
     removeFromCaches(user)
+
     usersCollection.flatMap(_.update.one(
-      Json.obj("_id" -> user.id),
-      Json.obj(
-        "$set" -> Json.obj("flags" -> user.flags),
-        "$inc" -> Json.obj("version" -> 1)
+      byField("_id", user.id),
+      BSONDocument(
+        "$set" -> BSONDocument("flags" -> user.flags),
+        "$inc" -> BSONDocument("version" -> 1)
       )
     ).map(_ => user).recover(processUserDbEx[User](user.id)))
   }
@@ -162,10 +165,10 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
 
       usersCollection.flatMap { users =>
         users.update.one(
-          Json.obj("_id" -> user.id),
-          Json.obj(
-            "$set" -> Json.obj("firstName" -> updUser.firstName, "lastName" -> updUser.lastName, "email" -> updUser.email),
-            "$inc" ->  Json.obj("version" -> 1)
+          byField("_id", user.id),
+          BSONDocument(
+            "$set" -> BSONDocument("firstName" -> updUser.firstName, "lastName" -> updUser.lastName, "email" -> updUser.email),
+            "$inc" -> BSONDocument("version" -> 1)
           )
         ).recover(processUserDbEx[User](user.id))
       }.map(_ => updUser)
@@ -178,14 +181,14 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   def updatePassHash(login: String, pass: PasswordInfo): Future[Unit] = {
     usersCollection.flatMap { users =>
       val criteria = login match {
-        case uuid: String if User.checkUuid(uuid) => Json.obj("_id" -> uuid.toLong)
-        case email: String if User.checkEmail(email) => Json.obj("email" -> email.toLowerCase)
-        case phone: String if User.checkPhone(phone) => Json.obj("phone" -> phone)
+        case uuid: String if User.checkUuid(uuid) => byField("_id", uuid)
+        case email: String if User.checkEmail(email) => byField("email", email.toLowerCase)
+        case phone: String if User.checkPhone(phone) => byField("phone", phone)
       }
 
-      val obj = Json.obj(
-        "$set" -> Json.obj("passHash" -> pass.password),
-        "$inc" ->  Json.obj("version" -> 1)
+      val obj = BSONDocument(
+        "$set" -> BSONDocument("passHash" -> pass.password),
+        "$inc" -> BSONDocument("version" -> 1)
       )
 
       users.update(criteria, obj).map(Function.const(()))
@@ -212,7 +215,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   def delete(user: User): Future[Unit] = {
     usersCollection.map { users =>
 
-      users.delete(true).one(Json.obj("_id" -> user.id))
+      users.delete(true).one(byField("_id", user.id))
 
       removeFromCaches(user)
 
@@ -229,7 +232,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   }
 
   def count(branch: Option[String] = None): Future[Int] = {
-    val selector = branch.map(b => Json.obj("hierarchy" -> b))
+    val selector = branch.map(b => BSONDocument("hierarchy" -> b))
     usersCollection.flatMap(_.count(selector))
   }
 
@@ -243,11 +246,11 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
 
   def getByAnyIdOpt(id: String): Future[Option[User]] = {
     val user = id match {
-      case uuid: String if User.checkUuid(uuid)    => usersCollection.flatMap(_.find(Json.obj("_id" -> uuid)).one[User])
-      case email: String if User.checkEmail(email) => usersCollection.flatMap(_.find(Json.obj("email" -> email.toLowerCase)).one[User])
-      case phone: String if User.checkPhone(phone) => usersCollection.flatMap(_.find(Json.obj("phone" -> phone)).one[User]) 
+      case uuid: String if User.checkUuid(uuid)    => usersCollection.flatMap(_.find(byField("_id", uuid)).one[User])
+      case email: String if User.checkEmail(email) => usersCollection.flatMap(_.find(byField("email", email.toLowerCase)).one[User])
+      case phone: String if User.checkPhone(phone) => usersCollection.flatMap(_.find(byField("phone", phone)).one[User]) 
       case socialId: String if User.checkSocialProviderKey(socialId) => authService.findUserUuid(socialId) flatMap {
-        case Some(uuid) => usersCollection.flatMap(_.find(Json.obj("_id" -> uuid)).one[User])
+        case Some(uuid) => usersCollection.flatMap(_.find(byField("_id", uuid)).one[User])
         case None => Future.successful(None)
       }
       case _ => Future.successful(None)

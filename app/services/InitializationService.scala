@@ -10,6 +10,7 @@ import utils.RandomStringGenerator
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
+import services.formats.MongoFormats._
 
 /**
   * Service that provisions database on the first start.
@@ -25,7 +26,7 @@ class InitializationService @Inject()(config: Configuration,
   val db = reactiveMongoApi.database
 
   db.flatMap(_.collectionNames).onComplete {
-    case Success(cols) if cols.contains(User.COLLECTION_NAME) =>
+    case Success(cols) if cols.contains("users") =>
       log.debug("Database already provisioned")
     case Success(_) =>
       init()
@@ -49,7 +50,7 @@ class InitializationService @Inject()(config: Configuration,
 
   def initAdminUser(): User = {
     implicit val userWriter = User.mongoWriter
-    val usersCollection = db.map(_.collection[JSONCollection](User.COLLECTION_NAME))
+    val usersCollection = db.map(_.collection[JSONCollection]("users"))
 
     /*
 

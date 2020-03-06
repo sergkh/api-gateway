@@ -8,6 +8,7 @@ import play.api.libs.functional.syntax._
 import play.api.libs.json._
 import utils.UuidGenerator
 import utils.StringHelpers._
+import akka.http.scaladsl.model.TransferEncodings.deflate
 
 /**
   *
@@ -23,7 +24,7 @@ case class User(email: Option[String] = None,
                 hierarchy: Seq[String] = Nil,
                 firstName: Option[String] = None,
                 lastName: Option[String] = None,
-                id: String = UuidGenerator.generateId,
+                _id: String = UuidGenerator.generateId,
                 version: Int = 0) extends Identity {
 
   def fullName: Option[String] = {
@@ -33,7 +34,9 @@ case class User(email: Option[String] = None,
     } yield first + " " + last
   }
 
-  val uuidStr = id
+  def id = _id
+
+  val uuidStr = _id
 
   def identifier: String = email getOrElse (phone getOrElse id).toString
 
@@ -72,7 +75,6 @@ object User {
   val phonesCacheName = "dynamic-phones-cache"
   val socialCacheName = "dynamic-social-cache"
 
-  val COLLECTION_NAME = "users"
   val EXTENDED_COLLECTION_NAME = "extended-users"
 
   val FLAG_PASSWORD_EXP = "pass_exp"

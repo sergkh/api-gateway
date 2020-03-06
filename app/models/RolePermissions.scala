@@ -18,8 +18,6 @@ case class RolePermissions(role: String, permissions: Seq[String]) {
 
 object RolePermissions {
 
-  val COLLECTION_NAME = "user_permissions"
-
   implicit val reader: Reads[RolePermissions] = (
       (JsPath \ "role").read[String] and
       (JsPath \ "permissions").read[Seq[String]].orElse(Reads.pure(Nil))
