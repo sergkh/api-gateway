@@ -41,7 +41,7 @@ class InitializationService @Inject()(config: Configuration,
   }
 
   def initRoles(): Unit = {
-    val rolesCollection = db.map(_.collection[JSONCollection](RolePermissions.COLLECTION_NAME))
+    val rolesCollection = db.map(_.collection[JSONCollection](RolePermissions.Collection))
     val adminPermissions = RolePermissions(AdminRole, config.get[Seq[String]]("app.defaultAdminPermissions"))
 
     rolesCollection.map(_.insert(adminPermissions))

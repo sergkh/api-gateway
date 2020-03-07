@@ -15,7 +15,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 class UsersRolePermissionsService @Inject()(reactiveMongoApi: ReactiveMongoApi)(implicit ex: ExecutionContext) extends Logging {
 
-  private def collection = reactiveMongoApi.database.map(_.collection[JSONCollection](RolePermissions.COLLECTION_NAME))
+  private def collection = reactiveMongoApi.database.map(_.collection[JSONCollection](RolePermissions.Collection))
 
   def save(rolePermission: RolePermissions): Future[RolePermissions] = {
     collection

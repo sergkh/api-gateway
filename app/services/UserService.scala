@@ -49,7 +49,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
 
   private def usersCollection = db.map(_.collection[BSONCollection]("users"))
 
-  private def rolesCollection = db.map(_.collection[BSONCollection]("user_permissions"))
+  private def rolesCollection = db.map(_.collection[BSONCollection](RolePermissions.Collection))
 
   /**
     * Retrieves a user that matches the specified login info.

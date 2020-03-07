@@ -17,7 +17,7 @@ case class RolePermissions(role: String, permissions: Seq[String]) {
 }
 
 object RolePermissions {
-
+  final val Collection = "role_permissions"
   implicit val reader: Reads[RolePermissions] = (
       (JsPath \ "role").read[String] and
       (JsPath \ "permissions").read[Seq[String]].orElse(Reads.pure(Nil))
