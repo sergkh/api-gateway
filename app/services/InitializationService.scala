@@ -13,9 +13,8 @@ import scala.util.{Failure, Success}
 import services.formats.MongoFormats._
 import reactivemongo.bson._
 import reactivemongo.api.bson.collection._
-import reactivemongo.api.collections.bson.BSONCollection
 import services.formats.MongoFormats._
-
+import reactivemongo.api.indexes.{Index, IndexType}
 
 /**
   * Service that provisions database on the first start.
@@ -42,6 +41,7 @@ class InitializationService @Inject()(config: Configuration,
   def init(): Unit = {
     initRoles()
     val admin = initAdminUser()
+    initBranches()
     initDefaultOAuthApp(admin)
   }
 
@@ -49,25 +49,19 @@ class InitializationService @Inject()(config: Configuration,
     val rolesCollection = db.map(_.collection[BSONCollection](RolePermissions.Collection))
     val adminPermissions = RolePermissions(AdminRole, config.get[Seq[String]]("app.defaultAdminPermissions").toList)
 
-    rolesCollection.map(_.insert(adminPermissions))
+    rolesCollection.map(_.insert.one(adminPermissions))
   }
 
 
   def initAdminUser(): User = {
     implicit val userWriter = User.mongoWriter
     val usersCollection = db.map(_.collection[BSONCollection]("users"))
-
-    /*
-
+    
     usersCollection.map(_.indexesManager) map { manager =>
-      manager.ensure(Index(Seq("email" -> IndexType.Ascending), background = true, unique = true, sparse = true)).recover {
-        case ex: Exception => log.warn("Error while creating email index: ", ex)
-      }
-      manager.ensure(Index(Seq("phone" -> IndexType.Ascending), background = true, unique = true, sparse = true)).recover {
-        case ex: Exception => log.warn("Error while creating phone index: ", ex)
-      }
+      manager.ensure(index(Seq("email" -> IndexType.Ascending), "email_idx"))
+      manager.ensure(index(Seq("phone" -> IndexType.Ascending), "phone_idx"))
     }
-    */
+
     val password = RandomStringGenerator.generateSecret(32)
 
     val admin = User(
@@ -90,6 +84,14 @@ class InitializationService @Inject()(config: Configuration,
     admin
   }
 
+  def initBranches() {
+    val branchesCollection = db.map(_.collection[BSONCollection]("branches"))
+
+    branchesCollection.map(_.indexesManager) map { manager =>
+      manager.ensure(index(Seq("hierarchy" -> IndexType.Ascending), "hierarchy_idx", unique = false))
+    }
+  }
+
   def initDefaultOAuthApp(user: User): Unit = {
     val collection = db.map(_.collection[JSONCollection](ThirdpartyApplication.COLLECTION_NAME))
 
@@ -102,4 +104,30 @@ class InitializationService @Inject()(config: Configuration,
     ))
   }
 
+  private def index(key: Seq[(String, IndexType)], name: String, unique: Boolean = true, sparse: Boolean = true) = {
+    
+    Index(BSONSerializationPack)(
+      key = key,
+      name = Some(name),
+      unique = unique,
+      background = true,
+      dropDups = false,
+      sparse = sparse,
+      expireAfterSeconds = None,
+      storageEngine = None,
+      weights = None,
+      defaultLanguage = None,
+      languageOverride = None,
+      textIndexVersion = None,
+      sphereIndexVersion = None,
+      bits = None,
+      min = None,
+      max = None,
+      bucketSize = None,
+      collation = None,
+      wildcardProjection = None,
+      version = None,
+      partialFilter = None,
+      options = BSONDocument.empty)    
+  }
 }

@@ -31,35 +31,6 @@ class MongoBranchesService @Inject()(conf: Configuration,
 
   private val MAX_TRIES = 5
 
-  /* TODO: ensure indexes
-  branches.map(_.indexesManager) map { manager =>
-    val bsonIndex = Index(JSONSerializationPack)(
-      key = Seq("hierarchy" -> IndexType.Ascending),
-      name = Some("hierarchy_idx"),
-      unique = false,
-      background = true,
-      dropDups = false,
-      sparse = true,
-      expireAfterSeconds = None,
-      storageEngine = None,
-      weights = None,
-      defaultLanguage = None,
-      languageOverride = None,
-      textIndexVersion = None,
-      sphereIndexVersion = None,
-      bits = None,
-      min = None,
-      max = None,
-      bucketSize = None,
-      collation = None,
-      wildcardProjection = None,
-      version = None,
-      partialFilter = None,
-      options = BSONDocument.empty)
-
-    manager.ensure(bsonIndex)
-  } */
-
   implicit val format = Branch.mongoFormat
 
   def create(create: CreateBranch, user: User): Future[Branch] = {
