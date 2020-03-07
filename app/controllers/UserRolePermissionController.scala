@@ -16,11 +16,8 @@ import utils.RichJson._
 import utils.RichRequest._
 import ErrorCodes._
 import scala.concurrent.ExecutionContext.Implicits.global
+import services.formats.MongoFormats._
 
-
-/**
-  * Created by faiaz on 19.10.16.
-  */
 class UserRolePermissionController @Inject()(usersPermissionsService: UsersRolePermissionsService,
                                              usersService: UserService,
                                              eventBus: EventsStream,

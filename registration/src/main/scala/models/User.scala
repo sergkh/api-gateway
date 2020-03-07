@@ -9,22 +9,18 @@ import play.api.libs.json._
 import utils.UuidGenerator
 import utils.StringHelpers._
 import akka.http.scaladsl.model.TransferEncodings.deflate
+import reactivemongo.bson.Macros.Annotations.{Key, Ignore}
 
-/**
-  *
-  * @author Yaroslav Derman <yaroslav.derman@gmail.com>
-  *         created on 03/02/17
-  */
 case class User(email: Option[String] = None,
                 phone: Option[String] = None,
                 passHash: String,
-                flags: Seq[String] = Nil,
-                roles: Seq[String] = Nil,
-                permissions: Seq[String] = Nil,
-                hierarchy: Seq[String] = Nil,
+                flags: List[String] = Nil,
+                roles: List[String] = Nil,
+                @Ignore permissions: List[String] = Nil,
+                hierarchy: List[String] = Nil,
                 firstName: Option[String] = None,
                 lastName: Option[String] = None,
-                _id: String = UuidGenerator.generateId,
+                @Key("_id") id: String = UuidGenerator.generateId,
                 version: Int = 0) extends Identity {
 
   def fullName: Option[String] = {
@@ -33,10 +29,6 @@ case class User(email: Option[String] = None,
       last <- lastName
     } yield first + " " + last
   }
-
-  def id = _id
-
-  val uuidStr = _id
 
   def identifier: String = email getOrElse (phone getOrElse id).toString
 
@@ -96,10 +88,10 @@ object User {
       (JsPath \ "email").readNullable[String] and
       (JsPath \ "phone").readNullable[String] and
       (JsPath \ "passHash").read[String].orElse(Reads.pure("")) and
-      (JsPath \ "flags").read[Seq[String]].orElse(Reads.pure(Nil)) and
-      (JsPath \ "roles").read[Seq[String]].orElse(Reads.pure(Nil)) and
-      (JsPath \ "permissions").read[Seq[String]].orElse(Reads.pure(Nil)) and
-      (JsPath \ "hierarchy").read[Seq[String]].orElse(Reads.pure(Nil)) and
+      (JsPath \ "flags").read[List[String]].orElse(Reads.pure(Nil)) and
+      (JsPath \ "roles").read[List[String]].orElse(Reads.pure(Nil)) and
+      (JsPath \ "permissions").read[List[String]].orElse(Reads.pure(Nil)) and
+      (JsPath \ "hierarchy").read[List[String]].orElse(Reads.pure(Nil)) and
       (JsPath \ "firstName").readNullable[String] and
       (JsPath \ "lastName").readNullable[String] and
       (JsPath \ "id").read[String] and
@@ -126,10 +118,10 @@ object User {
     (JsPath \ "email").readNullable[String] and
     (JsPath \ "phone").readNullable[String] and
     (JsPath \ "passHash").read[String].orElse(Reads.pure("")) and
-    (JsPath \ "flags").read[Seq[String]].orElse(Reads.pure(Nil)) and
-    (JsPath \ "roles").read[Seq[String]].orElse(Reads.pure(Nil)) and
+    (JsPath \ "flags").read[List[String]].orElse(Reads.pure(Nil)) and
+    (JsPath \ "roles").read[List[String]].orElse(Reads.pure(Nil)) and
     Reads.pure(Nil) and
-    (JsPath \ "hierarchy").read[Seq[String]].orElse(Reads.pure(Nil)) and
+    (JsPath \ "hierarchy").read[List[String]].orElse(Reads.pure(Nil)) and
     (JsPath \ "firstName").readNullable[String] and
     (JsPath \ "lastName").readNullable[String] and
     (JsPath \ "_id").read[String] and

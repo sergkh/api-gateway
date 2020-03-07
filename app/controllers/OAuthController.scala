@@ -85,7 +85,7 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
         val user = req.identity
 
         for {
-          _ <- eventBus.publish(OauthTokenRemoved(user.uuidStr, authenticator.id, token, req))
+          _ <- eventBus.publish(OauthTokenRemoved(user.id, authenticator.id, token, req))
           _ <- eventBus.publish(Logout(user, token, req, authenticator.id))
         } yield {
           log.info(s"Remove oauth token $token by ${req.identity.id}")
@@ -115,7 +115,7 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
 
     for {
       thirdApp <- oauthService.createApp(app)
-      _        <- eventBus.publish(ApplicationCreated(req.identity.uuidStr, thirdApp, req))
+      _        <- eventBus.publish(ApplicationCreated(req.identity.id, thirdApp, req))
     } yield {
       log.info(s"Create third party application $thirdApp")
       Ok(Json.obj("clientSecret" -> thirdApp.secret, "clientId" -> thirdApp.id))
@@ -129,7 +129,7 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
       app <- oauthService.getApp4user(id, user.id)
       newApp = app.toNonEmptyApplication(data.enabled, data.name, data.description, data.logo, data.url, data.contacts, data.redirectUrlPattern)
       _ <- oauthService.updateApp(id, newApp)
-      _ <- eventBus.publish(ApplicationUpdated(req.identity.uuidStr, app, req))
+      _ <- eventBus.publish(ApplicationUpdated(req.identity.id, app, req))
     } yield {
       log.info("Updating thirdparty application " + id + ", for user: " + user.id)
       Ok(toJson(app))
@@ -176,7 +176,7 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
 
       oauthService.removeApp(id, user, silh.env.authenticatorService)
 
-      eventBus.publish(ApplicationRemoved(user.uuidStr, id, req)) map { _ =>
+      eventBus.publish(ApplicationRemoved(user.id, id, req)) map { _ =>
         log.info("Disable thirdparty application " + id + ", for user: " + user.id)
         NoContent
       }

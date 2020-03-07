@@ -12,10 +12,13 @@ import utils.Logging
 import utils.MongoErrorHandler._
 
 import scala.concurrent.{ExecutionContext, Future}
+import reactivemongo.api.collections.bson.BSONCollection
+import services.formats.MongoFormats._
+import reactivemongo.bson.BSONDocument
 
 class UsersRolePermissionsService @Inject()(reactiveMongoApi: ReactiveMongoApi)(implicit ex: ExecutionContext) extends Logging {
 
-  private def collection = reactiveMongoApi.database.map(_.collection[JSONCollection](RolePermissions.Collection))
+  private def collection = reactiveMongoApi.database.map(_.collection[BSONCollection](RolePermissions.Collection))
 
   def save(rolePermission: RolePermissions): Future[RolePermissions] = {
     collection
@@ -25,30 +28,28 @@ class UsersRolePermissionsService @Inject()(reactiveMongoApi: ReactiveMongoApi)(
   }
 
   def get(role: String): Future[Option[RolePermissions]] = {
-    val criteria = Json.obj("role" -> role.toUpperCase)
-    collection.flatMap(
-      _.find(criteria).one[RolePermissions])
+    val criteria = BSONDocument("_id" -> role.toUpperCase)
+    collection.flatMap(_.find(criteria).one[RolePermissions])
   }
 
   def update(rolePermission: RolePermissions): Future[UpdateWriteResult] = {
-    val criteria = Json.obj("role" -> rolePermission.role.toUpperCase)
-    val updObj = Json.obj("$set" -> Json.obj("permissions" -> rolePermission.permissions))
+    val criteria = BSONDocument("_id" -> rolePermission.role.toUpperCase)
+    val updObj = BSONDocument("$set" -> Json.obj("permissions" -> rolePermission.permissions))
     collection.flatMap(_.update(criteria, updObj))
       .recover(processError)
   }
 
   def remove(role: String): Future[Option[RolePermissions]] = {
-    collection.flatMap(
-      _.findAndRemove(Json.obj("role" -> role)).map(res => res.result[RolePermissions])
+    collection.flatMap(_.findAndRemove(BSONDocument("_id" -> role)).map(res => res.result[RolePermissions])
     )
   }
 
   def getAvailableRoles: Future[Seq[String]] = {
     collection.flatMap(
-      _.find(JsObject(Nil), Json.obj("role" -> 1, "_id" -> 0))
-        .cursor[JsValue](ReadPreference.secondaryPreferred)
-        .collect[List](-1, errorHandler[JsValue])
-        .map { jsList => jsList.map(js => (js \ "role").as[String]) }
+      _.find(BSONDocument.empty, Json.obj("_id" -> 1))
+        .cursor[BSONDocument](ReadPreference.secondaryPreferred)
+        .collect[List](-1, errorHandler[BSONDocument])
+        .map { jsList => jsList.map(bson => bson.getAsTry[String]("_id").get) }
     )
   }
 

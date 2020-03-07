@@ -170,7 +170,7 @@ class UserController @Inject()(
       val confirmCode = data.code
       confirmationService.retrieveByLogin(reqLogin) flatMap {
         case Some(code) =>
-          val loginInfo = LoginInfo(CredentialsProvider.ID, user.uuidStr)
+          val loginInfo = LoginInfo(CredentialsProvider.ID, user.id)
           for {
             user <- silh.env.identityService.retrieve(loginInfo)
             authenticator <- silh.env.authenticatorService.create(loginInfo)
@@ -367,8 +367,8 @@ class UserController @Inject()(
           log.info(s"Update extended user info for ${user.id} by ${request.identity.id} with $info")
           Ok(info)
         case None =>
-          log.warn(s"Extended info for user ${user.uuidStr} not found")
-          throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Extended info for user ${user.uuidStr} not found")
+          log.warn(s"Extended info for user ${user.id} not found")
+          throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Extended info for user ${user.id} not found")
       }
     }
   }
@@ -401,8 +401,8 @@ class UserController @Inject()(
         }
 
       case None =>
-        log.warn(s"Extended info for user ${user.uuidStr} not found")
-        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Extended info for user ${user.uuidStr} not found")
+        log.warn(s"Extended info for user ${user.id} not found")
+        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Extended info for user ${user.id} not found")
     }
   }
 
@@ -446,26 +446,26 @@ class UserController @Inject()(
 
   private def verifyConfirmationRequired(editUser: User, newUser: User, request: SecuredRequest[JwtEnv, JsValue], body: Option[JsValue] = None) = {
     if (editUser.phone != newUser.phone && newUser.phone.isDefined && !confirmationValidator.verifyConfirmed(request)) {
-      val (otp, code) = ConfirmationCode.generatePair(editUser.uuidStr, request, otpLength, body.map(json => ByteString(Json.toBytes(json))))
+      val (otp, code) = ConfirmationCode.generatePair(editUser.id, request, otpLength, body.map(json => ByteString(Json.toBytes(json))))
 
       // store code for both UUID and phone
       confirmationService.create(code)
       confirmationService.create(code.copy(login = editUser.phone.get))
 
-      eventBus.publish(OtpGeneration(Some(newUser.uuidStr), None, newUser.phone, otp, request)) map { _ =>
+      eventBus.publish(OtpGeneration(Some(newUser.id), None, newUser.phone, otp, request)) map { _ =>
         log.info(s"Sending phone confirmation code to ${newUser.id}")
         throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
       }
     } else if (editUser.email != newUser.email && newUser.email.isDefined && !confirmationValidator.verifyConfirmed(request)) {
       val (otp, code) = ConfirmationCode.generatePair(
-        editUser.uuidStr, request, otpEmailLength, body.map(json => ByteString(Json.toBytes(json)))
+        editUser.id, request, otpEmailLength, body.map(json => ByteString(Json.toBytes(json)))
       )
 
       // store code for both UUID and email with increased TTL
       confirmationService.create(code, ttl = Some(optEmailTTLSeconds))
       confirmationService.create(code.copy(login = newUser.email.get), ttl = Some(optEmailTTLSeconds))
 
-      eventBus.publish(OtpGeneration(Some(newUser.uuidStr), newUser.email, None, otp, request)) map { _ =>
+      eventBus.publish(OtpGeneration(Some(newUser.id), newUser.email, None, otp, request)) map { _ =>
         log.info(s"Sending email confirmation code to ${newUser.id}")
         throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
       }

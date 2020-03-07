@@ -101,7 +101,7 @@ class ProxyController @Inject()(silh: Silhouette[JwtEnv],
   private def replaceMe(rootPath: String, userOpt: Option[User]) = {
     rootPath match {
       case meRegex(path, _, other) if userOpt.nonEmpty =>
-        path + "/" + userOpt.map(_.uuidStr).get + other
+        path + "/" + userOpt.map(_.id).get + other
 
       case meRegex(_, _, _) if userOpt.isEmpty =>
         throw AppException(ErrorCodes.ACCESS_DENIED, "User not authenticated")

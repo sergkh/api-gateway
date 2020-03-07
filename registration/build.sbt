@@ -9,6 +9,7 @@ publish := {}
 libraryDependencies ++= Seq(
   "com.typesafe.play"     %% "play-json" % Dependencies.playVersion % Provided,
   "com.typesafe.play"     %% "play" % Dependencies.playVersion % Provided,
+  "org.reactivemongo"     %% "reactivemongo-bson-macros" % "0.20.3",
   "com.impactua"          %% "redis-scala" % Dependencies.redisVersion % Provided,
   "net.codingwell"        %% "scala-guice" % Dependencies.guiceVersion,
   "com.mohiva"            %% "play-silhouette" % Dependencies.silhouetteVersion % Provided,

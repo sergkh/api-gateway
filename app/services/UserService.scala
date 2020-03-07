@@ -139,7 +139,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
       _ <- Future.successful(log.info("Saving social profile"))
       _ <- authService.save(user.id, profile.loginInfo, authInfo)
       _ <- Future.successful(log.info("Saved social profile"))
-      _ <- usersCollection.flatMap(_.insert.one(transformToDbUser(user)).recover(processUserDbEx[User](user.id)))
+      _ <- usersCollection.flatMap(_.insert.one(user).recover(processUserDbEx[User](user.id)))
     } yield user
   }
 
@@ -195,17 +195,14 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     }
   }
 
-  def update(user4update: User, replaceDoc: Boolean = false): Future[User] = {
+  def update(update: User, replaceDoc: Boolean = false): Future[User] = {
     usersCollection.flatMap { users =>
-      val obj = if (replaceDoc) {
-        transformToDbUser(user4update).withFields("passHash" -> JsString(user4update.passHash))
-      } else {
-        Json.obj("$set" -> transformToDbUser(user4update))
-      }
+      val user = update.copy(version = update.version + 1)
+      val obj = if (replaceDoc) user.toBson else BSONDocument("$set" -> user)
 
-      users.findAndUpdate(versionedSelector(user4update), obj, true).recover(processUserDbEx(user4update.id)).map { res =>
+      users.findAndUpdate(versionedSelector(update), obj, true).recover(processUserDbEx(user.id)).map { res =>
         res.result[User].getOrElse {
-          log.error(s"Concurrent modification exception occurred on user ${user4update.id} updating")
+          log.error(s"Concurrent modification exception occurred on user ${user.id} updating")
           throw AppException(ErrorCodes.CONCURRENT_MODIFICATION, s"User exists, but version is conflicts")
         }
       }
@@ -271,9 +268,9 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     case _ => throw AppException(ErrorCodes.ACCESS_DENIED, s"Access denied to another user: $id")
   }
 
-  private def loadPermissions(roles: Seq[String]): Future[Seq[String]] = rolesCache.getOrElseUpdate(roles.mkString(",")) {
+  private def loadPermissions(roles: List[String]): Future[List[String]] = rolesCache.getOrElseUpdate(roles.mkString(",")) {
     rolesCollection.flatMap(
-      _.find(Json.obj("role" -> Json.obj("$in" -> roles)))
+      _.find(BSONDocument("role" -> BSONDocument("$in" -> roles)))
         .cursor[RolePermissions](ReadPreference.secondaryPreferred)
         .collect[List](-1, errorHandler[RolePermissions])
         .map(_.flatMap(_.permissions).distinct)
@@ -294,17 +291,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
       throw AppException(ErrorCodes.INTERNAL_SERVER_ERROR, "Internal error occurred on user updating")
   }
 
-  private def transformToDbUser(user: User): JsObject = transformToDbUser(Json.toJson(user).as[JsObject]).withFields("version" -> JsNumber(user.version + 1))
-
-  private def transformToDbUser(userJson: JsObject): JsObject = userJson.without("permissions")
-
-  private def versionedSelector(user4update: User): JsObject = Json.obj(
-    "_id" -> user4update.id,
-    "$or" -> Json.arr(
-      Json.obj("version" -> Json.obj("$exists" -> false)),
-      Json.obj("version" -> user4update.version)
-    )
-  )
+  private def versionedSelector(user: User): BSONDocument = BSONDocument("_id" -> user.id, "version" -> user.version)
 
   private def errorHandler[T] = Cursor.ContOnError[List[T]]((v: List[T], ex: Throwable) => {
     log.warn("Error occurred on users reading", ex)
@@ -323,19 +310,19 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   }
 
   private def cacheUser(user: User): User = {
-    usersCache.set(user.uuidStr, user, cachedTime)
+    usersCache.set(user.id, user, cachedTime)
 
     for (email <- user.email) {
-      emailsCache.set(email, user.uuidStr, cachedTime)
+      emailsCache.set(email, user.id, cachedTime)
     }
 
     for (phone <- user.phone) {
-      phonesCache.set(phone, user.uuidStr, cachedTime)
+      phonesCache.set(phone, user.id, cachedTime)
     }
 
     authService.retrieveAllSocialInfo(user.id) map { socialIdLst =>
       for (socialId <- socialIdLst) {
-        socialCache.set(socialId, user.uuidStr, cachedTime)
+        socialCache.set(socialId, user.id, cachedTime)
       }
     }
 
@@ -343,7 +330,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   }
 
   private def removeFromCaches(user: User): Unit = {
-    usersCache.remove(user.uuidStr)
+    usersCache.remove(user.id)
     for (email <- user.email) emailsCache.remove(email)
     for (phone <- user.phone) phonesCache.remove(phone)
   }

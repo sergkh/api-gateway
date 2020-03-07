@@ -11,13 +11,18 @@ import utils.RandomStringGenerator
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
 import services.formats.MongoFormats._
+import reactivemongo.bson._
+import reactivemongo.api.bson.collection._
+import reactivemongo.api.collections.bson.BSONCollection
+import services.formats.MongoFormats._
+
 
 /**
   * Service that provisions database on the first start.
   */
 class InitializationService @Inject()(config: Configuration,
                                       reactiveMongoApi: ReactiveMongoApi,
-                                      passwordHasher: PasswordHasher)(implicit ctx: ExecutionContext) {
+                                      passwordHasher: PasswordHasher)(implicit ec: ExecutionContext) {
 
   val log = Logger(getClass.getName)
 
@@ -41,8 +46,8 @@ class InitializationService @Inject()(config: Configuration,
   }
 
   def initRoles(): Unit = {
-    val rolesCollection = db.map(_.collection[JSONCollection](RolePermissions.Collection))
-    val adminPermissions = RolePermissions(AdminRole, config.get[Seq[String]]("app.defaultAdminPermissions"))
+    val rolesCollection = db.map(_.collection[BSONCollection](RolePermissions.Collection))
+    val adminPermissions = RolePermissions(AdminRole, config.get[Seq[String]]("app.defaultAdminPermissions").toList)
 
     rolesCollection.map(_.insert(adminPermissions))
   }
@@ -50,7 +55,7 @@ class InitializationService @Inject()(config: Configuration,
 
   def initAdminUser(): User = {
     implicit val userWriter = User.mongoWriter
-    val usersCollection = db.map(_.collection[JSONCollection]("users"))
+    val usersCollection = db.map(_.collection[BSONCollection]("users"))
 
     /*
 
@@ -68,7 +73,7 @@ class InitializationService @Inject()(config: Configuration,
     val admin = User(
       email = Some(config.get[String]("app.defaultAdmin")),
       passHash = passwordHasher.hash(password).password,
-      roles = Seq(AdminRole)
+      roles = List(AdminRole)
     )
 
     log.info(
@@ -80,7 +85,7 @@ class InitializationService @Inject()(config: Configuration,
         +=====================================================================
       """.stripMargin)
 
-    usersCollection.flatMap(_.insert(admin))
+    usersCollection.flatMap(_.insert.one(admin))
 
     admin
   }

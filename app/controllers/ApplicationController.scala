@@ -130,8 +130,8 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
 
       confirmationService.create(code)
 
-      eventBus.publish(OtpGeneration(Some(user.uuidStr), user.email, user.phone, secret, request)) map { _ =>
-        log.info("Generated login code for " + user.uuidStr)
+      eventBus.publish(OtpGeneration(Some(user.id), user.email, user.phone, secret, request)) map { _ =>
+        log.info("Generated login code for " + user.id)
         throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
       }
 
@@ -139,18 +139,18 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
       val (secret, code) = ConfirmationCode.generatePair(credentials.login, ConfirmationCode.OP_LOGIN, otpLength, None)
       confirmationService.create(code)
 
-      eventBus.publish(OtpGeneration(Some(user.uuidStr), user.email, user.phone, secret, request)) map { _ =>
-        log.info("Generated passwordless login code for " + user.uuidStr)
+      eventBus.publish(OtpGeneration(Some(user.id), user.email, user.phone, secret, request)) map { _ =>
+        log.info("Generated passwordless login code for " + user.id)
         throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
       }
 
     case Some(user)  =>
-      val userIdLoginInfo = LoginInfo(CredentialsProvider.ID, user.uuidStr)
+      val userIdLoginInfo = LoginInfo(CredentialsProvider.ID, user.id)
       silh.env.authenticatorService.create(userIdLoginInfo) flatMap { authenticator =>
         silh.env.authenticatorService.init(authenticator).flatMap { token =>
           log.info(s"Succeed user authentication ${userIdLoginInfo.providerKey}")
 
-          eventBus.publish(Login(user.uuidStr, token, request, authenticator.id, authenticator.expirationDateTime.getMillis)).flatMap { _ =>
+          eventBus.publish(Login(user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis)).flatMap { _ =>
             silh.env.authenticatorService.embed(token, Ok(JsonHelper.toNonemptyJson("token" -> token)))
           }
         }
@@ -212,7 +212,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
       case None => // try by other user logins, option filter to avoid calls if code was already found
         for {
           userOpt     <- userService.getByAnyIdOpt(login)
-          codeByUuid  <- userOpt.map(u => confirmationService.retrieveByLogin(u.uuidStr))
+          codeByUuid  <- userOpt.map(u => confirmationService.retrieveByLogin(u.id))
                                 .getOrElse(FastFuture.successful(None))
           codeByEmail <- userOpt.flatMap(_.email)
                                 .filter(_ => codeByUuid.isEmpty)
@@ -290,7 +290,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
       confirmationService.consumeByLogin(confirmationCode.login)
 
       for {
-        authenticator <- silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, user.uuidStr))
+        authenticator <- silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, user.id))
         value <- silh.env.authenticatorService.init(authenticator)
         result <- silh.env.authenticatorService.embed(value, Ok(Json.obj("token" -> value)))
         _ <- if (loginConfirmation) {
@@ -326,10 +326,10 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
                    throw AppException(ErrorCodes.CONFIRM_CODE_NOT_FOUND, s"OTP for user: $login doesn't exist")
                  } else { Future.unit }
       (otp, newCode) = codeOpt.get.regenerate()
-      _ <- eventBus.publish(OtpGeneration(Some(userOpt.get.uuidStr), userOpt.get.email, userOpt.get.phone, otp, request))
+      _ <- eventBus.publish(OtpGeneration(Some(userOpt.get.id), userOpt.get.email, userOpt.get.phone, otp, request))
     } yield {
       confirmationService.create(newCode)
-      log.info(s"Regenerated otp code for user: ${userOpt.get.uuidStr} by login $login")
+      log.info(s"Regenerated otp code for user: ${userOpt.get.id} by login $login")
       NoContent
     }
   }

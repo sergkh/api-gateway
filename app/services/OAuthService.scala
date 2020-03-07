@@ -95,7 +95,7 @@ class OAuthService @Inject()(userService: UserService,
           (DEFAULT_TEMP_TOKEN_TTL, LoginInfo(CredentialsProvider.ID, IVALID_LOGIN_INFO_PROVIDER))
 
         case OAuthAuthorizeRequest.Type.TOKEN =>
-          (ETERNAL_TOKEN_TTL, LoginInfo(CredentialsProvider.ID, user.uuidStr))
+          (ETERNAL_TOKEN_TTL, LoginInfo(CredentialsProvider.ID, user.id))
 
         case unknown: Any =>
           throw AppException(ErrorCodes.INVALID_REQUEST, "Unknown response type: " + unknown)
@@ -105,8 +105,8 @@ class OAuthService @Inject()(userService: UserService,
 
         authService.init(authenticator).flatMap { oauthToken =>
           if (tokenType == TokenClaims.Type.OAUTH_ETERNAL) {
-            eventBus.publish(Login(user.uuidStr, oauthToken, request, authenticator.id, authenticator.expirationDateTime.getMillis))
-            eventBus.publish(OauthTokenCreated(user.uuidStr, authenticator.id, oauthToken, request))
+            eventBus.publish(Login(user.id, oauthToken, request, authenticator.id, authenticator.expirationDateTime.getMillis))
+            eventBus.publish(OauthTokenCreated(user.id, authenticator.id, oauthToken, request))
             Json.obj("accessToken" -> oauthToken, "expiresIn" -> ttl.toSeconds)
           } else {
             Json.obj("code" -> oauthToken)

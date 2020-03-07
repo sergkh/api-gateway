@@ -47,8 +47,8 @@ object UserForm {
       TAG_PHONE -> optional(nonEmptyText.verifying(phoneNumber)),
       TAG_FIRST_NAME -> optional(nonEmptyText),
       TAG_LAST_NAME -> optional(nonEmptyText),
-      TAG_FLAGS -> default(seq(nonEmptyText), Nil),
-      "roles" -> default(seq(nonEmptyText), Nil),
+      TAG_FLAGS -> default(list(nonEmptyText), Nil),
+      "roles" -> default(list(nonEmptyText), Nil),
       "branch" -> optional(text(Branch.BranchIdSize, Branch.BranchIdSize)),
       "version" -> default(number(min = 0), 0)
     )(UpdateUser.apply)(UpdateUser.unapply)
@@ -82,8 +82,8 @@ object UserForm {
                         phone: Option[String],
                         firstName: Option[String],
                         lastName: Option[String],
-                        flags: Seq[String],
-                        roles: Seq[String],
+                        flags: List[String],
+                        roles: List[String],
                         branch: Option[String],
                         version: Int) {
 
@@ -95,7 +95,7 @@ object UserForm {
         lastName = lastName,
         flags = flags,
         roles = roles,
-        hierarchy = if (origin.branch == branch) origin.hierarchy else branch.toSeq,
+        hierarchy = if (origin.branch == branch) origin.hierarchy else branch.toList,
         version = version
       )
     }

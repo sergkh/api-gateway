@@ -77,7 +77,7 @@ object RequestTracker {
   def needToBeStored(method: String, req: StreamedProxyRequest): Boolean =
     (method == "POST" || method == "PUT" || method == "DELETE") && req.userOpt.isDefined && req.req.headers.hasHeader(header)
 
-  def key(req: StreamedProxyRequest): String = "rq:" + req.userOpt.get.uuidStr + ":" + req.req.headers(header)
+  def key(req: StreamedProxyRequest): String = "rq:" + req.userOpt.get.id + ":" + req.req.headers(header)
 
   implicit object BinaryResultConverter extends BinaryConverter[Option[CachedResult]] {
     override def read(data: Array[Byte]): Option[CachedResult] = if (data.isEmpty) None else KryoSerializer.fromBytes[Option[CachedResult]](data)
