@@ -16,7 +16,7 @@ import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration._
 
 /**
-  * @author Yaroslav Derman <yaroslav.derman@gmail.com>.
+  * @author Yaroslav Derman
   */
 class CustomJWTAuthenticatorService(settings: JWTAuthenticatorSettings,
                                     repository: Option[AuthenticatorRepository[JWTAuthenticator]],
@@ -34,6 +34,7 @@ class CustomJWTAuthenticatorService(settings: JWTAuthenticatorSettings,
 
   override def retrieve[B](implicit request: ExtractableRequest[B]): Future[Option[JWTAuthenticator]] = {
     Future.fromTry(retrieveToken(request)).flatMap {
+      // TODO: change deserialization here
       case Some(token) => unserialize(token, authenticatorEncoder, settings) match {
         case Success(authenticator) =>
           repository.fold(Future.successful(Option(authenticator)))(_.find(authenticator.id)) map {
@@ -53,6 +54,21 @@ class CustomJWTAuthenticatorService(settings: JWTAuthenticatorSettings,
     }
   }
 
+  /**
+   * Creates a new JWT for the given authenticator and return it. If a backing store is defined, then the
+   * authenticator will be stored in it.
+   *
+   * @param authenticator The authenticator instance.
+   * @param request       The request header.
+   * @return The serialized authenticator value.
+   */
+  override def init(authenticator: JWTAuthenticator)(implicit request: RequestHeader): Future[String] = {
+    repository.fold(Future.successful(authenticator))(_.add(authenticator)).map { a =>
+      serialize(a, authenticatorEncoder, settings) // TODO: change serialization here
+    }.recover {
+      case e => throw new AuthenticatorInitializationException(InitError.format(ID, authenticator), e)
+    }
+  }
 
   /**
     * Retrieves the authenticator for defined token.

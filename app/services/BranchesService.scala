@@ -132,7 +132,7 @@ class MongoBranchesService @Inject()(conf: Configuration,
   })
 
   private def createSafe(branch: Branch, tries: Int): Future[Branch] = {
-    branches.flatMap(_.insert(branch).map(_ => branch)).recoverWith {
+    branches.flatMap(_.insert.one(branch).map(_ => branch)).recoverWith {
       case dbEx: DatabaseException if dbEx.code.exists(c => c == 11000 || c == 11001) && tries > 0 =>
         // duplicate key, try another ID
         val id = Branch.nextId

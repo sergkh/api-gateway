@@ -99,7 +99,7 @@ class InitializationService @Inject()(config: Configuration,
     val clientId = config.get[String]("swagger.client_id")
     val clientSecret = config.get[String]("swagger.client_secret")
 
-    collection.map(_.insert(
+    collection.map(_.insert.one(
       ThirdpartyApplication(user.id, appName, "Default application", "", "", "", "", true, clientId, clientSecret)
     ))
   }
