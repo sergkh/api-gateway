@@ -24,11 +24,14 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import events.EventsStream
 import utils.RichJson._
+import java.security.KeyPairGenerator
+import java.security.spec.ECGenParameterSpec
 
 @Singleton
 class TokenController @Inject()(silh: Silhouette[JwtEnv], conf: Configuration, eventStream: EventsStream)
                                (implicit exec: ExecutionContext) extends BaseController {
 
+                              
 
   // /auth/realms/$realm/protocol/openid-connect/certs
   def certs(realm: String) = Action.async { request =>
@@ -43,4 +46,12 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv], conf: Configuration, e
       )
     ))
   }
+}
+
+class TokensService {
+  val g = KeyPairGenerator.getInstance("ECDSA", "BC")
+  g.initialize(new ECGenParameterSpec("secp256r1"))
+  val keyPair = g.generateKeyPair()
+
+  def getCertificates: List[]
 }
