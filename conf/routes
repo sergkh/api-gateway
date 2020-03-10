@@ -518,13 +518,13 @@ PUT             /users/:userId/extended-info                      @controllers.U
 #     type: string
 #     required: false
 #     default: Month before
-#     description: Date from wich users will be taken, format ISO 8601-2004
+#     description: Date from which users will be taken, format ISO 8601-2004
 #   - name: until
 #     in: query
 #     type: string
 #     required: false
 #     default: Current time
-#     description: Date to wich users will be taken, format ISO 8601-2004
+#     description: Date to which users will be taken, format ISO 8601-2004
 ###
 GET             /users/:userId/structure                          @controllers.UserController.retrieveOwnStructure(userId: String)
 
@@ -663,13 +663,45 @@ POST          /oauth/authorize                                    @controllers.O
 POST          /oauth/token                                        @controllers.OAuthController.createToken
 
 ###
+# summary: List token certificates
+# description: >
+#               Lists certificates that can be used to verify token signature. It's possible that multiple certificates are defined,
+#               one should match a certificate by key ID extracted from the token header.
+# tags:
+#   - OAuth
+# operationId: getOAuthCertificates
+# responses:
+#   200:
+#     description: OAuth certificates
+#     schema:
+#       type: object
+#       properties:
+#         keys:
+#           type: array
+#           description: Keys array
+#           items:
+#              type: object
+#              properties:
+#                kid:
+#                  type: string
+#                  description: Key identifier
+#                x5c:
+#                  type: array
+#                  description: List of certificates
+#                  items:
+#                     type: string
+#                     description: X.509 encoded certificate
+###
+GET          /oauth/certs                                        @controllers.TokenController.authCerts
+
+###
 # summary: Authorize user with OAuth service by admin
 # description: >
 #               There are two ways to get the application access to the user: a two-stage and a simplified.
 #               For most applications, a two-step access scheme is suitable: first, retrieve a temporary "authorization code" in
-#               terms of OAuth, which shoul exchange for a permanent token. Which option will be used depends on
+#               terms of OAuth, which should exchange for a permanent token. Which option will be used depends on
 #               the responseType parameter. The lifetime of the temporary token is 30 seconds.
-#               If in 30 seconds you don't exchange it for a permanent, you shoult try to get temporary token again.
+#               If in 30 seconds you don't exchange it for a permanent, you should try to get temporary token again.
 #               In simplified version you retrieve oauth access token
 # tags:
 #   - OAuth
@@ -805,23 +837,6 @@ POST          /users/oauth-apps                                 @controllers.OAu
 #     description: User object
 ###
 GET           /oauth/tokens                                       @controllers.OAuthController.getAuthenticators
-
-###
-# summary: Returns list certificates used to sign the token
-# tags:
-#   - OAuth
-# operationId: getCertificates
-# parameters:
-#   - name: realm
-#     in: path
-#     type: string
-#     required: true
-#     description: Realm name
-# responses:
-#   200:
-#     description: Certificates object
-###
-GET          /auth/realms/:realm/protocol/openid-connect/certs    @controllers.TokenController.certs(realm)
 
 ###
 # summary: Removes OAuth token specified in the URL

@@ -7,7 +7,7 @@ import java.security.SecureRandom
 import akka.actor.ActorSystem
 import com.fotolog.redis.RedisClient
 import com.mohiva.play.silhouette.api.LoginInfo
-import com.mohiva.play.silhouette.api.util.PasswordHasher
+import com.mohiva.play.silhouette.api.util.PasswordHasherRegistry
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import events.{EventsStream, Signup}
 import forms.RegisterForm
@@ -27,7 +27,7 @@ import scala.concurrent.{ExecutionContext, Future}
   * @author Yaroslav Derman <yaroslav.derman@gmail.com>.
   */
 class OpenRegistrationService @Inject()(config: Configuration,
-                                        passwordHasher: PasswordHasher,
+                                        passwordHashers: PasswordHasherRegistry,
                                         eventBus: EventsStream,
                                         val userService: UserIdentityService
                                        )(implicit ctx: ExecutionContext, system: ActorSystem) extends RegistrationService {
@@ -60,7 +60,7 @@ class OpenRegistrationService @Inject()(config: Configuration,
         throw AppException(ErrorCodes.ALREADY_EXISTS, "User with such login already exists")
 
       case None =>
-        val passwordInfo = passwordHasher.hash(data.password.getOrElse {
+        val passwordInfo = passwordHashers.current.hash(data.password.getOrElse {
           val random = new Array[Byte](50)
           new SecureRandom().nextBytes(random)
           new String(random)

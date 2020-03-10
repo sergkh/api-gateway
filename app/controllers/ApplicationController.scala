@@ -13,7 +13,7 @@ import utils.RichJson._
 import com.mohiva.play.silhouette.api.exceptions.ProviderException
 import com.mohiva.play.silhouette.api.repositories.AuthInfoRepository
 import com.mohiva.play.silhouette.api.services.AuthenticatorService
-import com.mohiva.play.silhouette.api.util.{Credentials, PasswordHasher}
+import com.mohiva.play.silhouette.api.util.Credentials
 import com.mohiva.play.silhouette.api.{LoginInfo, Silhouette}
 import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
 import com.mohiva.play.silhouette.impl.exceptions.{IdentityNotFoundException, InvalidPasswordException}
@@ -46,7 +46,6 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
                                       userService: UserService,
                                       authInfoRepository: AuthInfoRepository,
                                       credentialsProvider: CredentialsProvider,
-                                      passwordHasher: PasswordHasher,
                                       confirmationService: ConfirmationCodeService,
                                       config: Configuration,
                                       eventBus: EventsStream,

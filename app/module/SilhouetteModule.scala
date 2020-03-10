@@ -19,7 +19,7 @@ import com.mohiva.play.silhouette.impl.providers.state.{CsrfStateItemHandler, Cs
 import com.mohiva.play.silhouette.impl.services._
 import com.mohiva.play.silhouette.impl.util._
 import com.mohiva.play.silhouette.impl.providers.oauth2._
-import com.mohiva.play.silhouette.password.BCryptPasswordHasher
+import com.mohiva.play.silhouette.password.BCryptSha256PasswordHasher
 import com.mohiva.play.silhouette.persistence.daos.DelegableAuthInfoDAO
 import com.mohiva.play.silhouette.persistence.repositories.DelegableAuthInfoRepository
 import com.typesafe.config.Config
@@ -44,6 +44,8 @@ import com.mohiva.play.silhouette.impl.providers.openid.services.PlayOpenIDServi
 import play.api.libs.openid.OpenIdClient
 import com.typesafe.config.ConfigObject
 import org.slf4j.LoggerFactory
+import java.security.Security
+import org.bouncycastle.jce.provider.BouncyCastleProvider
 
 
 /**
@@ -59,8 +61,6 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
     }
   }
 
-  private val HASHER_ROUNDS = 5
-
   /**
     * Configures the module.
     */
@@ -69,7 +69,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
     bind[Silhouette[JwtEnv]].to[SilhouetteProvider[JwtEnv]]
     bind[CacheLayer].to[PlayCacheLayer]
     bind[IDGenerator].toInstance(new SecureRandomIDGenerator())
-    bind[PasswordHasher].toInstance(new BCryptPasswordHasher(HASHER_ROUNDS))
+    bind[PasswordHasher].toInstance(new BCryptSha256PasswordHasher())
     bind[EventBus].to[CustomEventBus].asEagerSingleton()
     bind[Clock].toInstance(Clock())
     bind[UnsecuredErrorHandler].to[ServerErrorHandler]
@@ -167,6 +167,10 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
                                   sessionsService: SessionsService,
                                   mongoTokensDao: OAuthService,
                                   clock: Clock): AuthenticatorService[JWTAuthenticator] = {
+
+    if (Security.getProvider("BC") == null) {
+      Security.addProvider(new BouncyCastleProvider())
+    }
 
     val settings = conf.underlying.as[JWTAuthenticatorSettings]("silhouette.authenticator")
 

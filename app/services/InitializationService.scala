@@ -1,6 +1,5 @@
 package services
 
-import com.mohiva.play.silhouette.api.util.PasswordHasher
 import javax.inject.Inject
 import models.{RolePermissions, ThirdpartyApplication, User}
 import play.api.{Configuration, Logger}
@@ -15,13 +14,14 @@ import reactivemongo.bson._
 import reactivemongo.api.bson.collection._
 import services.formats.MongoFormats._
 import reactivemongo.api.indexes.{Index, IndexType}
+import com.mohiva.play.silhouette.api.util.PasswordHasherRegistry
 
 /**
   * Service that provisions database on the first start.
   */
 class InitializationService @Inject()(config: Configuration,
                                       reactiveMongoApi: ReactiveMongoApi,
-                                      passwordHasher: PasswordHasher)(implicit ec: ExecutionContext) {
+                                      passwordHasher: PasswordHasherRegistry)(implicit ec: ExecutionContext) {
 
   val log = Logger(getClass.getName)
 
@@ -66,7 +66,7 @@ class InitializationService @Inject()(config: Configuration,
 
     val admin = User(
       email = Some(config.get[String]("app.defaultAdmin")),
-      passHash = passwordHasher.hash(password).password,
+      passHash = passwordHasher.current.hash(password).password,
       roles = List(AdminRole)
     )
 

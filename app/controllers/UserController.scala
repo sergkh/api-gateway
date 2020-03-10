@@ -10,7 +10,7 @@ import javax.inject.{Inject, Singleton}
 import akka.http.scaladsl.util.FastFuture
 import utils.StringHelpers._
 import com.mohiva.play.silhouette.api.actions.SecuredRequest
-import com.mohiva.play.silhouette.api.util.{PasswordHasher, PasswordInfo}
+import com.mohiva.play.silhouette.api.util.{PasswordHasherRegistry, PasswordInfo}
 import com.mohiva.play.silhouette.api.{LoginInfo, Silhouette}
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import com.mohiva.play.silhouette.password.BCryptPasswordHasher
@@ -49,7 +49,7 @@ class UserController @Inject()(
                                 eventBus: EventsStream,
                                 userService: UserService,
                                 passDao: DelegableAuthInfoDAO[PasswordInfo],
-                                passwordHasher: PasswordHasher,
+                                passwordHashers: PasswordHasherRegistry,
                                 confirmationService: ConfirmationCodeService,
                                 confirmationValidator: ConfirmationProvider,
                                 extendedInfoService: ExtendedUserInfoService,
@@ -108,14 +108,14 @@ class UserController @Inject()(
       val loginInfo = LoginInfo(CredentialsProvider.ID, user.identifier)
 
       val updUser = user.copy(
-        passHash = passwordHasher.hash(data.newPass).password
+        passHash = passwordHashers.current.hash(data.newPass).password
       )
 
       passDao.find(loginInfo).flatMap {
         case Some(passInfo) if data.pass.isDefined =>
-          if (passwordHasher.matches(passInfo, data.pass.get)) {
+          if (passwordHashers.all.exists(_.matches(passInfo, data.pass.get))) {
 
-            passDao.update(loginInfo, PasswordInfo(BCryptPasswordHasher.ID, updUser.passHash)).flatMap { _ =>
+            passDao.update(loginInfo, PasswordInfo(passwordHashers.current.id, updUser.passHash)).flatMap { _ =>
               eventBus.publish(PasswordChange(updUser, request, request2lang)) map { _ =>
 
                 log.info(s"User $user changed password")
@@ -127,7 +127,7 @@ class UserController @Inject()(
             throw AppException(ErrorCodes.ACCESS_DENIED, s"Old password is wrong")
           }
         case None if data.login.isEmpty =>
-          passDao.update(loginInfo, PasswordInfo(BCryptPasswordHasher.ID, updUser.passHash)).flatMap { _ =>
+          passDao.update(loginInfo, PasswordInfo(passwordHashers.current.id, updUser.passHash)).flatMap { _ =>
             eventBus.publish(PasswordChange(updUser, request, request2lang)) map { _ =>
               log.info(s"User $user set password")
               NoContent.discardingCookies()
@@ -183,9 +183,9 @@ class UserController @Inject()(
                   log.info(s"Code $confirmCode not found for login $reqLogin")
                   throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User ${code.login} not found")
                 } else {
-                  val updUser = u.copy(passHash = passwordHasher.hash(data.password).password)
+                  val updUser = u.copy(passHash = passwordHashers.current.hash(data.password).password)
 
-                  passDao.update(loginInfo, PasswordInfo(BCryptPasswordHasher.ID, updUser.passHash)).flatMap { _ =>
+                  passDao.update(loginInfo, PasswordInfo(passwordHashers.current.id, updUser.passHash)).flatMap { _ =>
                     eventBus.publish(PasswordChange(updUser, request, request2lang)) map { _ =>
                       confirmationService.consumeByLogin(reqLogin)
                     }
