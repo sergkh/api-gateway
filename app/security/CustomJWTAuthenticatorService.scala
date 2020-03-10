@@ -14,6 +14,9 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.language.{implicitConversions, postfixOps}
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration._
+import play.api.mvc.RequestHeader
+import com.mohiva.play.silhouette.api.services.AuthenticatorService
+import com.mohiva.play.silhouette.api.exceptions.AuthenticatorInitializationException
 
 /**
   * @author Yaroslav Derman
@@ -50,7 +53,7 @@ class CustomJWTAuthenticatorService(settings: JWTAuthenticatorSettings,
       }
       case None => Future.successful(None)
     }.recover {
-      case e => throw new AuthenticatorRetrievalException(RetrieveError.format(ID), e)
+      case e => throw new AuthenticatorRetrievalException(AuthenticatorService.RetrieveError.format(ID), e)
     }
   }
 
@@ -66,7 +69,7 @@ class CustomJWTAuthenticatorService(settings: JWTAuthenticatorSettings,
     repository.fold(Future.successful(authenticator))(_.add(authenticator)).map { a =>
       serialize(a, authenticatorEncoder, settings) // TODO: change serialization here
     }.recover {
-      case e => throw new AuthenticatorInitializationException(InitError.format(ID, authenticator), e)
+      case e => throw new AuthenticatorInitializationException(AuthenticatorService.InitError.format(ID, authenticator), e)
     }
   }
 
