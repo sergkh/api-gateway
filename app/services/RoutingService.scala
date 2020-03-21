@@ -4,6 +4,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 import akka.actor.ActorSystem
 import com.google.inject.{Inject, Singleton}
+import com.iheart.playSwagger.SwaggerSpecGenerator
 import events.{EventsStream, ServiceDiscovered, ServiceLost, ServicesListUpdate}
 import models.Service
 import play.api.libs.json._
@@ -11,11 +12,13 @@ import play.api.libs.ws.WSClient
 import play.api.{Configuration, Environment, Mode}
 import services.RoutingService.ServiceDescriptor
 import utils.Logging
+import utils.RichJson._
 import utils.ProxyRoutesParser._
 
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
+
 
 /**
   * @author faiaz
