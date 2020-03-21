@@ -24,4 +24,8 @@ object FutureUtils {
     def <<[B](f2: => Future[B])(implicit ec: ExecutionContext): Future[A] = for { a <- f; _ <- f2 } yield a
   }
 
+  implicit class RichOptFuture[A](val f: Future[Option[A]]) extends AnyVal {
+    def orFail(t: Exception)(implicit ec: ExecutionContext): Future[A] = f.map(_.getOrElse(throw t))
+  }
+
 }

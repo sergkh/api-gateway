@@ -3,13 +3,13 @@ package services
 import java.util.Base64
 
 import akka.actor.ActorSystem
-import javax.inject.{Inject, Singleton}
 import com.mohiva.play.silhouette.api.Authenticator.Implicits._
-import com.mohiva.play.silhouette.api.{EventBus, LoginInfo}
+import com.mohiva.play.silhouette.api.LoginInfo
 import com.mohiva.play.silhouette.api.repositories.AuthenticatorRepository
 import com.mohiva.play.silhouette.api.util.JsonFormats._
 import com.mohiva.play.silhouette.impl.authenticators.{JWTAuthenticator, JWTAuthenticatorService}
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
+import javax.inject.{Inject, Singleton}
 import models.AppEvent._
 import models.TokenClaims._
 import models._
@@ -31,7 +31,6 @@ import utils.{JsonHelper, Logging, MongoErrorHandler}
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.implicitConversions
-import ErrorCodes._
 
 /**
   * @author Yaroslav Derman <yaroslav.derman@gmail.com>.

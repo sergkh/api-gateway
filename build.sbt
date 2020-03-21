@@ -5,7 +5,7 @@ name := """api-gateway"""
 
 lazy val commonSettings = Seq(
   version := (version in ThisBuild).value,
-  scalaVersion := "2.12.10"
+  scalaVersion := "2.12.11"
 )
 
 lazy val `base-models` = project.settings(commonSettings: _*)

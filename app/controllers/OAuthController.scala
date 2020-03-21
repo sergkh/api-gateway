@@ -3,22 +3,22 @@ package controllers
 //scalastyle:off public.methods.have.type
 
 import akka.actor.ActorSystem
-import javax.inject.{Inject, Singleton}
 import com.mohiva.play.silhouette.api.Silhouette
 import com.mohiva.play.silhouette.api.services.AuthenticatorService
 import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
 import events.EventsStream
 import forms.{OAuthForm, ThirdPartyAppForm}
+import javax.inject.{Inject, Singleton}
 import models.AppEvent._
 import models._
 import play.api.Configuration
 import play.api.libs.json.{JsObject, Json}
 import security._
 import services.{OAuthService, UserService}
-import utils.Settings._
-import utils.RichRequest._
 import utils.RichJson._
-import ErrorCodes._
+import utils.RichRequest._
+import utils.Settings._
+
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.language.implicitConversions
 

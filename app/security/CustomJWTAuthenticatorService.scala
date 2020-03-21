@@ -1,30 +1,35 @@
 package security
 
+import java.{util => ju}
+
+import com.mohiva.play.silhouette.api.LoginInfo
 import com.mohiva.play.silhouette.api.crypto.AuthenticatorEncoder
-import com.mohiva.play.silhouette.api.exceptions.AuthenticatorRetrievalException
+import com.mohiva.play.silhouette.api.exceptions.{AuthenticatorException, AuthenticatorInitializationException, AuthenticatorRetrievalException}
 import com.mohiva.play.silhouette.api.repositories.AuthenticatorRepository
-import com.mohiva.play.silhouette.api.services.AuthenticatorService.RetrieveError
+import com.mohiva.play.silhouette.api.services.AuthenticatorService
 import com.mohiva.play.silhouette.api.util.{Clock, ExtractableRequest, IDGenerator}
 import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator._
 import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticatorService.ID
 import com.mohiva.play.silhouette.impl.authenticators.{JWTAuthenticator, JWTAuthenticatorService, JWTAuthenticatorSettings}
+import org.joda.time.DateTime
+import pdi.jwt._
+import play.api.libs.json._
+import play.api.mvc.RequestHeader
 import utils.Logging
+import utils.RichJson._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.{implicitConversions, postfixOps}
 import scala.util.{Failure, Success, Try}
-import scala.concurrent.duration._
-import play.api.mvc.RequestHeader
-import com.mohiva.play.silhouette.api.services.AuthenticatorService
-import com.mohiva.play.silhouette.api.exceptions.AuthenticatorInitializationException
 
 /**
   * @author Yaroslav Derman
   */
 class CustomJWTAuthenticatorService(settings: JWTAuthenticatorSettings,
                                     repository: Option[AuthenticatorRepository[JWTAuthenticator]],
-                                    authenticatorEncoder: AuthenticatorEncoder,
+                                    authenticatorEncoder: AuthenticatorEncoder,                                    
                                     idGenerator: IDGenerator,
+                                    keysManager: KeysManager,
                                     val clock: Clock)(implicit val exContext: ExecutionContext)
   extends JWTAuthenticatorService(
     settings,
@@ -33,20 +38,12 @@ class CustomJWTAuthenticatorService(settings: JWTAuthenticatorSettings,
     idGenerator,
     clock)(exContext) with Logging {
 
-  final val OAUTH_MIN_DURATION_MS = 1.day.toMillis
+  final val algorithm = JwtAlgorithm.ES512
 
   override def retrieve[B](implicit request: ExtractableRequest[B]): Future[Option[JWTAuthenticator]] = {
     Future.fromTry(retrieveToken(request)).flatMap {
-      // TODO: change deserialization here
-      case Some(token) => unserialize(token, authenticatorEncoder, settings) match {
-        case Success(authenticator) =>
-          repository.fold(Future.successful(Option(authenticator)))(_.find(authenticator.id)) map {
-            case Some(oauth) if oauth.isTimedOut && isOauthToken(oauth) =>
-              // OAuth tokens are long term and do not have idle timeout
-              Some(oauth.copy(idleTimeout = None))
-            case other =>
-              other
-          }
+      case Some(token) => deserializeJwt(token, authenticatorEncoder, settings) match {
+        case Success(authenticator) => repository.fold(Future.successful(Option(authenticator)))(_.find(authenticator.id))
         case Failure(e) =>
           logger.info(e.getMessage, e)
           Future.successful(None)
@@ -67,7 +64,7 @@ class CustomJWTAuthenticatorService(settings: JWTAuthenticatorSettings,
    */
   override def init(authenticator: JWTAuthenticator)(implicit request: RequestHeader): Future[String] = {
     repository.fold(Future.successful(authenticator))(_.add(authenticator)).map { a =>
-      serialize(a, authenticatorEncoder, settings) // TODO: change serialization here
+      serializeJwt(a, authenticatorEncoder, settings)
     }.recover {
       case e => throw new AuthenticatorInitializationException(AuthenticatorService.InitError.format(ID, authenticator), e)
     }
@@ -104,12 +101,66 @@ class CustomJWTAuthenticatorService(settings: JWTAuthenticatorSettings,
     )
   }
 
-  /**
-    * Heuristics to determine if authenticator is OAuth.
-    * It's enough to check that it's a long term token.
-    */
-  private def isOauthToken(oauth: JWTAuthenticator): Boolean = {
-    oauth.expirationDateTime.getMillis - oauth.lastUsedDateTime.getMillis > OAUTH_MIN_DURATION_MS
+  private def serializeJwt(authenticator: JWTAuthenticator,
+                        authenticatorEncoder: AuthenticatorEncoder,
+                        settings: JWTAuthenticatorSettings): String = {
+    val (keyId, privKey) = keysManager.currentAuthPrivKey
+
+    val subject = Json.toJson(authenticator.loginInfo).toString()
+
+    val header = JwtHeader(Some(algorithm), typ = Some("JWT"), keyId = Some(keyId))
+    val claim = JwtClaim(
+      content = authenticator.customClaims.map(_.without("aud")).map(Json.stringify).getOrElse("{}"),
+      issuer = Some(settings.issuerClaim),
+      subject = Some(authenticatorEncoder.encode(subject)),
+      audience = authenticator.customClaims.flatMap(js => (js \ "aud").asOpt[Set[String]]),
+      expiration = Some(authenticator.expirationDateTime.getMillis / 1000),
+      issuedAt = Some(authenticator.lastUsedDateTime.getMillis / 1000),
+      jwtId = Some(authenticator.id)
+    )
+
+    Jwt.encode(header, claim, privKey)
   }
 
+    /**
+   * Unserializes the authenticator.
+   *
+   * @param str                  The string representation of the authenticator.
+   * @param authenticatorEncoder The authenticator encoder.
+   * @param settings             The authenticator settings.
+   * @return An authenticator on success, otherwise a failure.
+   */
+  def deserializeJwt(
+    token: String,
+    authenticatorEncoder: AuthenticatorEncoder,
+    settings: JWTAuthenticatorSettings): Try[JWTAuthenticator] = {
+
+    for {
+      keyId     <- getKeyId(token)
+      publicKey <- Try(keysManager.authPubKey(keyId).getOrElse(throw new RuntimeException("Unknown key ID")))
+      claim     <- Jwt.decode(token, publicKey, List(algorithm))
+    } yield {
+      if (!claim.issuer.contains(settings.issuerClaim)) throw new RuntimeException("Token issued by a different issuer")
+      val subject = authenticatorEncoder.decode(claim.subject.getOrElse{throw new RuntimeException("Subject is not present")})
+
+      val loginInfo = Json.parse(subject).as[LoginInfo]
+      
+      JWTAuthenticator(
+        id = claim.jwtId.getOrElse(throw new RuntimeException("ID is not present")),
+        loginInfo = loginInfo,
+        lastUsedDateTime = new DateTime(claim.issuedAt.get * 1000),
+        expirationDateTime = new DateTime(claim.expiration.get * 1000),
+        idleTimeout = settings.authenticatorIdleTimeout,
+        customClaims = Some(Json.parse(claim.content).as[JsObject])
+      )
+    }
+  }
+
+  private def getKeyId(token: String): Try[String] = Try {
+    token.split("\\.").headOption.flatMap { header =>
+      Try((Json.parse(ju.Base64.getDecoder.decode(header)) \ "kid").as[String]).toOption
+    }.getOrElse {
+      throw new AuthenticatorException(JWTAuthenticatorService.InvalidJWTToken.format(ID, token))
+    }
+  }
 }

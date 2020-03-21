@@ -4,12 +4,9 @@ package controllers
 //scalastyle:off public.methods.have.type
 
 import akka.actor.ActorSystem
-import javax.inject.{Inject, Singleton}
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import utils.RichRequest._
-import utils.RichJson._
 import com.mohiva.play.silhouette.api.exceptions.ProviderException
 import com.mohiva.play.silhouette.api.repositories.AuthInfoRepository
 import com.mohiva.play.silhouette.api.services.AuthenticatorService
@@ -21,21 +18,21 @@ import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import events.EventsStream
 import forms.LoginForm.LoginCredentials
 import forms._
+import javax.inject.{Inject, Singleton}
 import models.AppEvent._
 import models._
-import ErrorCodes._
-import play.api.i18n.{I18nSupport, Messages}
+import play.api.Configuration
+import play.api.i18n.I18nSupport
 import play.api.libs.json.Json
 import play.api.mvc.{Headers, Request, RequestHeader, Result}
-import play.api.Configuration
 import security.{ConfirmationCodeService, CustomJWTAuthenticatorService, WithPermission}
 import services._
 import services.impl.RegistrationFiltersChain
 import utils.JsonHelper
+import utils.RichRequest._
 
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.concurrent.Future
-import scala.concurrent.duration.FiniteDuration
 import scala.language.implicitConversions
 
 /**

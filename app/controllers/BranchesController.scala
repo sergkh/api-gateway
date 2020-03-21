@@ -3,10 +3,10 @@ package controllers
 //scalastyle:off public.methods.have.type
 
 import akka.actor.ActorSystem
-import javax.inject.{Inject, Singleton}
 import com.mohiva.play.silhouette.api.Silhouette
 import events.EventsStream
 import forms.BranchForm
+import javax.inject.{Inject, Singleton}
 import models.AppEvent._
 import models.{AppException, ErrorCodes, JwtEnv}
 import play.api.libs.json.Json
@@ -23,7 +23,6 @@ class BranchesController @Inject()(
                                    branches: BranchesService
                                   )(implicit exec: ExecutionContext, system: ActorSystem)
  extends BaseController {
-  import ErrorCodes._
   implicit val branchesService = branches
 
   val editPerm = WithAnyPermission("branches:edit")

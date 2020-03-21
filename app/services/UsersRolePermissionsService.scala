@@ -4,17 +4,16 @@ import com.google.inject.Inject
 import models.RolePermissions
 import play.api.libs.json._
 import play.modules.reactivemongo.ReactiveMongoApi
+import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.commands.UpdateWriteResult
-import reactivemongo.play.json._
 import reactivemongo.api.{Cursor, ReadPreference}
-import reactivemongo.play.json.collection.JSONCollection
+import reactivemongo.bson.BSONDocument
+import reactivemongo.play.json._
+import services.formats.MongoFormats._
 import utils.Logging
 import utils.MongoErrorHandler._
 
 import scala.concurrent.{ExecutionContext, Future}
-import reactivemongo.api.collections.bson.BSONCollection
-import services.formats.MongoFormats._
-import reactivemongo.bson.BSONDocument
 
 class UsersRolePermissionsService @Inject()(reactiveMongoApi: ReactiveMongoApi)(implicit ex: ExecutionContext) extends Logging {
 

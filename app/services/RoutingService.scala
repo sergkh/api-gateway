@@ -16,8 +16,6 @@ import utils.ProxyRoutesParser._
 import scala.collection.JavaConverters._
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
-import utils.RichJson._
-import com.iheart.playSwagger.SwaggerSpecGenerator
 
 /**
   * @author faiaz

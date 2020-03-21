@@ -1,7 +1,5 @@
 package module
 
-import scala.collection.JavaConverters._
-import javax.inject.Singleton
 import _root_.services._
 import com.google.inject.name.Named
 import com.google.inject.{AbstractModule, Provides}
@@ -14,38 +12,36 @@ import com.mohiva.play.silhouette.api.{Environment, EventBus, Silhouette, Silhou
 import com.mohiva.play.silhouette.crypto._
 import com.mohiva.play.silhouette.impl.authenticators._
 import com.mohiva.play.silhouette.impl.providers._
+import com.mohiva.play.silhouette.impl.providers.oauth1.{TwitterProvider, XingProvider}
 import com.mohiva.play.silhouette.impl.providers.oauth1.secrets.{CookieSecretProvider, CookieSecretSettings}
+import com.mohiva.play.silhouette.impl.providers.oauth1.services.PlayOAuth1Service
+import com.mohiva.play.silhouette.impl.providers.oauth2._
+import com.mohiva.play.silhouette.impl.providers.openid.YahooProvider
+import com.mohiva.play.silhouette.impl.providers.openid.services.PlayOpenIDService
 import com.mohiva.play.silhouette.impl.providers.state.{CsrfStateItemHandler, CsrfStateSettings}
 import com.mohiva.play.silhouette.impl.services._
 import com.mohiva.play.silhouette.impl.util._
-import com.mohiva.play.silhouette.impl.providers.oauth2._
 import com.mohiva.play.silhouette.password.BCryptSha256PasswordHasher
 import com.mohiva.play.silhouette.persistence.daos.DelegableAuthInfoDAO
 import com.mohiva.play.silhouette.persistence.repositories.DelegableAuthInfoRepository
 import com.typesafe.config.Config
+import javax.inject.Singleton
 import models.dao._
 import models.{JwtEnv, User}
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ArbitraryTypeReader._
 import net.ceedubs.ficus.readers.{EnumerationReader, ValueReader}
 import net.codingwell.scalaguice.ScalaModule
+import org.slf4j.LoggerFactory
 import play.api.Configuration
+import play.api.libs.openid.OpenIdClient
 import play.api.libs.ws.WSClient
 import play.api.mvc.Cookie
-import security.{CustomJWTAuthenticatorService, JWTTokensDao, JWTTokensDaoWrapper}
+import security.{CustomJWTAuthenticatorService, JWTTokensDao, JWTTokensDaoWrapper, KeysManager}
 import utils.{CustomEventBus, ServerErrorHandler}
 
+import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
-import com.mohiva.play.silhouette.impl.providers.oauth1.TwitterProvider
-import com.mohiva.play.silhouette.impl.providers.oauth1.services.PlayOAuth1Service
-import com.mohiva.play.silhouette.impl.providers.oauth1.XingProvider
-import com.mohiva.play.silhouette.impl.providers.openid.YahooProvider
-import com.mohiva.play.silhouette.impl.providers.openid.services.PlayOpenIDService
-import play.api.libs.openid.OpenIdClient
-import com.typesafe.config.ConfigObject
-import org.slf4j.LoggerFactory
-import java.security.Security
-import org.bouncycastle.jce.provider.BouncyCastleProvider
 
 
 /**
@@ -105,6 +101,9 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
     Environment[JwtEnv](userService, authService, Seq(), eventBus)
   }
 
+  @Provides
+  def provideKeyManger: KeysManager = new KeysManager()
+
   /**
     * Provides the social provider registry.
     *
@@ -117,7 +116,6 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
                                     client: OpenIdClient,
                                     conf: Configuration): SocialProviderRegistry = {
 
-    // TODO: make loading dynamic
     val socialConfigs = conf.underlying.getConfigList("silhouette.social").asScala
     
     val providers = socialConfigs.flatMap {
@@ -166,11 +164,8 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
                                   @Named("authenticator-crypter") crypter: Crypter,
                                   sessionsService: SessionsService,
                                   mongoTokensDao: OAuthService,
+                                  keyManager: KeysManager,
                                   clock: Clock): AuthenticatorService[JWTAuthenticator] = {
-
-    if (Security.getProvider("BC") == null) {
-      Security.addProvider(new BouncyCastleProvider())
-    }
 
     val settings = conf.underlying.as[JWTAuthenticatorSettings]("silhouette.authenticator")
 
@@ -194,7 +189,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
           s"Use: none, redis, mongo or combined")
     }
 
-    new CustomJWTAuthenticatorService(settings, store, encoder, idGenerator, clock)
+    new CustomJWTAuthenticatorService(settings, store, encoder, idGenerator, keyManager, clock)
   }
 
 

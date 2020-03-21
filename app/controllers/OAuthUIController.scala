@@ -2,14 +2,13 @@ package controllers
 
 //scalastyle:off public.methods.have.type
 
-import javax.inject.{Inject, Singleton}
-
 import com.mohiva.play.silhouette.api.Silhouette
 import com.mohiva.play.silhouette.api.services.AuthenticatorService
 import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
+import javax.inject.{Inject, Singleton}
 import models.JwtEnv
+import play.api.Configuration
 import play.api.i18n.I18nSupport
-import play.api.{Configuration, Mode}
 import security._
 import services._
 

@@ -1,8 +1,8 @@
 package services
 
 import com.google.inject.Inject
-import models.{ExtendedUser, User}
 import models.ExtendedUser._
+import models.{ExtendedUser, User}
 import play.api.libs.json.{JsNumber, JsObject, Json}
 import play.modules.reactivemongo.ReactiveMongoApi
 import reactivemongo.api.{Cursor, QueryOpts, ReadPreference}

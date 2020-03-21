@@ -694,6 +694,51 @@ POST          /oauth/token                                        @controllers.O
 ###
 GET          /oauth/certs                                        @controllers.TokenController.authCerts
 
+
+###
+# summary: Refresh access token
+# description: Allows to obtain new access token from existing Refresh token.
+# tags:
+#   - OAuth
+# operationId: refreshToken
+# parameters:
+#   - name: body
+#     schema:
+#      type: object
+#      properties:
+#        grant_type:
+#          type: string
+#          description: Grant type. Should be refresh_token
+#        client_id:
+#          type: string
+#          description: Client ID
+#        client_secret:
+#          type: string
+#          description: Client Secret
+#        refresh_token:
+#          type: string
+#          description: Refresh token
+# responses:
+#   200:
+#     description: Access token
+#     schema:
+#       type: object
+#       properties:
+#         access_token:
+#           type: string
+#           description: Access token
+#         token_type:
+#           type: string
+#           description: The type of the token issued
+#         expires_in:
+#           type: integer
+#           description: Expiration time in seconds from now
+#         refresh_token:
+#           type: string
+#           description: Refresh token
+###
+POST          /oauth/token                                        @controllers.TokenController.getAccessToken
+
 ###
 # summary: Authorize user with OAuth service by admin
 # description: >

@@ -1,11 +1,10 @@
 package services
 
 
+import com.google.inject.ImplementedBy
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import javax.inject.Inject
-
-import com.google.inject.ImplementedBy
 import play.api.Configuration
 import play.api.libs.Codecs
 import play.api.mvc.RequestHeader

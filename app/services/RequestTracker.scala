@@ -2,19 +2,19 @@ package services
 
 import java.io.Serializable
 
-import javax.inject.{Inject, Singleton}
 import akka.http.scaladsl.util.FastFuture
 import akka.stream.Materializer
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.fotolog.redis.{BinaryConverter, RedisClient}
+import javax.inject.{Inject, Singleton}
 import models.{AppException, ErrorCodes}
 import play.api.Configuration
 import play.api.http.HttpEntity.Streamed
 import play.api.mvc.{ResponseHeader, Result}
 import services.RequestTracker._
 import utils.KryoSerializer
-import ErrorCodes._
+
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 

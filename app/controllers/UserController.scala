@@ -2,22 +2,17 @@ package controllers
 
 //scalastyle:off public.methods.have.type
 
-import java.util.Date
-
 import akka.actor.ActorSystem
-import akka.util.ByteString
-import javax.inject.{Inject, Singleton}
 import akka.http.scaladsl.util.FastFuture
-import utils.StringHelpers._
+import akka.util.ByteString
 import com.mohiva.play.silhouette.api.actions.SecuredRequest
 import com.mohiva.play.silhouette.api.util.{PasswordHasherRegistry, PasswordInfo}
 import com.mohiva.play.silhouette.api.{LoginInfo, Silhouette}
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
-import com.mohiva.play.silhouette.password.BCryptPasswordHasher
 import com.mohiva.play.silhouette.persistence.daos.DelegableAuthInfoDAO
 import events.EventsStream
-import forms.UserForm.UpdateUser
 import forms.{ResetPasswordForm, UserForm}
+import javax.inject.{Inject, Singleton}
 import models.AppEvent.{UserBlocked, _}
 import models.User._
 import models._
@@ -29,16 +24,13 @@ import play.api.mvc.{RequestHeader, Result}
 import reactivemongo.play.json._
 import security.{ConfirmationCodeService, WithAnyPermission, WithUser}
 import services.{BranchesService, ConfirmationProvider, ExtendedUserInfoService, UserService}
+import utils.FutureUtils._
 import utils.Responses._
-import diffson.playJson._
-import diffson.jsonpatch._
-import diffson.jsonpatch.lcsdiff._
-import utils.RichRequest._
 import utils.RichJson._
-import ErrorCodes._
+import utils.RichRequest._
+import utils.StringHelpers._
 
 import scala.concurrent.{ExecutionContext, Future}
-import utils.FutureUtils._
 /**
   * Created by yaroslav on 29/11/15.
   */
@@ -56,8 +48,6 @@ class UserController @Inject()(
                                 branches: BranchesService
                               )(implicit exec: ExecutionContext, system: ActorSystem)
   extends BaseController {
-
-  import DiffsonProtocol._
 
   val otpLength = config.getOptional[Int]("confirmation.otp.length").getOrElse(ConfirmationCodeService.DEFAULT_OTP_LEN)
   val otpEmailLength = config.getOptional[Int]("confirmation.otp.email-length").getOrElse(otpLength)

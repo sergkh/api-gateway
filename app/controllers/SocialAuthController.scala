@@ -2,16 +2,19 @@ package controllers
 
 //scalastyle:off public.methods.have.type
 
-import javax.inject.Inject
 import _root_.services.UserService
 import com.mohiva.play.silhouette.api._
+import com.mohiva.play.silhouette.api.actions.UserAwareRequest
 import com.mohiva.play.silhouette.api.exceptions.ProviderException
 import com.mohiva.play.silhouette.api.repositories.AuthInfoRepository
 import com.mohiva.play.silhouette.impl.providers._
+import forms.OAuthForm
+import javax.inject.Inject
 import models.{AppException, ErrorCodes, JwtEnv, User}
 import play.api.i18n.I18nSupport
 import play.api.libs.json.Json
-import ErrorCodes._
+import play.api.mvc.AnyContent
+import utils.RichRequest._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -36,39 +39,44 @@ class SocialAuthController @Inject()(
     * @return The result to display.
     */
   def authenticate(provider: String) = silh.UserAwareAction.async { implicit request =>
-    
-    log.info(s"Starting auth using $provider")
+    val authReq = request.asForm(OAuthForm.authorize)
+
+    // TODO: Add response_type Use code for server side flows and token for application side flows
+
+    log.info(s"Starting auth using $provider, req: $authReq")
     
     (socialProviderRegistry.get[SocialProvider](provider) match {
       case Some(p: SocialProvider with CommonSocialProfileBuilder) =>
-        p.authenticate() flatMap {
-          case Left(result) => 
-            log.info(s"Social auth redirect: $result")
-            Future.successful(result)
-          case Right(authInfo) => 
-            log.info(s"Returned auth info $authInfo")
-            for {
-              profile       <- p.retrieveProfile(authInfo)
-              _             <- Future.successful(log.info(s"Obtained profile $profile"))
-              user          <- initUser(request.identity, profile, authInfo)
-              _             <- Future.successful(log.info(s"User initialized $user"))
-              _             <- authInfoRepository.save(profile.loginInfo, authInfo)
-              _             <- Future.successful(log.info(s"Info saved"))              
-              authenticator <- silh.env.authenticatorService.create(profile.loginInfo)
-              _             <- Future.successful(log.info(s"Created new authenticator: $authenticator"))
-              value         <- silh.env.authenticatorService.init(authenticator)
-              _             <- Future.successful(log.info(s"Authenticator initialized : $value"))
-              result        <- Future.successful(Ok(Json.obj("token" -> value)))
-            } yield {
-              silh.env.eventBus.publish(LoginEvent(user, request))
-              log.info(s"User $user authenticated though $provider")
-              result
-            }
-        }
+        socialAuth(provider, p)
       case _ => 
         log.warn(s"Cannot authenticate with unexpected social provider $provider")
         Future.failed(throw AppException(ErrorCodes.AUTHORIZATION_FAILED, s"Unsupported authentication provider $provider") )
-    }) recover {
+    })
+  }
+
+  private def socialAuth(provierName: String, p: SocialProvider with CommonSocialProfileBuilder)(implicit request: UserAwareRequest[JwtEnv, AnyContent]) = {
+    p.authenticate() flatMap {
+      case Left(result) => 
+        log.info(s"Social auth redirect: $result")
+        Future.successful(result)
+      case Right(authInfo) => 
+
+        for {
+          profile       <- p.retrieveProfile(authInfo)
+          user          <- initUser(request.identity, profile, authInfo)
+          _             <- authInfoRepository.save(profile.loginInfo, authInfo)
+          authenticator <- silh.env.authenticatorService.create(profile.loginInfo)
+          value         <- silh.env.authenticatorService.init(authenticator)
+        } yield {
+          silh.env.eventBus.publish(LoginEvent(user, request))
+
+          log.info(s"User $user authenticated though $provierName")
+
+          Ok(
+            Json.obj("token" -> value)
+          )
+        }
+    } recover {
       case ex: ProviderException =>
         log.warn("Oauth provider exception:" + ex.getMessage, ex.getCause)
         throw AppException(ErrorCodes.AUTHORIZATION_FAILED, "Invalid credentials")

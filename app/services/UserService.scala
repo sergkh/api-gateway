@@ -1,33 +1,26 @@
 package services
 
-import java.util.Date
-
 import akka.http.scaladsl.util.FastFuture
-import javax.inject.{Inject, Singleton}
 import com.mohiva.play.silhouette.api.util.PasswordInfo
 import com.mohiva.play.silhouette.api.{AuthInfo, LoginInfo}
-import models.{AppException, ErrorCodes, QueryParams, RolePermissions, User}
+import com.mohiva.play.silhouette.impl.providers.CommonSocialProfile
+import javax.inject.{Inject, Singleton}
+import models._
 import play.api.Configuration
 import play.api.cache.{AsyncCacheApi, NamedCache}
 import play.api.libs.json._
 import play.modules.reactivemongo.ReactiveMongoApi
+import reactivemongo.api.collections.bson.BSONCollection
 import reactivemongo.api.{Cursor, QueryOpts, ReadPreference}
 import reactivemongo.core.errors.DatabaseException
 import reactivemongo.play.json._
-import reactivemongo.play.json.collection._
 import services.auth.SocialAuthService
 import utils.Logging
-import utils.RichJson._
+import reactivemongo.bson._
+import services.formats.MongoFormats._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
-import com.mohiva.play.silhouette.impl.providers.CommonSocialProfile
-import scala.util.Try
-import reactivemongo.api.collections.bson.BSONCollection
-
-import reactivemongo.bson._
-import services.formats.MongoFormats._
-import reactivemongo.api.bson.collection._
 /**
   * Handles actions to users.
   */
@@ -243,7 +236,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
 
   def getByAnyIdOpt(id: String): Future[Option[User]] = {
     val user = id match {
-      case uuid: String if User.checkUuid(uuid)    => usersCollection.flatMap(_.find(byField("_id", uuid)).one[User])
+      case uuid: String if User.checkUuid(uuid)    => usersCollection.flatMap(_.find(byId(uuid)).one[User])
       case email: String if User.checkEmail(email) => usersCollection.flatMap(_.find(byField("email", email.toLowerCase)).one[User])
       case phone: String if User.checkPhone(phone) => usersCollection.flatMap(_.find(byField("phone", phone)).one[User]) 
       case socialId: String if User.checkSocialProviderKey(socialId) => authService.findUserUuid(socialId) flatMap {

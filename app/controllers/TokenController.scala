@@ -2,48 +2,38 @@ package controllers
 
 //scalastyle:off public.methods.have.type
 
-import akka.actor.ActorSystem
+import java.time.{LocalDateTime, ZoneOffset}
+import java.{util => ju}
+
+import com.mohiva.play.silhouette.api.{LoginInfo, Silhouette}
+import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
+import events.EventsStream
+import forms.OAuthForm
 import javax.inject.{Inject, Singleton}
-import akka.stream.Materializer
-import akka.stream.scaladsl.Source
-import akka.util.{ByteString, Timeout}
-import com.mohiva.play.silhouette.api.Silhouette
-import com.mohiva.play.silhouette.api.actions.UserAwareRequest
-import models.{AppException, ErrorCodes, JwtEnv, Service, User}
-import play.api.Configuration
-import play.api.cache.SyncCacheApi
+import models.AppEvent.Login
+import models.ErrorCodes._
+import models.{AppException, ErrorCodes, JwtEnv}
 import play.api.libs.json.Json
-import play.api.libs.streams.Accumulator
-import play.api.mvc.BodyParser
-import security.{ConfirmationCodeService, WithAnyPermission}
-import services.{ProxyService, RoutingService, StreamedProxyRequest}
-import ErrorCodes._
-import utils.Responses._
+import security.KeysManager
+import services.{OAuthService, TokensService, UserService}
+import utils.FutureUtils._
+import utils.RichRequest._
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
-import events.EventsStream
-import utils.RichJson._
-import java.security._
-import org.bouncycastle.cert.X509v3CertificateBuilder
-import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
-import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
-import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
-import java.security.spec.ECGenParameterSpec
-import org.bouncycastle.asn1.x500.X500Name
-import java.{util => ju}
-import java.math.BigInteger
-import java.security.cert.X509Certificate
-import scala.compat.Platform
-import services.TokensService
 
 @Singleton
-class TokenController @Inject()(silh: Silhouette[JwtEnv], tokensService: TokensService)
+class TokenController @Inject()(silh: Silhouette[JwtEnv], 
+                                oauth: OAuthService,
+                                tokens: TokensService,
+                                keyManager: KeysManager,
+                                userService: UserService,
+                                eventBus: EventsStream
+                              )
                                (implicit exec: ExecutionContext) extends BaseController {
 
   def authCerts = Action { _ =>
 
-    val keys = tokensService.authCertificates
+    val keys = keyManager.authCertificates
     
     Ok(Json.obj(
       "keys" -> Json.arr(
@@ -54,6 +44,36 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv], tokensService: TokensS
         }
       )
     ))
+  }
+
+  def getAccessToken = Action.async { implicit request =>
+    val refresh = request.asForm(OAuthForm.refreshToken)
+
+    log.info(s"Requesting access token for ${refresh.clientId}")
+
+    for {
+      app       <- oauth.getApp(refresh.clientId)
+      _         <- conditionalFail(app.secret != refresh.clientSecret, ACCESS_DENIED, "Wrong client secret")
+      refreshToken     <- tokens.get(refresh.refreshToken).orFail(AppException(AUTHORIZATION_FAILED, "Invalid refresh token"))
+      loginInfo = LoginInfo(CredentialsProvider.ID, refreshToken.userId)
+      user      <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
+      authenticator <- silh.env.authenticatorService.create(loginInfo)
+      token     <- silh.env.authenticatorService.init(authenticator)
+      _         <- eventBus.publish(Login(user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis))
+    } yield {
+      log.info(s"Succeed user authentication ${loginInfo.providerKey}")
+      
+      val expireIn = ((authenticator.expirationDateTime.toInstant.getMillis / 1000) - 
+                  LocalDateTime.now().toInstant(ZoneOffset.UTC).getEpochSecond())
+
+      Ok(Json.obj(
+        "token_type" -> "Bearer",
+        "access_token" -> token,
+        "expires_in" -> expireIn,
+        "scope" -> refreshToken.scopes.mkString(" ")
+        // TODO: "id_token": "ID_token"        
+      ))
+    }
   }
 }
 

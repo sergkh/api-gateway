@@ -1,18 +1,17 @@
 package services
 
-import javax.inject.{Inject, Singleton}
 import akka.http.scaladsl.util.FastFuture
 import forms.BranchForm.CreateBranch
+import javax.inject.{Inject, Singleton}
 import models.{AppException, Branch, ErrorCodes, User}
-import play.api.{Configuration, Logging}
 import play.api.libs.json._
+import play.api.{Configuration, Logging}
 import play.modules.reactivemongo.ReactiveMongoApi
-import reactivemongo.api.indexes.{Index, IndexType}
 import reactivemongo.api.{Cursor, ReadPreference}
-import reactivemongo.play.json._
 import reactivemongo.core.errors.DatabaseException
+import reactivemongo.play.json._
 import reactivemongo.play.json.collection.JSONCollection
-import ErrorCodes._
+
 import scala.concurrent.{ExecutionContext, Future}
 
 trait BranchesService {

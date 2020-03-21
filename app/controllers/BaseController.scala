@@ -4,6 +4,7 @@ import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.mohiva.play.silhouette.api.actions.SecuredRequest
 import models.JwtEnv
+import play.api.Logger
 import play.api.http.{ContentTypeOf, ContentTypes, Writeable}
 import play.api.i18n.Lang
 import play.api.libs.json.{JsArray, JsValue, Json}
@@ -11,7 +12,6 @@ import play.api.mvc._
 import services.StreamedProxyRequest
 
 import scala.language.implicitConversions
-import play.api.Logger
 
 /**
   * Created by sergeykhruschak on 12/9/15.

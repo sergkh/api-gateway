@@ -1,10 +1,10 @@
 package models
 
 import java.security.BasicPermission
+
 import play.api.libs.functional.syntax._
 import play.api.libs.json.{JsObject, JsPath, OWrites, Reads}
 import utils.JsonHelper
-import reactivemongo.bson.Macros.Annotations.Key
 
 case class UserPermission(name: String) extends BasicPermission(name.toUpperCase)
 

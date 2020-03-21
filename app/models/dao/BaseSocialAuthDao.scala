@@ -10,7 +10,6 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.reflect.ClassTag
 import scala.reflect.runtime.universe._
-import ErrorCodes._
 
 class BaseSocialAuthDao[A <: AuthInfo](userService: UserService,
                                        authService: SocialAuthService)(implicit val tt: TypeTag[A], ct: ClassTag[A]) extends DelegableAuthInfoDAO[A] {

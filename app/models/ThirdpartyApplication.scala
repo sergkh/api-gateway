@@ -4,7 +4,6 @@ import play.api.libs.functional.syntax._
 import play.api.libs.json.{JsPath, OWrites, Reads}
 import services.CodeGenerator
 import utils.UuidGenerator
-import ErrorCodes._
 
 /**
   * Describes new Thirdarty application that can access user data via OAuth2 tokens.

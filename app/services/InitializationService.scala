@@ -1,20 +1,19 @@
 package services
 
+import com.mohiva.play.silhouette.api.util.PasswordHasherRegistry
 import javax.inject.Inject
 import models.{RolePermissions, ThirdpartyApplication, User}
 import play.api.{Configuration, Logger}
 import play.modules.reactivemongo.ReactiveMongoApi
+import reactivemongo.api.bson.collection._
+import reactivemongo.api.indexes.{Index, IndexType}
 import reactivemongo.play.json.collection.JSONCollection
 import utils.RandomStringGenerator
+import reactivemongo.bson._
+import services.formats.MongoFormats._
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
-import services.formats.MongoFormats._
-import reactivemongo.bson._
-import reactivemongo.api.bson.collection._
-import services.formats.MongoFormats._
-import reactivemongo.api.indexes.{Index, IndexType}
-import com.mohiva.play.silhouette.api.util.PasswordHasherRegistry
 
 /**
   * Service that provisions database on the first start.
@@ -96,8 +95,17 @@ class InitializationService @Inject()(config: Configuration,
     val collection = db.map(_.collection[JSONCollection](ThirdpartyApplication.COLLECTION_NAME))
 
     val appName = config.get[String]("swagger.appName")
-    val clientId = config.get[String]("swagger.client_id")
-    val clientSecret = config.get[String]("swagger.client_secret")
+    val clientId = RandomStringGenerator.generateSecret(11)
+    val clientSecret = RandomStringGenerator.generateSecret(32)
+
+    log.info(
+      s"""
+        +=====================================================================
+        | Creating default OAuth client credentials:
+        | ClientId: ${clientId}
+        | Secret: ${clientSecret}
+        +=====================================================================
+      """.stripMargin)
 
     collection.map(_.insert.one(
       ThirdpartyApplication(user.id, appName, "Default application", "", "", "", "", true, clientId, clientSecret)

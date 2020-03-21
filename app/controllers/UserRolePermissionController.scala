@@ -12,11 +12,9 @@ import models.{AppException, ErrorCodes, JwtEnv, RolePermissions}
 import play.api.libs.json.Json
 import security.WithPermission
 import services.{UserService, UsersRolePermissionsService}
-import utils.RichJson._
 import utils.RichRequest._
-import ErrorCodes._
+
 import scala.concurrent.ExecutionContext.Implicits.global
-import services.formats.MongoFormats._
 
 class UserRolePermissionController @Inject()(usersPermissionsService: UsersRolePermissionsService,
                                              usersService: UserService,
