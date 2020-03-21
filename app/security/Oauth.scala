@@ -2,9 +2,8 @@ package security
 
 import java.util.Base64
 
-import javax.inject.Inject
 import akka.event.slf4j.Logger
-import utils.StringHelpers._
+import javax.inject.Inject
 import models.{AppException, ErrorCodes, ThirdpartyApplication}
 import play.api.libs.json.Json
 import play.api.mvc._
@@ -13,7 +12,7 @@ import play.mvc.Http
 import reactivemongo.play.json._
 import reactivemongo.play.json.collection._
 import services.UserService
-import models.ErrorCodes._
+import utils.StringHelpers._
 
 import scala.concurrent.{ExecutionContext, Future}
 

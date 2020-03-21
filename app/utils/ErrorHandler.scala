@@ -3,8 +3,7 @@ package utils
 import javax.inject.Inject
 import models.ErrorCodes._
 import models.{AppException, ErrorCodes, FormValidationException}
-import play.api.http.DefaultHttpErrorHandler
-import play.api.http.Status
+import play.api.http.{DefaultHttpErrorHandler, Status}
 import play.api.libs.json._
 import play.api.mvc.Results._
 import play.api.mvc.{RequestHeader, Result, Results}

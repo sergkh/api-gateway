@@ -2,15 +2,13 @@ package forms
 
 import java.util.Date
 
-import play.api.data.Form
-import play.api.data.Forms._
-import play.api.data.validation.{Invalid, Valid, ValidationError}
-import utils.Settings._
 import models.{Branch, QueryParams, User}
+import play.api.data.Forms._
 import play.api.data.format.Formatter
-import play.api.data.validation.Constraint
-import play.api.data.{FormError, Forms, Mapping}
+import play.api.data.validation.{Constraint, Invalid, Valid, ValidationError}
+import play.api.data.{Form, FormError, Forms, Mapping}
 import utils.DateHelpers
+import utils.Settings._
 
 import scala.util.matching.Regex
 

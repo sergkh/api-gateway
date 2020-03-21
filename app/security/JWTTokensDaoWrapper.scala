@@ -6,8 +6,8 @@ import services.OAuthService
 import utils.Logging
 import utils.Responses._
 
-import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 class JWTTokensDaoWrapper(nonOauthStore: JWTTokensDao, oauthStore: OAuthService)
   extends AuthenticatorRepository[JWTAuthenticator] with Logging {

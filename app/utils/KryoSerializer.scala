@@ -1,6 +1,6 @@
 package utils
 
-import com.twitter.chill.{KryoInstantiator, KryoPool, ScalaKryoInstantiator}
+import com.twitter.chill.ScalaKryoInstantiator
 
 import scala.reflect.ClassTag
 

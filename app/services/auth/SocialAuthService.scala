@@ -3,8 +3,9 @@ package services.auth
 import com.google.inject.Inject
 import com.mohiva.play.silhouette.api.{AuthInfo, LoginInfo}
 import com.mohiva.play.silhouette.impl.providers.{OAuth1Info, OAuth2Info}
-import models.auth._
-import play.api.libs.json.Json
+import models.auth.UserAuthInfo._
+import models.auth.{SocialOAuth1, SocialOAuth2, UserAuthInfo}
+import play.api.libs.json.{JsObject, Json}
 import play.modules.reactivemongo.ReactiveMongoApi
 import reactivemongo.play.json._
 import reactivemongo.play.json.collection.JSONCollection
@@ -12,11 +13,6 @@ import reactivemongo.play.json.collection.JSONCollection
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import scala.reflect.runtime.universe._
-import play.api.libs.json.JsObject
-import models.auth.UserAuthInfo._
-import models.auth.{SocialOAuth1, SocialOAuth2, UserAuthInfo}
-import play.api.libs.json.{JsObject, Json}
-import reactivemongo.play.json._
 
 /**
   * Created by faiaz on 16.05.17.

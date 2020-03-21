@@ -6,6 +6,7 @@ import models.User
 import play.api.mvc.Request
 import services.BranchesService
 import utils.Responses._
+
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.concurrent.Future
 

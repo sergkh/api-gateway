@@ -1,15 +1,14 @@
 package security
 
-import javax.inject.Inject
-
 import com.fotolog.redis.{BinaryConverter, RedisClient}
+import javax.inject.Inject
 import models.ConfirmationCode
 import play.api.Configuration
 import play.api.inject.ApplicationLifecycle
 import security.ConfirmationCodeService._
 import utils.KryoSerializer
-import scala.concurrent.ExecutionContext.Implicits._
 
+import scala.concurrent.ExecutionContext.Implicits._
 import scala.concurrent.Future
 
 class ConfirmationCodeService @Inject()(conf: Configuration, lifecycle: ApplicationLifecycle) {

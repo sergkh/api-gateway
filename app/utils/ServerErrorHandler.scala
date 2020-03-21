@@ -1,7 +1,7 @@
 package utils
 
-import javax.inject.{Inject, Singleton}
 import com.mohiva.play.silhouette.api.actions.{SecuredErrorHandler, UnsecuredErrorHandler}
+import javax.inject.{Inject, Singleton}
 import models.ErrorCodes
 import play.api.libs.json._
 import play.api.mvc.Results._

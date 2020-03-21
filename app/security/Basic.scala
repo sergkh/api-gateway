@@ -2,12 +2,12 @@ package security
 
 import java.util.Base64
 
-import javax.inject.Inject
 import akka.event.slf4j.Logger
+import javax.inject.Inject
 import models.{AppException, ErrorCodes}
 import play.api.mvc._
 import play.mvc.Http
-import ErrorCodes._
+
 import scala.concurrent.{ExecutionContext, Future}
 
 /**

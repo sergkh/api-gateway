@@ -2,8 +2,8 @@ package utils.filters
 
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 
-import javax.inject.{Inject, Singleton}
 import akka.stream.Materializer
+import javax.inject.{Inject, Singleton}
 import models.ErrorCodes
 import play.api.Configuration
 import play.api.inject.DefaultApplicationLifecycle

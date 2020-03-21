@@ -10,7 +10,7 @@ import play.api.Configuration
 import services.SessionsService
 import utils.Logging
 import utils.Responses._
-import ErrorCodes._
+
 import scala.compat.Platform
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future

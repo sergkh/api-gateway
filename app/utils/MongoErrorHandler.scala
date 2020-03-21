@@ -2,7 +2,6 @@ package utils
 
 import models.{AppException, ErrorCodes}
 import reactivemongo.core.errors.DatabaseException
-import ErrorCodes._
 /**
   * Created by faiaz on 19.10.16.
   */

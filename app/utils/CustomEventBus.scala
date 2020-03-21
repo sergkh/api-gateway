@@ -1,9 +1,8 @@
 package utils
 
-import javax.inject.Inject
-
 import akka.actor.ActorSystem
 import com.mohiva.play.silhouette.api.EventBus
+import javax.inject.Inject
 
 /**
   *

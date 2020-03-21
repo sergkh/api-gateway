@@ -1,6 +1,6 @@
 package forms
 
-import UserForm._
+import forms.UserForm._
 import models.OAuthAuthorizeRequest
 import play.api.data.Form
 import play.api.data.Forms._

@@ -1,6 +1,6 @@
 package forms
 
-import UserForm._
+import forms.UserForm._
 import play.api.data.Form
 import play.api.data.Forms._
 import utils.Settings._

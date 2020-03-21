@@ -1,6 +1,5 @@
 package module
 
-import akka.actor.ActorSystem
 import com.google.inject.AbstractModule
 import events.EventsStream
 import net.codingwell.scalaguice.ScalaModule
