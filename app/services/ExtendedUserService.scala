@@ -1,8 +1,7 @@
 package services
 
 import com.google.inject.Inject
-import models.ExtendedUser._
-import models.{ExtendedUser, User}
+import models.User
 import play.api.libs.json.{JsNumber, JsObject, Json}
 import play.modules.reactivemongo.ReactiveMongoApi
 import reactivemongo.api.{Cursor, QueryOpts, ReadPreference}
@@ -23,10 +22,6 @@ class ExtendedUserService @Inject()(mongoApi: ReactiveMongoApi)(implicit ctx: Ex
 
   //TODO: recover mongo db exception
   override def create(info: JsObject): Future[JsObject] = {
-    coll.flatMap(_.insert.one(info).map(_ => info))
-  }
-
-  override def create(info: ExtendedUser): Future[ExtendedUser] = {
     coll.flatMap(_.insert.one(info).map(_ => info))
   }
 

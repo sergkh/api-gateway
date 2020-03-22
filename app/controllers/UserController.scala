@@ -332,7 +332,8 @@ class UserController @Inject()(
   }
 
   def createExtendedInfo(anyId: String) = silh.SecuredAction(WithUser(anyId)).async(parse.json) { implicit request =>
-    val extendedInfo = Json.obj("_id" -> request.identity.id) ++ request.body.as[JsObject]
+    val extendedInfo = request.body.as[JsObject] ++ Json.obj("_id" -> request.identity.id)
+
     extendedInfoService.create(extendedInfo).map { info =>
       log.info(s"Save extended user info for ${request.identity.id} with $info")
       Ok(info)
@@ -343,14 +344,14 @@ class UserController @Inject()(
     userService.getRequestedUser(anyId, request.identity).flatMap { user =>
       val selector = Json.obj("_id" -> user.id)
 
-      val update = request.body.as[JsObject].without("uuid").fields.filter(kv => !ExtendedUser.serviceFields.contains(kv._1))
+      val update = request.body.as[JsObject].without("id")
 
-      if (update.isEmpty) {
-        log.info(s"Update object contain only service fields: ${ExtendedUser.serviceFields}")
+      if (update.fields.isEmpty) {
+        log.info(s"Update object can not be empty")
         throw AppException(ErrorCodes.INVALID_REQUEST, "Nothing to update")
       }
 
-      val updateObj = Json.obj("$set" -> JsObject(update))
+      val updateObj = Json.obj("$set" -> update)
 
       extendedInfoService.update(selector, updateObj).map {
         case Some(info) =>

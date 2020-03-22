@@ -1,6 +1,5 @@
 package services
 
-import models.ExtendedUser
 import play.api.libs.json.JsObject
 
 import scala.concurrent.Future
@@ -12,8 +11,6 @@ import scala.concurrent.Future
 trait ExtendedUserInfoService {
 
   def create(info: JsObject): Future[JsObject]
-
-  def create(info: ExtendedUser): Future[ExtendedUser]
 
   def retrieve4user(userId: String): Future[Option[JsObject]]
 
