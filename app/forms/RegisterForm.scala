@@ -20,14 +20,6 @@ object RegisterForm {
     )(OpenFormData.apply)(OpenFormData.unapply)
   )
 
-  val referralForm = Form(
-    mapping(
-      "login" -> nonEmptyText.verifying(or(emailAddress, phoneNumber)),
-      "password" -> password,
-      "invitationCode" -> optional(nonEmptyText)
-    )(ReferralFormData.apply)(ReferralFormData.unapply)
-  )
-
 }
 
 
@@ -37,7 +29,6 @@ object RegisterForm {
   * @param password The password of the user.
   */
 case class OpenFormData(login: String, password: Option[String]) extends RegisterOptData
-case class ReferralFormData(login: String, password: String, invitationCode: Option[String]) extends RegisterOptData
 
 sealed trait RegisterOptData {
 

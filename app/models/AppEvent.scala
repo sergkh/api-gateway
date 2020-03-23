@@ -22,7 +22,6 @@ object AppEvent {
   case class UserUnblocked(user: User, request: RequestHeader, lang: Lang) extends UserModificationEvent("user_unblocked", user.id)
   case class UserUpdate(user: User, request: RequestHeader, lang: Lang) extends UserModificationEvent("user_update", user.id)
   case class UserDelete(user: User, comment: Option[String], request: RequestHeader, lang: Lang) extends UserModificationEvent("user_delete", user.id)
-  case class UserInvitation(email: String, url: String, user: User) extends BaseAppEvent("user_invitation", user.id)
 
   case class RoleCreated(role: RolePermissions) extends BaseAppEvent("role_created", role.role)
   case class RoleUpdated(role: RolePermissions) extends BaseAppEvent("role_updated", role.role)

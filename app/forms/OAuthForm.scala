@@ -1,6 +1,6 @@
 package forms
 
-import forms.UserForm._
+import forms.FormConstraints._
 import play.api.data.Form
 import play.api.data.Forms._
 /**

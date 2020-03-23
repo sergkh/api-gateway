@@ -115,22 +115,6 @@ GET           /sessions                                           @controllers.A
 POST          /users                                              @controllers.ApplicationController.register
 
 ###
-# summary: Invite user to your structure
-# tags:
-#   - Branches
-# operationId: inviteUser
-# responses:
-#   204:
-#     description: Invitation was send
-# parameters:
-#   - name: body
-#     required: true
-#     schema:
-#      $ref: '#/definitions/forms.InviteForm.Invite'
-###
-POST          /users/invite                                       @controllers.ApplicationController.invite()
-
-###
 # summary: Confirms a user by code send by email/phone
 # tags:
 #   - Users
