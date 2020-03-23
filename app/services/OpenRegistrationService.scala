@@ -1,4 +1,4 @@
-package services.impl
+package services
 
 //scalastyle:off magic.number
 
@@ -9,27 +9,34 @@ import com.fotolog.redis.RedisClient
 import com.mohiva.play.silhouette.api.LoginInfo
 import com.mohiva.play.silhouette.api.util.PasswordHasherRegistry
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
-import events.{EventsStream, Signup}
 import forms.RegisterForm
 import javax.inject.Inject
 import models.RegistrationData._
-import models.{AppException, ErrorCodes, OpenRegistrationData, RegistrationData, User}
+import models.{AppException, ErrorCodes, OpenRegistrationData, RegistrationData}
 import org.slf4j.LoggerFactory
 import play.api.Configuration
 import play.api.libs.json.Json
 import play.api.mvc.{Request, RequestHeader}
-import services.{RegistrationService, UserIdentityService}
-
 import scala.concurrent.duration.Duration
 import scala.concurrent.{ExecutionContext, Future}
+import play.api.libs.json.JsObject
+
+
+trait RegistrationService {
+  def userRegistrationRequest(req: Request[_]): Future[RegistrationData]
+  def getUnconfirmedRegistrationData(login: String): Future[Option[RegistrationData]]
+}
+
+trait UserExistenceService {
+  def exists(id: String): Future[Boolean]
+}
 
 /**
   * @author Yaroslav Derman <yaroslav.derman@gmail.com>.
   */
 class OpenRegistrationService @Inject()(config: Configuration,
                                         passwordHashers: PasswordHasherRegistry,
-                                        eventBus: EventsStream,
-                                        val userService: UserIdentityService
+                                        userService: UserExistenceService
                                        )(implicit ctx: ExecutionContext, system: ActorSystem) extends RegistrationService {
 
   val log = LoggerFactory.getLogger(getClass)
@@ -55,11 +62,11 @@ class OpenRegistrationService @Inject()(config: Configuration,
       throw AppException(ErrorCodes.INVALID_REQUEST, "Invalid password")
     }
 
-    userService.retrieve(LoginInfo(CredentialsProvider.ID, data.loginFormatted)).flatMap {
-      case Some(_) =>
+    userService.exists(data.loginFormatted).flatMap {
+      case true =>
         throw AppException(ErrorCodes.ALREADY_EXISTS, "User with such login already exists")
 
-      case None =>
+      case false =>
         val passwordInfo = passwordHashers.current.hash(data.password.getOrElse {
           val random = new Array[Byte](50)
           new SecureRandom().nextBytes(random)
@@ -79,43 +86,11 @@ class OpenRegistrationService @Inject()(config: Configuration,
     }
   }
 
-  def getUserByLogin(login: String): Future[Option[User]] = {
+  def getUnconfirmedRegistrationData(login: String): Future[Option[RegistrationData]] = {
     val key = if (login.contains("@")) emailCode else phoneCode
 
     redis.getAsync[String](key + login.toLowerCase).map {
-      _.map { data =>
-        val registerData = Json.parse(data).as[OpenRegistrationData]
-
-        User(
-          email = registerData.optEmail.map(_.toLowerCase),
-          phone = registerData.optPhone,
-          passHash = registerData.passHash
-        )
-      }
-    }
-  }
-
-  def confirmUserRegistrationRequest(login: String)(implicit requestHeader: RequestHeader): Future[User] = {
-    val key = if (login.contains("@")) emailCode else phoneCode
-
-    redis.getAsync[String](key + login.toLowerCase).flatMap {
-      case Some(query) =>
-        val registerData = Json.parse(query).as[OpenRegistrationData]
-
-        val user = User(
-          email = registerData.optEmail.map(_.toLowerCase),
-          phone = registerData.optPhone,
-          passHash = registerData.passHash
-        )
-
-        userService.save(user).flatMap { u =>
-          eventBus.publish(Signup(user, requestHeader)) map { _ =>
-            log.info(s"User $user successfully created")
-            u
-          }
-        }
-
-      case None => throw new RuntimeException("Query not exist for email ")
+      _.map { data => Json.parse(data).as[OpenRegistrationData] }
     }
   }
 }

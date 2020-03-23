@@ -10,6 +10,23 @@ import reactivemongo.play.json.collection.JSONCollection
 
 import scala.concurrent.{ExecutionContext, Future}
 
+trait ExtendedUserInfoService {
+
+  def create(info: JsObject): Future[JsObject]
+
+  def retrieve4user(userId: String): Future[Option[JsObject]]
+
+  def retrieve(selector: JsObject, projectionKeys: String*): Future[Option[JsObject]]
+
+  def retrieveList(selector: JsObject, limit: Int, offset: Int, projectionKeys: String*): Future[List[JsObject]]
+
+  def count(selector: JsObject): Future[Int]
+
+  def update(selector: JsObject, updateObj: JsObject): Future[Option[JsObject]]
+
+  def delete(selector: JsObject): Future[Option[JsObject]]
+}
+
 /**
   * @author Yaroslav Derman <yaroslav.derman@gmail.com>.
   *         created on 08.02.2017.

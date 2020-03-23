@@ -21,6 +21,8 @@ import services.formats.MongoFormats._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
+import com.mohiva.play.silhouette.api.services.IdentityService
+import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 /**
   * Handles actions to users.
   */
@@ -32,7 +34,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
                             rolesCache: AsyncCacheApi,
                             reactiveMongoApi: ReactiveMongoApi,
                             authService: SocialAuthService,
-                            conf: Configuration)(implicit ec: ExecutionContext) extends UserIdentityService with Logging {
+                            conf: Configuration)(implicit ec: ExecutionContext) extends IdentityService[User] with UserExistenceService with Logging {
 
   private[this] final val futureNoneUser: Future[Option[User]] = FastFuture.successful(None)
 
@@ -69,9 +71,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     }
   }
 
-  def retrieve(selector: JsObject): Future[Option[JsObject]] = {
-    usersCollection.flatMap(_.find(selector).one[JsObject])
-  }
+  def exists(login: String): Future[Boolean] = retrieve(LoginInfo(CredentialsProvider.ID, login)).map(_.nonEmpty)
 
   /**
     * Saves a user.

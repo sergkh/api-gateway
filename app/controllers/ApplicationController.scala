@@ -27,9 +27,10 @@ import play.api.libs.json.Json
 import play.api.mvc.{Headers, Request, RequestHeader, Result}
 import security.{ConfirmationCodeService, CustomJWTAuthenticatorService, WithPermission}
 import services._
-import services.impl.RegistrationFiltersChain
+import services.RegistrationFiltersChain
 import utils.JsonHelper
 import utils.RichRequest._
+import utils.FutureUtils._
 
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.concurrent.Future
@@ -161,7 +162,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
     request.identity match {
       case Some(user) if user.hasPermission(createUserPermission) =>
         registration.userRegistrationRequest(request).flatMap { regData =>
-          registration.confirmUserRegistrationRequest(regData.login).map { u =>
+          finishUserRegistration(regData.login).map { u =>
             Ok(Json.toJson(u))
           }
         }
@@ -272,9 +273,19 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
   }
 
   private def confirmUserRegistration(confirmationCode: ConfirmationCode)(implicit request: RequestHeader) = {
-    confirmAction(confirmationCode, action = _ =>
-      registration.confirmUserRegistrationRequest(confirmationCode.login)
-    )
+    confirmAction(confirmationCode, action = _ => finishUserRegistration(confirmationCode.login))
+  }
+
+  private def finishUserRegistration(login: String)(implicit request: RequestHeader): Future[User] = {
+    for {
+        regData <- registration.getUnconfirmedRegistrationData(login).orFail(AppException(ErrorCodes.ENTITY_NOT_FOUND, "User not found"))
+        user     = User.fromRegistration(regData)
+        _       <- userService.save(user)
+        _       <- eventBus.publish(Signup(user, request))
+      } yield {
+        log.info(s"User $user successfully created")
+        user
+      }
   }
 
   private def confirmAction(confirmationCode: ConfirmationCode, action: LoginInfo => Future[User])(implicit request: RequestHeader): Future[Result] = {
@@ -310,7 +321,9 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
     val login = request.asForm(ConfirmForm.reConfirm).login
 
     def codeToUser(c: Option[ConfirmationCode]): Future[Option[User]] = c.map(_.operation match {
-      case ConfirmationCode.OP_REGISTER => registration.getUserByLogin(login)
+      case ConfirmationCode.OP_REGISTER => registration.getUnconfirmedRegistrationData(login).map {
+        _.map(data => User(email = data.optEmail.map(_.toLowerCase), phone = data.optPhone, passHash = data.passHash))        
+      }
       case _ => userService.getByAnyIdOpt(login)
     }).getOrElse(Future.successful(None))
 

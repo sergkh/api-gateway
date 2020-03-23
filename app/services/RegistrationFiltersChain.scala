@@ -1,4 +1,4 @@
-package services.impl
+package services
 
 import akka.http.scaladsl.util.FastFuture
 import javax.inject.{Inject, Singleton}

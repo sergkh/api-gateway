@@ -9,20 +9,21 @@ lazy val commonSettings = Seq(
 )
 
 lazy val `base-models` = project.settings(commonSettings: _*)
-lazy val registration = project.settings(commonSettings: _*).dependsOn(`base-models`)
 lazy val etcdDiscovery = (project in file("./modules/etcd-discovery")).settings(commonSettings: _*).dependsOn(`base-models`)
 lazy val kafka = (project in file("./modules/kafka")).settings(commonSettings: _*).dependsOn(`base-models`)
 
 lazy val root = (project in file("."))
   .enablePlugins(PlayScala, JavaAgent, SbtNativePackager, BuildInfoPlugin)
-  .aggregate(`base-models`, registration, etcdDiscovery, kafka)
-  .dependsOn(`base-models`, registration, etcdDiscovery, kafka)
+  .aggregate(`base-models`, etcdDiscovery, kafka)
+  .dependsOn(`base-models`, etcdDiscovery, kafka)
   .settings(commonSettings: _*)
 
 
 resolvers += "Atlassian Releases" at "https://maven.atlassian.com/public/"
 resolvers += "Typesafe repository" at "https://repo.typesafe.com/typesafe/releases/"
 resolvers += "Sonatype OSS Snapshots" at "https://oss.sonatype.org/content/repositories/snapshots"
+resolvers += "scalaz-bintray" at "https://dl.bintray.com/scalaz/releases"
+resolvers += Resolver.bintrayRepo("sergkh", "maven")
 resolvers += Resolver.jcenterRepo
 resolvers += Resolver.mavenLocal
 
@@ -53,7 +54,6 @@ libraryDependencies ++= Seq(
   "com.iheart"        %% "ficus"                            % "1.4.7",
   "org.reactivemongo" %% "play2-reactivemongo"              % "0.20.3-play28",
   "org.reactivemongo" %% "reactivemongo-bson-macros"        % "0.20.3",
-//  "org.mongodb.scala" %% "mongo-scala-driver"               % "2.8.0", ???
   "com.iheart"        %% "play-swagger"                     % "0.9.1-PLAY2.8",
   "com.twitter"       %% "chill"                            % "0.9.5",
   "org.gnieh"         %% "diffson-play-json"                % "4.0.2",

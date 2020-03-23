@@ -58,6 +58,12 @@ case class User(email: Option[String] = None,
 }
 
 object User {
+  def fromRegistration(r: RegistrationData) = User(
+    email = r.optEmail,
+    phone = r.optPhone,
+    passHash = r.passHash
+  )
+
 
   implicit val oAuth1InfoFmt = Json.format[OAuth1Info]
   implicit val oAuth2InfoFmt = Json.format[OAuth2Info]

@@ -10,7 +10,8 @@ abstract class UserModificationEvent(name: String, key: String) extends BaseAppE
 
 object AppEvent {
   class OAuthAppEvent(name: String, key: String) extends BaseAppEvent(name, key)
-
+  
+  case class Signup(user: User, request: RequestHeader) extends BaseAppEvent("signup", user.id)
   case class Login(userId: String, token: String, request: RequestHeader, sessionId: String, expirationTime: Long) extends BaseAppEvent("login", userId)
   case class Logout(user: User, token: String, request: RequestHeader, sessionId: String) extends BaseAppEvent("logout", user.id)
   case class OtpGeneration(userId: Option[String], email: Option[String], phone: Option[String], code: String, request: RequestHeader) extends BaseAppEvent("otp", userId.getOrElse("none"))
