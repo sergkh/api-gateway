@@ -65,12 +65,12 @@ class OAuthService @Inject()(userService: UserService,
     tokensCollection.flatMap(_.insert(authenticator).map(_ => authenticator))
   }
 
-  def list(userId: Option[Long], accountId: Option[Long], appId: Option[Long], limit: Int,
-           offset: Int): Future[List[JWTAuthenticator]] = {
+  def list(userId: Option[String], appId: Option[String], limit: Int, offset: Int): Future[List[JWTAuthenticator]] = {
 
     val opts = QueryOpts(batchSizeN = limit, skipN = offset)
+    
     tokensCollection.flatMap(
-      _.find(JsonHelper.toNonemptyJson("appId" -> appId, TAG_USER_ID -> userId, TAG_ACCOUNT_ID -> accountId))
+      _.find(JsonHelper.toNonemptyJson("appId" -> appId, TAG_USER_ID -> userId))
         .options(opts)
         .cursor[JWTAuthenticator](ReadPreference.secondaryPreferred).collect[List](-1, errorHandler[JWTAuthenticator])
     )

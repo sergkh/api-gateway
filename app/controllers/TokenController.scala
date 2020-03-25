@@ -20,6 +20,10 @@ import utils.FutureUtils._
 import utils.RichRequest._
 
 import scala.concurrent.ExecutionContext
+import play.api.mvc.Headers
+import play.api.http.HeaderNames
+import play.api.mvc.RequestHeader
+import scala.util.Try
 
 @Singleton
 class TokenController @Inject()(silh: Silhouette[JwtEnv], 
@@ -47,19 +51,23 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
   }
 
   def getAccessToken = Action.async { implicit request =>
-    val refresh = request.asForm(OAuthForm.refreshToken)
-
-    log.info(s"Requesting access token for ${refresh.clientId}")
+    val refresh = request.asForm(OAuthForm.getAccessTokenFromRefreshToken) // TODO: implement other forms
+    
+    val (clientId, clientSecret) = clientAuthorization(request).getOrElse {
+      throw new AppException(AUTHORIZATION_FAILED, "Client authorization failed")
+    }
+    
+    log.info(s"Requesting access token for ${clientId}")
 
     for {
-      app       <- oauth.getApp(refresh.clientId)
-      _         <- conditionalFail(app.secret != refresh.clientSecret, ACCESS_DENIED, "Wrong client secret")
-      refreshToken     <- tokens.get(refresh.refreshToken).orFail(AppException(AUTHORIZATION_FAILED, "Invalid refresh token"))
-      loginInfo = LoginInfo(CredentialsProvider.ID, refreshToken.userId)
-      user      <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
-      authenticator <- silh.env.authenticatorService.create(loginInfo)
-      token     <- silh.env.authenticatorService.init(authenticator)
-      _         <- eventBus.publish(Login(user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis))
+      app             <- oauth.getApp(clientId)
+      _               <- conditionalFail(app.secret != clientSecret, ACCESS_DENIED, "Wrong client secret")
+      refreshToken    <- tokens.get(refresh.refreshToken).orFail(AppException(AUTHORIZATION_FAILED, "Invalid refresh token"))
+      loginInfo       = LoginInfo(CredentialsProvider.ID, refreshToken.userId)
+      user            <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
+      authenticator   <- silh.env.authenticatorService.create(loginInfo)
+      token           <- silh.env.authenticatorService.init(authenticator)
+      _               <- eventBus.publish(Login(user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis))
     } yield {
       log.info(s"Succeed user authentication ${loginInfo.providerKey}")
       
@@ -75,5 +83,13 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
       ))
     }
   }
+
+  def clientAuthorization(request: RequestHeader): Option[(String, String)] = 
+    request.headers.get(HeaderNames.AUTHORIZATION).map(_.split(" ")).collect {
+      case Array("Bearer", data) => Try {
+        val Array(user, pass) = new String(ju.Base64.getDecoder.decode(data)).split(":")
+        user -> pass
+      }.toOption
+    }.flatten
 }
 

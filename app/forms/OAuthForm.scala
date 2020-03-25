@@ -18,9 +18,8 @@ object OAuthForm {
 
   val getTokens = Form(
     mapping(
-      "userId" -> optional(longUuid),
-      "accountId" -> optional(longUuid),
-      "appId" -> optional(longUuid),
+      "userId" -> optional(nonEmptyText),
+      "appId" -> optional(nonEmptyText),
       "limit" -> optional(limit),
       "offset" -> optional(offset)
     )(GetOAuthToken.apply)(GetOAuthToken.unapply)
@@ -36,17 +35,35 @@ object OAuthForm {
     )(AuthorizeUser.apply)(AuthorizeUser.unapply)
   )
 
-  val refreshToken = Form(
+  val grantType = Form(single("grant_type" -> nonEmptyText))
+
+  val getAccessTokenByPass = Form(
     mapping(
-      "grant_type" -> nonEmptyText,
+      "username" -> nonEmptyText,
+      "password" -> nonEmptyText,
+      "scope" -> optional(nonEmptyText)
+    )(AccessTokenByPassword.apply)(AccessTokenByPassword.unapply)
+  )
+
+  val getAccessTokenFromRefreshToken = Form(
+    mapping(
       "refresh_token" -> nonEmptyText,
-      "client_id" -> nonEmptyText,
-      "client_secret" -> nonEmptyText,
-    )(RefreshToken.apply)(RefreshToken.unapply)
+    )(AccessTokenByRefreshToken.apply)(AccessTokenByRefreshToken.unapply)
+  )
+
+  val getAccessTokenFromAuthCode = Form(
+    mapping(
+      "code" -> nonEmptyText,
+      "redirect_uri" -> nonEmptyText,
+      "client_id" -> optional(nonEmptyText)      
+    )(AccessTokenByAuthorizationCode.apply)(AccessTokenByAuthorizationCode.unapply)
   )
 
   case class OAuthToken(token: String)
-  case class GetOAuthToken(userId: Option[Long], accountId: Option[Long], appId: Option[Long], limit: Option[Int], offset: Option[Int])
-  case class RefreshToken(grantType: String, refreshToken: String, clientId: String, clientSecret: String)
+  case class GetOAuthToken(userId: Option[String], appId: Option[String], limit: Option[Int], offset: Option[Int])
+  case class AccessTokenByRefreshToken(refreshToken: String)
+  case class AccessTokenByAuthorizationCode(authCode: String, redirectUri: String, clientId: Option[String])
+  case class AccessTokenByPassword(username: String, password: String, scope: Option[String])
+
   case class AuthorizeUser(clientId: String, responseType: String, clientSecret: Option[String], redirectUri: Option[String], state: Option[String])
 }

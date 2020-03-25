@@ -102,8 +102,8 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
     val limit = data.limit.getOrElse(DEFAULT_LIMIT)
     val offset = data.limit.getOrElse(DEFAULT_OFFSET)
 
-    oauthService.list(data.userId, data.accountId, data.appId, limit, offset).map { tokens =>
-      log.info(s"Get oauth tokens for user: ${data.userId}, accountId: ${data.accountId}, clientId: ${data.appId} by ${req.identity.id}")
+    oauthService.list(data.userId, data.appId, limit, offset).map { tokens =>
+      log.info(s"Get oauth tokens for user: ${data.userId}, clientId: ${data.appId} by ${req.identity.id}")
       Ok(Json.toJson(tokens))
     }
   }

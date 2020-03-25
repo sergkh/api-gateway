@@ -73,8 +73,6 @@ object Settings {
   final val TAG_PERCENT = "percent"
   final val TAG_WALLET = "wallet"
   final val TAG_MSISDN = "msisdn"
-  final val TAG_ACCOUNT = "account"
-  final val TAG_ACCOUNT_ID = "accountId"
   final val TAG_USER = "user"
   final val TAG_USER_ID = "userId"
   final val TAG_DETAILS = "details"
