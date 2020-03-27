@@ -14,8 +14,8 @@ import models.AppEvent.Login
 import models.ErrorCodes._
 import models.{AppException, ErrorCodes, JwtEnv}
 import play.api.libs.json.Json
-import security.KeysManager
-import services.{OAuthService, TokensService, UserService}
+import security.{KeysManager, WithUser}
+import services.{ClientAppsService, TokensService, UserService}
 import utils.FutureUtils._
 import utils.RichRequest._
 
@@ -26,8 +26,8 @@ import play.api.mvc.RequestHeader
 import scala.util.Try
 
 @Singleton
-class TokenController @Inject()(silh: Silhouette[JwtEnv], 
-                                oauth: OAuthService,
+class TokenController @Inject()(silh: Silhouette[JwtEnv],
+                                oauth: ClientAppsService,
                                 tokens: TokensService,
                                 keyManager: KeysManager,
                                 userService: UserService,
@@ -50,10 +50,19 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
     ))
   }
 
-  def getAccessToken = Action.async { implicit request =>
+  // OLD create token
+  //   def createToken = oauth.Secured.async(parse.json) { implicit request =>
+  //   val code = request.asForm(ClientAppForm.code)
+
+  //   oauthService.createToken(code, silh.env.authenticatorService).map { tokenResp =>
+  //     Ok(tokenResp)
+  //   }
+  // }
+
+  def getAccessToken = Action.async { implicit request =>    
     val refresh = request.asForm(OAuthForm.getAccessTokenFromRefreshToken) // TODO: implement other forms
     
-    val (clientId, clientSecret) = clientAuthorization(request).getOrElse {
+    val (clientId, clientSecret) = request.basicAuth.getOrElse {
       throw new AppException(AUTHORIZATION_FAILED, "Client authorization failed")
     }
     
@@ -84,12 +93,129 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
     }
   }
 
-  def clientAuthorization(request: RequestHeader): Option[(String, String)] = 
-    request.headers.get(HeaderNames.AUTHORIZATION).map(_.split(" ")).collect {
-      case Array("Bearer", data) => Try {
-        val Array(user, pass) = new String(ju.Base64.getDecoder.decode(data)).split(":")
-        user -> pass
-      }.toOption
-    }.flatten
+    // TODO: fixme
+  def listUserTokens(userId: String) = silh.SecuredAction(WithUser(userId)).async { implicit req =>
+    // val data = req.asForm(OAuthForm.getTokens)
+    // val limit = data.limit.getOrElse(DEFAULT_LIMIT)
+    // val offset = data.limit.getOrElse(DEFAULT_OFFSET)
+
+    // oauthService.list(data.userId, data.appId, limit, offset).map { tokens =>
+    //   log.info(s"Get oauth tokens for user: ${data.userId}, clientId: ${data.appId} by ${req.identity.id}")
+    //   Ok(Json.toJson(tokens))
+    // }
+
+    ???
+  }
+
+/*
+  final val IVALID_LOGIN_INFO_PROVIDER = "oauth.application"
+
+
+  private val ETERNAL_TOKEN_TTL = config.get[FiniteDuration]("oauth.ttl")
+
+  // TODO: remove from here
+  def createToken(code: String, authenticatorService: CustomJWTAuthenticatorService)(implicit req: Request[_]): Future[JsObject] = {
+    authenticatorService.retrieveByValue(code).flatMap {
+      case Some(jwtAuthenticator) => jwtAuthenticator.customClaims match {
+        case Some(json) =>
+          val claims = try { json.as[TokenClaims] } catch {
+            case _: Exception =>
+              authenticatorService.discard(jwtAuthenticator, Results.Forbidden)
+              log.info("Invalid token claims for token: " + json)
+              throw AppException(ErrorCodes.INVALID_TOKEN_CLAIMS, "Invalid external data for token ")
+          }
+
+          val ttl = ETERNAL_TOKEN_TTL
+          val expire = authenticatorService.clock.now + ttl
+          val Array(appId, secret) = new String(Base64.getDecoder.decode(req.headers(Http.HeaderNames.AUTHORIZATION).replaceFirst("Basic ", ""))).split(":")
+
+          getApp(appId).flatMap { app =>
+            app.checkSecret(secret)
+
+            val loginInfo = LoginInfo(CredentialsProvider.ID, app.ownerId)
+
+            authenticatorService.renew(jwtAuthenticator.copy(
+              expirationDateTime = expire,
+              loginInfo = loginInfo
+            )).flatMap { oauthToken =>
+                eventBus.publish(Login(claims.userId.toString, oauthToken, req, jwtAuthenticator.id, jwtAuthenticator.expirationDateTime.getMillis))
+                eventBus.publish(OauthTokenCreated(claims.userId.toString, jwtAuthenticator.id, oauthToken, req))
+
+                log.info("Creating permanent oauth token: '" + oauthToken + "' for user: " + jwtAuthenticator.loginInfo.providerKey +
+                  ", exp date: " + expire + ", permissions: " + claims.permissions.mkString(",") +
+                  ", from: " + code + ", for: " + claims.clientId)
+
+                Json.obj("accessToken" -> oauthToken, "expiresIn" -> ttl.toSeconds)
+            }
+          }
+
+        case None =>
+          log.info("Oauth token doesn't have required claims")
+          throw AppException(ErrorCodes.ENTITY_NOT_FOUND, "Temporary token claims not found")
+      }
+
+      case None =>
+        log.info(s"Temporary oauth token $code doesn't found")
+        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, "Temporary token not found")
+    }
+  }
+
+
+
+  private def oauthAuthenticator(
+                                  authenticatorService: JWTAuthenticatorService,
+                                  loginInfo: LoginInfo,
+                                  tokenClaims: TokenClaims,
+                                  ttl: FiniteDuration)(implicit request: Request[_]) = {
+    authenticatorService.create(loginInfo).map { jwt =>
+      jwt.copy(
+        idleTimeout = None,
+        expirationDateTime = jwt.lastUsedDateTime + ttl,
+        customClaims = Some(Json.toJson(tokenClaims).as[JsObject])
+      )
+    }
+  }
+
+    // TODO: remove from here
+  def authorize(authReq: OAuthAuthorizeRequest, user: User, authService: JWTAuthenticatorService)
+               (implicit request: Request[_]): Future[JsObject] = {
+
+    getApp(authReq.clientId).flatMap { app =>
+
+      val tokenType = if (authReq.responseType == OAuthAuthorizeRequest.Type.TOKEN) {
+        TokenClaims.Type.OAUTH_ETERNAL
+      } else {
+        TokenClaims.Type.OAUTH_TEMPORARY
+      }
+
+      val tokenClaims = TokenClaims(user, app.id, authReq.permissions.filter(user.hasPermission))
+
+      val (ttl, loginInfo) = authReq.responseType match {
+        case OAuthAuthorizeRequest.Type.CODE =>
+          (DEFAULT_TEMP_TOKEN_TTL, LoginInfo(CredentialsProvider.ID, IVALID_LOGIN_INFO_PROVIDER))
+
+        case OAuthAuthorizeRequest.Type.TOKEN =>
+          (ETERNAL_TOKEN_TTL, LoginInfo(CredentialsProvider.ID, user.id))
+
+        case unknown: Any =>
+          throw AppException(ErrorCodes.INVALID_REQUEST, "Unknown response type: " + unknown)
+      }
+
+      oauthAuthenticator(authService, loginInfo, tokenClaims, ttl).flatMap { authenticator =>
+
+        authService.init(authenticator).flatMap { oauthToken =>
+          if (tokenType == TokenClaims.Type.OAUTH_ETERNAL) {
+            eventBus.publish(Login(user.id, oauthToken, request, authenticator.id, authenticator.expirationDateTime.getMillis))
+            eventBus.publish(OauthTokenCreated(user.id, authenticator.id, oauthToken, request))
+            Json.obj("accessToken" -> oauthToken, "expiresIn" -> ttl.toSeconds)
+          } else {
+            Json.obj("code" -> oauthToken)
+          }
+        }
+      }
+    }
+  }
+  */
+
 }
 

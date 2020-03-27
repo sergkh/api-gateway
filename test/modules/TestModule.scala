@@ -2,7 +2,7 @@ package modules
 
 import java.util.UUID
 
-import _root_.services.{ProxyService, SessionsService}
+import services.{ProxyService, SessionsService}
 import akka.actor.ActorSystem
 import com.mohiva.play.silhouette.api._
 import com.mohiva.play.silhouette.api.crypto.Base64AuthenticatorEncoder
@@ -12,13 +12,14 @@ import com.mohiva.play.silhouette.impl.authenticators._
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import com.mohiva.play.silhouette.impl.util.SecureRandomIDGenerator
 import com.mohiva.play.silhouette.test._
+import events.EventsStream
 import helpers.Context
 import models.JwtEnv
 import net.codingwell.scalaguice.ScalaModule
 import org.mockito.MockitoSugar
 import play.modules.reactivemongo.ReactiveMongoApi
-import security.CustomJWTAuthenticatorService
-import service.fakes.{FakeProxy, FakeSessionsService}
+import security.{CustomJWTAuthenticatorService, KeysManager}
+import service.fakes.{TestEventsStream, TestProxy, TestSessionsService}
 import utils.CustomEventBus
 
 import scala.concurrent.ExecutionContext
@@ -31,13 +32,14 @@ import scala.reflect.runtime.universe._
   * @author Sergey Khruschak <sergey.khruschak@gmail.com>
   *         Created on 2/4/16.
   */
-object FakeModule extends ScalaModule with Context with MockitoSugar {
+object TestModule extends ScalaModule with Context with MockitoSugar {
 
   implicit val ctx = scala.concurrent.ExecutionContext.Implicits.global
 
   val actorSystem = ActorSystem.create()
   val eventBus = new CustomEventBus(actorSystem)
   private val db = mock[ReactiveMongoApi]
+
 
   /**
     * A Silhouette fake environment.
@@ -55,9 +57,10 @@ object FakeModule extends ScalaModule with Context with MockitoSugar {
     bind[ActorSystem].toInstance(actorSystem)
     bind[EventBus].toInstance(eventBus)
     bind[Environment[JwtEnv]].toInstance(env)
-    bind[ProxyService].to[FakeProxy]
-    bind[SessionsService].to[FakeSessionsService]
+    bind[ProxyService].to[TestProxy]
+    bind[SessionsService].to[TestSessionsService]
     bind[ReactiveMongoApi].toInstance(db)
+    bind[EventsStream].to[TestEventsStream]
   }
 
   case class CustomFakeEnvironment[E <: Env](
@@ -102,6 +105,7 @@ object FakeModule extends ScalaModule with Context with MockitoSugar {
     None,
     new Base64AuthenticatorEncoder(),
     new SecureRandomIDGenerator(),
+    mock[KeysManager],
     Clock())
 
 

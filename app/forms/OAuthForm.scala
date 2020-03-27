@@ -3,6 +3,7 @@ package forms
 import forms.FormConstraints._
 import play.api.data.Form
 import play.api.data.Forms._
+import play.api.mvc.Flash
 /**
   *
   * @author Yaroslav Derman <yaroslav.derman@gmail.com>
@@ -29,10 +30,11 @@ object OAuthForm {
     mapping(
       "client_id" -> nonEmptyText,
       "response_type" -> nonEmptyText,
-      "client_secret" -> optional(nonEmptyText),
+      "scope" -> nonEmptyText,      
       "redirect_uri" -> optional(nonEmptyText),
-      "state" -> optional(nonEmptyText)
-    )(AuthorizeUser.apply)(AuthorizeUser.unapply)
+      "state" -> optional(nonEmptyText),
+      "audience" -> optional(nonEmptyText)
+    )(AuthorizeUsingProvider.apply)(AuthorizeUsingProvider.unapply)
   )
 
   val grantType = Form(single("grant_type" -> nonEmptyText))
@@ -65,5 +67,36 @@ object OAuthForm {
   case class AccessTokenByAuthorizationCode(authCode: String, redirectUri: String, clientId: Option[String])
   case class AccessTokenByPassword(username: String, password: String, scope: Option[String])
 
-  case class AuthorizeUser(clientId: String, responseType: String, clientSecret: Option[String], redirectUri: Option[String], state: Option[String])
+  case class AuthorizeUsingProvider(clientId: String, 
+                           responseType: String, 
+                           scope: String, 
+                           redirectUri: Option[String], 
+                           state: Option[String], 
+                           audience: Option[String]) {
+    def flash: Flash = Flash(Map(
+      "c" -> clientId,
+      "t" -> responseType,
+      "sc" -> scope,
+      "r" -> redirectUri.getOrElse(""),      
+      "st" -> state.getOrElse(""),
+      "a" -> audience.getOrElse("")
+    ))
+  }
+
+  object AuthorizeUsingProvider {
+    def fromFlash(f: Flash): Option[AuthorizeUsingProvider] = {
+      for {
+        clientId     <- f.get("c")
+        responseType <- f.get("t")
+        scope        <- f.get("sc")
+      } yield AuthorizeUsingProvider(
+          clientId, 
+          responseType, 
+          scope, 
+          f.get("r").filter(_.isEmpty),
+          f.get("st").filter(_.isEmpty),
+          f.get("a").filter(_.isEmpty)
+        )
+    }
+  }
 }

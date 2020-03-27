@@ -7,9 +7,10 @@ import models.Session
 import play.api.libs.json.{Json, OFormat}
 import play.api.mvc.RequestHeader
 import play.modules.reactivemongo.ReactiveMongoApi
-import reactivemongo.play.json._
-import reactivemongo.play.json.collection.JSONCollection
+import reactivemongo.bson.BSONDocument
+import reactivemongo.api.collections.bson.BSONCollection
 import utils.MongoErrorHandler
+import services.formats.MongoFormats._
 
 import scala.compat.Platform
 import scala.concurrent.{ExecutionContext, Future}
@@ -35,44 +36,28 @@ trait SessionsService {
 
 class MongoSessionsService @Inject()(reactiveMongoApi: ReactiveMongoApi)
                                     (implicit exec: ExecutionContext) extends SessionsService {
+  def retrieve(id: String): Future[Option[Session]] =
+    sessionCollection.flatMap(_.find(byId(id)).one[Session])
 
-  import SessionJson._
+  def store(session: Session): Future[Session] =
+    sessionCollection.flatMap(_.insert(false).one(session)
+                     .map(_ => session).recover(MongoErrorHandler.processError[Session]))
 
-  val COLLECTION_NAME = "sessions"
-
-  private def db = reactiveMongoApi.database
-
-  private def sessionCollection = db.map(_.collection[JSONCollection](COLLECTION_NAME))
-
-  def retrieve(id: String): Future[Option[Session]] = {
-    val selector = Json.obj("_id" -> id)
-    sessionCollection.flatMap(_.find(selector).one[Session])
-  }
-
-  def store(session: Session): Future[Session] = {
-    sessionCollection.flatMap(_.insert(session).map(_ => session).recover(MongoErrorHandler.processError[Session]))
-  }
-
-  def updateExpiration(id: String, expiredAt: Long): Future[Unit] = {
-    sessionCollection.flatMap(_.update(
-      Json.obj("_id" -> id),
-      Json.obj("$set" -> Json.obj("expiredAt" -> expiredAt))
+  def updateExpiration(id: String, expiredAt: Long): Future[Unit] =
+    sessionCollection.flatMap(_.update.one(
+      byId(id), BSONDocument("$set" -> BSONDocument("expiredAt" -> expiredAt))
     ).map(_ => ()).recover(MongoErrorHandler.processError[Unit]))
-  }
 
-  def finish(id: String): Future[Unit] = {
-    sessionCollection.flatMap(_.update(
-      Json.obj("_id" -> id),
-      Json.obj("$set" -> Json.obj("expiredAt" -> Platform.currentTime))
+  def finish(id: String): Future[Unit] =
+    sessionCollection.flatMap(_.update.one(
+      byId(id),
+      BSONDocument("$set" -> BSONDocument("expiredAt" -> Platform.currentTime))
     ).map(_ => ()).recover(MongoErrorHandler.processError[Unit]))
-  }
 
-  def remove(id: String): Future[Unit] = {
-    sessionCollection.flatMap(_.remove(
-      Json.obj("_id" -> id)
-    ).map(_ => ()).recover(MongoErrorHandler.processError[Unit]))
-  }
+  def remove(id: String): Future[Unit] =
+    sessionCollection.flatMap(_.delete.one(byId(id)).map(_ => ()).recover(MongoErrorHandler.processError[Unit]))
 
+  private def sessionCollection = reactiveMongoApi.database.map(_.collection[BSONCollection]("sessions"))
 }
 
 trait SessionEventProcessor

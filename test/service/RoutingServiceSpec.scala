@@ -7,18 +7,17 @@ import mockws.{MockWS, MockWSHelpers}
 import events.ServiceDiscovered
 import models.Service
 import org.mockito.MockitoSugar
+import org.scalatest.{Matchers, WordSpecLike}
 import org.scalatest.concurrent.Eventually
-import org.scalatest.matchers.must.Matchers
 import play.api.{Configuration, Environment}
 import play.api.libs.json.{JsObject, JsValue, Json}
 import play.api.mvc.Results._
-import services.{ApiTemplateService, RoutingService}
+import services.RoutingService
 import org.scalatest.time.{Seconds, Span}
-import org.scalatest.wordspec.AnyWordSpecLike
-import service.fakes.FakeEventsStream
+import service.fakes.TestEventsStream
 
 class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
-  with AnyWordSpecLike
+  with WordSpecLike
   with Matchers
   with MockWSHelpers
   with Eventually
@@ -50,7 +49,7 @@ class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
     }
   }
 
-  val bus = new FakeEventsStream()
+  val bus = new TestEventsStream()
 
   val config = Configuration(ConfigFactory.parseString("""
     swagger {
@@ -66,9 +65,7 @@ class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
 
   val env = Environment.simple()
 
-  val apiService = mock[ApiTemplateService]
-
-  val router = new RoutingService(ws, config, bus, system, env, apiService)
+  val router = new RoutingService(ws, config, bus, system, env)
 
   "Router" should {
     "return rates service" in {
@@ -76,8 +73,8 @@ class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
       bus.publish(ServiceDiscovered(rates))
 
       eventually (timeout(Span(1, Seconds))) {
-        router.matchService("/rates/USDEUR") mustEqual Some(rates)
-        router.matchService("/rates") mustEqual Some(rates)
+        router.matchService("/rates/USDEUR") shouldEqual Some(rates)
+        router.matchService("/rates") shouldEqual Some(rates)
       }
 
     }

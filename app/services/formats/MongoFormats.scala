@@ -1,13 +1,13 @@
 package services.formats
 
-import java.time._
+import java.time.{Instant, LocalDateTime, ZoneOffset}
 
 import models._
 import reactivemongo.bson._
 
 object MongoFormats {
   implicit object LocalDateTimeWriter extends BSONWriter[LocalDateTime, BSONDateTime] {
-    def write(dt: LocalDateTime) : BSONDateTime = BSONDateTime(dt.toInstant(ZoneOffset.UTC).getEpochSecond())
+    def write(dt: LocalDateTime) : BSONDateTime = BSONDateTime(dt.toInstant(ZoneOffset.UTC).getEpochSecond)
   }
 
   implicit object LocalDateTimeReader extends BSONReader[BSONDateTime, LocalDateTime] {
@@ -28,15 +28,17 @@ object MongoFormats {
       version = doc.getAs[Int]("version").get
     )
   }
-
   implicit val userBsonWriter: BSONDocumentWriter[User] = Macros.writer[User]
 
   implicit val roleBsonPermissionsReader: BSONDocumentReader[RolePermissions] = Macros.reader[RolePermissions]
   implicit val roleBsonPermissionsWriter: BSONDocumentWriter[RolePermissions] = Macros.writer[RolePermissions]
 
   implicit val refreshTokenFormat = Macros.handler[RefreshToken]
+  implicit val sessionFormat = Macros.handler[Session]
 
-  @inline def byField[T](name: String, v: String): BSONDocument = BSONDocument(name -> v)
+  implicit val clientAppFormat = Macros.handler[ClientApp]
+
+  @inline def byField(name: String, v: String): BSONDocument = BSONDocument(name -> v)
   @inline def byId[T](v: String): BSONDocument = BSONDocument("_id" -> v)
 
   implicit class AnyToBSON[T](val v: T) extends AnyVal {

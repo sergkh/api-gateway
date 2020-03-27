@@ -585,68 +585,6 @@ GET           /users/:userId                                      @controllers.U
 GET           /users                                              @controllers.UserController.list()
 
 ###
-# summary: Authorize user with OAuth service
-# description: >
-#               There are two ways to get the application access to the user: a two-stage and a simplified.
-#               For most applications, a two-step access scheme is suitable: first, retrieve a temporary "authorization code" in
-#               terms of OAuth, which shoul exchange for a permanent token. Which option will be used depends on
-#               the responseType parameter. The lifetime of the temporary token is 30 seconds.
-#               If in 30 seconds you don't exchange it for a permanent, you shoult try to get temporary token again.
-#               In simplified version you retrieve oauth access token
-# tags:
-#   - OAuth
-# operationId: socialAuthorize
-# consumes:
-#   - application/json
-# parameters:
-#   - name: body
-#     schema:
-#      $ref: '#/definitions/models.OAuthAuthorizeRequest'
-# responses:
-#   200:
-#     description: TOKEN {"accessToken":"token","expiresIn":1} or CODE {"code":"temporary-token"}
-#     schema:
-#       type: object
-#       properties:
-#         accessToken:
-#           type: string
-#           description: Token
-#         expiresIn:
-#           type: integer
-#           format: int64
-#           description: Ttl in seconds
-###
-POST          /oauth/authorize                                    @controllers.OAuthController.authorize
-
-###
-# summary: Creates user token for OAuth code
-# description: >
-#               As the authentication data, you must specify client_id as the login and client_secret as the password
-#               in Authorization header with format `Basic base64(clientId:clientSecret)`
-# tags:
-#   - OAuth
-# operationId: createOAuthToken
-# parameters:
-#   - name: body
-#     schema:
-#      $ref: '#/definitions/forms.ThirdPartyAppForm.Code'
-# responses:
-#   200:
-#     description: OAuth token
-#     schema:
-#       type: object
-#       properties:
-#         accessToken:
-#           type: string
-#           description: Token
-#         expiresIn:
-#           type: integer
-#           format: int64
-#           description: Ttl in seconds
-###
-POST          /oauth/token                                        @controllers.OAuthController.createToken
-
-###
 # summary: List token certificates
 # description: >
 #               Lists certificates that can be used to verify token signature. It's possible that multiple certificates are defined,
@@ -724,82 +662,6 @@ GET          /oauth/certs                                        @controllers.To
 POST          /oauth/token                                        @controllers.TokenController.getAccessToken
 
 ###
-# summary: Authorize user with OAuth service by admin
-# description: >
-#               There are two ways to get the application access to the user: a two-stage and a simplified.
-#               For most applications, a two-step access scheme is suitable: first, retrieve a temporary "authorization code" in
-#               terms of OAuth, which should exchange for a permanent token. Which option will be used depends on
-#               the responseType parameter. The lifetime of the temporary token is 30 seconds.
-#               If in 30 seconds you don't exchange it for a permanent, you should try to get temporary token again.
-#               In simplified version you retrieve oauth access token
-# tags:
-#   - OAuth
-# operationId: oauthAuthorize
-# security:
-#   - api_key: ['oauth_token:create']
-# consumes:
-#   - application/json
-# parameters:
-#   - name: userId
-#     in: path
-#     type: string
-#     required: required
-#     description: User identifier (email/phone/uuid)
-#   - name: body
-#     schema:
-#      $ref: '#/definitions/models.OAuthAuthorizeRequest'
-# responses:
-#   200:
-#     description: TOKEN {"accessToken":"token","expiresIn":1} or CODE {"code":"temporary-token"}
-#     schema:
-#       type: object
-#       properties:
-#         accessToken:
-#           type: string
-#           description: Token
-#         expiresIn:
-#           type: integer
-#           format: int64
-#           description: Ttl in seconds
-###
-POST          /oauth/users/:userId/authorize                      @controllers.OAuthController.adminAuthorize(userId: String)
-
-###
-# summary: Creates user token for OAuth code
-# description: >
-#               As the authentication data, you must specify client_id as the login and client_secret as the password
-#               in Authorization header with format `Basic base64(clientId:clientSecret)`
-# tags:
-#   - OAuth
-# operationId: oauthCreateToken
-# security:
-#   - api_key: ['oauth_token:create']
-# parameters:
-#   - name: userId
-#     in: path
-#     type: string
-#     required: required
-#     description: User identifier (email/phone/uuid)
-#   - name: body
-#     schema:
-#      $ref: '#/definitions/forms.ThirdPartyAppForm.Code'
-# responses:
-#   200:
-#     description: OAuth token
-#     schema:
-#       type: object
-#       properties:
-#         accessToken:
-#           type: string
-#           description: Token
-#         expiresIn:
-#           type: integer
-#           format: int64
-#           description: Ttl in seconds
-###
-POST          /oauth/users/:userId/token                          @controllers.OAuthController.adminCreateToken(userId: String)
-
-###
 # summary: Registers Thirdparty application
 # description: >
 #               The result is the application identifier (clientId) and the application secret code (clientSecret)
@@ -810,7 +672,7 @@ POST          /oauth/users/:userId/token                          @controllers.O
 # parameters:
 #   - name: body
 #     schema:
-#      $ref: '#/definitions/forms.ThirdPartyAppForm.CreateApps'
+#      $ref: '#/definitions/forms.ClientAppForm.CreateApps'
 # responses:
 #   200:
 #     description: Application information for OAuth token authorization
@@ -834,17 +696,10 @@ POST          /users/oauth-apps                                 @controllers.OAu
 # operationId: getUserOauthTokens
 # parameters:
 #   - name: userId
-#     in: query
+#     in: path
 #     type: integer
 #     format: int64
-#     required: false
 #     description: User identifier (uuid)
-#   - name: accountId
-#     in: query
-#     type: integer
-#     format: int64
-#     required: false
-#     description: User account identifier
 #   - name: clientId
 #     in: query
 #     type: integer
@@ -865,24 +720,7 @@ POST          /users/oauth-apps                                 @controllers.OAu
 #   200:
 #     description: User object
 ###
-GET           /oauth/tokens                                       @controllers.OAuthController.getAuthenticators
-
-###
-# summary: Removes OAuth token specified in the URL
-# tags:
-#   - OAuth
-# operationId: deleteUserOauthToken
-# parameters:
-#   - name: token
-#     in: path
-#     type: string
-#     required: true
-#     description: OAuth token
-# responses:
-#   204:
-#     description: Token successfully removed
-###
-DELETE        /oauth/tokens/:token                                @controllers.OAuthController.removeToken(token: String)
+GET           /users/:userId/tokens                                       @controllers.TokenController.listUserTokens(userId: String)
 
 ###
 # summary: Returns Thirdparty application by given id
@@ -894,7 +732,7 @@ DELETE        /oauth/tokens/:token                                @controllers.O
 #     in: path
 #     type: string
 #     required: true
-#     description: User identifier (email/phone/uuid)
+#     description: Application owner user identifier (email/phone/uuid)
 #   - name: id
 #     in: path
 #     type: string
@@ -904,9 +742,9 @@ DELETE        /oauth/tokens/:token                                @controllers.O
 #   200:
 #     description: Single application information
 #     schema:
-#       $ref: '#/definitions/models.ThirdpartyApplication'
+#       $ref: '#/definitions/models.ClientApp'
 ###
-GET           /users/:userId/oauth-apps/:id                             @controllers.OAuthController.getApp(userId: String, id: String)
+GET           /users/:userId/oauth-apps/:id                             @controllers.OAuthController.getAppByOwner(userId: String, id: String)
 
 ###
 # summary: Returns Thirdparty application by id
@@ -924,9 +762,9 @@ GET           /users/:userId/oauth-apps/:id                             @control
 #   200:
 #     description: Single application information
 #     schema:
-#       $ref: '#/definitions/models.ThirdpartyApplication'
+#       $ref: '#/definitions/models.ClientApp'
 ###
-GET           /oauth-apps/:id                                     @controllers.OAuthController.getAppById(id: String)
+GET           /oauth-apps/:id                                     @controllers.OAuthController.getPublicAppInformation(id: String)
 
 
 ###
@@ -947,12 +785,12 @@ GET           /oauth-apps/:id                                     @controllers.O
 #     description: Thirdparty application id
 #   - name: body
 #     schema:
-#      $ref: '#/definitions/forms.ThirdPartyAppForm.UpdateApps'
+#      $ref: '#/definitions/forms.ClientAppForm.UpdateApps'
 # responses:
 #   200:
 #     description: Updated application information
 #     schema:
-#       $ref: '#/definitions/models.ThirdpartyApplication'
+#       $ref: '#/definitions/models.ClientApp'
 ###
 PUT           /users/:userId/oauth-apps/:id                             @controllers.OAuthController.updateApp(userId: String, id: String)
 
@@ -976,7 +814,7 @@ PUT           /users/:userId/oauth-apps/:id                             @control
 #   204:
 #     description: Application successfully removed
 ###
-DELETE        /users/:userId/oauth-apps/:id                             @controllers.OAuthController.removeApp(userId: String, id: String)
+DELETE        /users/:userId/oauth-apps/:id                             @controllers.OAuthController.removeApplication(userId: String, id: String)
 
 ###
 # summary: Returns all Thirdparty applications for given user
@@ -998,13 +836,13 @@ DELETE        /users/:userId/oauth-apps/:id                             @control
 #         items:
 #           type: array
 #           items:
-#               $ref: '#/definitions/models.ThirdpartyApplication'
+#               $ref: '#/definitions/models.ClientApp'
 #         count:
 #           type: integer
 #           format: int64
 #           description: Count
 ###
-GET           /users/:userId/oauth-apps                                 @controllers.OAuthController.getApps(userId: String)
+GET           /users/:userId/oauth-apps                                 @controllers.OAuthController.listApplications(userId: String)
 
 
 ###

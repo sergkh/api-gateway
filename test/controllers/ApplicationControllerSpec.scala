@@ -6,8 +6,8 @@ import com.mohiva.play.silhouette.test._
 import com.typesafe.config.ConfigFactory
 import models.{JwtEnv, User}
 import module.{GeneralModule, InitializationModule}
-import modules.FakeModule
-import modules.FakeModule._
+import modules.TestModule
+import modules.TestModule._
 import net.codingwell.scalaguice.ScalaModule
 import org.mockito.ArgumentMatchers._
 import org.mockito.MockitoSugar
@@ -45,7 +45,7 @@ class ApplicationControllerSpec extends PlaySpec with GuiceOneAppPerSuite with R
 
   implicit override lazy val app: Application = new GuiceApplicationBuilder()
     .loadConfig(Configuration(ConfigFactory.load("test.conf")))
-    .overrides(FakeModule)
+    .overrides(TestModule)
     .overrides(usersMockModule)
     .disable[GeneralModule].disable[InitializationModule]
     .configure("registration.schema" -> "open")

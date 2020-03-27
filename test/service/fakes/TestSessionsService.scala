@@ -10,7 +10,7 @@ import scala.concurrent.Future
   * @author Yaroslav Derman <yaroslav.derman@gmail.com>
   *         created on 03/05/17
   */
-class FakeSessionsService extends SessionsService {
+class TestSessionsService extends SessionsService {
   override def retrieve(id: String): Future[Option[Session]] = Future.successful(None)
 
   override def store(session: Session): Future[Session] = Future.successful(session)

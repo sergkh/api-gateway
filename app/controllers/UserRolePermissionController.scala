@@ -11,12 +11,12 @@ import models.AppEvent.{RoleCreated, RoleDeleted, RoleUpdated}
 import models.{AppException, ErrorCodes, JwtEnv, RolePermissions}
 import play.api.libs.json.Json
 import security.WithPermission
-import services.{UserService, UsersRolePermissionsService}
+import services.{UserService, UsersRolesService}
 import utils.RichRequest._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
-class UserRolePermissionController @Inject()(usersPermissionsService: UsersRolePermissionsService,
+class UserRolePermissionController @Inject()(usersPermissionsService: UsersRolesService,
                                              usersService: UserService,
                                              eventBus: EventsStream,
                                              silh: Silhouette[JwtEnv])

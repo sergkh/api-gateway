@@ -32,10 +32,10 @@ object AppEvent {
   case class WithoutPassConfirmation(user: User, request: RequestHeader, lang: Lang)
     extends UserModificationEvent("without_pass_confirmation", user.id)
 
-  case class ApplicationCreated(userId: String, app: ThirdpartyApplication, request: RequestHeader)
+  case class ApplicationCreated(userId: String, app: ClientApp, request: RequestHeader)
     extends OAuthAppEvent("application_created", app.id.toString)
 
-  case class ApplicationUpdated(userId: String, app: ThirdpartyApplication, request: RequestHeader)
+  case class ApplicationUpdated(userId: String, app: ClientApp, request: RequestHeader)
     extends OAuthAppEvent("application_updated", app.id.toString)
 
   case class ApplicationRemoved(userId: String, appId: String, request: RequestHeader)

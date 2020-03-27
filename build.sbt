@@ -41,7 +41,7 @@ buildInfoUsePackageAsPath := true
 buildInfoOptions += BuildInfoOption.ToJson
 
 
-libraryDependencies ++= Seq(  
+libraryDependencies ++= Seq(
   ehcache,
   filters,
   guice,
@@ -60,12 +60,12 @@ libraryDependencies ++= Seq(
   "com.impactua"      %% "redis-scala"                      % redisVersion,
   "net.codingwell"    %% "scala-guice"                      % guiceVersion,
   "org.webjars"       % "swagger-ui"                        % "3.25.0",
-  "org.scala-lang"    %  "scala-reflect"                    % "2.12.10",
-  "io.kamon"          %% "kamon-bundle"                     % "2.0.6",
+  "org.scala-lang"    %  "scala-reflect"                    % "2.12.11",
+//TODO:  "io.kamon"          %% "kamon-bundle"                     % "2.0.6",
   "com.mohiva"        %% "play-silhouette-testkit"          % silhouetteVersion  % Test,
-  "org.scalatest"     %% "scalatest"                        % "3.1.1"  % Test,
-  "org.mockito"       %  "mockito-core"                     % "3.3.1" % Test,
-  "org.mockito"        %% "mockito-scala"                   % "1.11.4" % Test,
+  "org.scalatest"     %% "scalatest"                        % "3.0.8"  % Test,
+  "org.mockito"       %  "mockito-core"                     % "3.3.3" % Test,
+  "org.mockito"        %% "mockito-scala"                   % "1.13.2" % Test,
   "com.typesafe.akka" %% "akka-testkit"                     % "2.6.3" % Test,
   "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.0.0"  % Test,
   "de.leanovate.play-mockws"  %% "play-mockws"              % "2.8.0"  % Test

@@ -7,8 +7,8 @@ import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import com.mohiva.play.silhouette.test._
 import models.{AppException, Branch, JwtEnv, User}
 import module.{GeneralModule, InitializationModule}
-import modules.FakeModule
-import modules.FakeModule._
+import modules.TestModule
+import modules.TestModule._
 import net.codingwell.scalaguice.ScalaModule
 import org.mockito.ArgumentMatchers._
 import org.mockito.MockitoSugar
@@ -28,8 +28,6 @@ import scala.concurrent.Future
 
 /**
   * @author Yaroslav Derman <yaroslav.derman@gmail.com>.
-  *         created on 29.03.2016.
-  *
   * Test case for the [[controllers.UserController]] class.
   */
 class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
@@ -47,9 +45,8 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
     }
   }
 
-
   implicit override lazy val app: Application = new GuiceApplicationBuilder()
-    .overrides(FakeModule)
+    .overrides(TestModule)
     .overrides(usersMockModule)
     .disable[GeneralModule]
     .disable[InitializationModule]
@@ -105,8 +102,8 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
 
       val date = new Date()
 
-      val readUser = jsonUser.as[User].copy(passUpdated = date)
-      val original = identity.copy(passHash = "", passUpdated = date)
+      val readUser = jsonUser.as[User]
+      val original = identity.copy(passHash = "")
 
       readUser mustEqual original
     }
@@ -138,7 +135,7 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
 
       status(result) mustBe OK
       contentAsJson(result) mustEqual Json.obj(
-        "uuid" -> newIdentity.uuid,
+        "id" -> newIdentity.id,
         "email" -> newIdentity.email.get,
         "permissions" -> Json.arr("users:edit","users:read"),
         "firstName" -> "New First name",
@@ -168,7 +165,7 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
       when(branchesMock.isAuthorized(branchId, adminIdentity)).thenReturn(Future.successful(true))
 
       when(branchesMock.get(branchId)).thenReturn(Future.successful(Some(Branch(
-        "test", adminIdentity.uuid, hierarchy = List("test11", "parent"), id = branchId
+        "test", adminIdentity.id, hierarchy = List("test11", "parent"), id = branchId
       ))))
 
       when(userServiceMock.update(any(), any())).thenAnswer { (user: User, b: Boolean) =>
@@ -190,7 +187,7 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
       status(result) mustBe OK
 
       contentAsJson(result) mustEqual Json.obj(
-        "uuid" -> newIdentity.uuid,
+        "id" -> newIdentity.id,
         "email" -> newIdentity.email.get,
         "permissions" -> Json.arr("users:edit","users:read"),
         "firstName" -> "New First name",
@@ -203,7 +200,7 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
       val updatedUser = newIdentity.copy(
         firstName = Some("New First name"),
         lastName = Some("New Last Name"),
-        hierarchy = Seq("test11", "parent"),
+        hierarchy = List("test11", "parent"),
         version = 0
       )
 

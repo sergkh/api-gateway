@@ -24,8 +24,7 @@ trait BranchesService {
 }
 
 @Singleton
-class MongoBranchesService @Inject()(conf: Configuration,
-                                     mongoApi: ReactiveMongoApi)(implicit exec: ExecutionContext)
+class MongoBranchesService @Inject()(conf: Configuration, mongoApi: ReactiveMongoApi)(implicit exec: ExecutionContext)
   extends BranchesService with Logging {
 
   private val MAX_TRIES = 5

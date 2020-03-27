@@ -4,7 +4,7 @@ import java.util.Base64
 
 import akka.event.slf4j.Logger
 import javax.inject.Inject
-import models.{AppException, ErrorCodes, ThirdpartyApplication}
+import models.{AppException, ErrorCodes, ClientApp}
 import play.api.libs.json.Json
 import play.api.mvc._
 import play.modules.reactivemongo.ReactiveMongoApi
@@ -24,7 +24,7 @@ class Oauth @Inject()(mongo: ReactiveMongoApi,
                       bodyParser: BodyParsers.Default,
                       userService: UserService)(implicit ctx: ExecutionContext) {
 
-  def appsCollection: Future[JSONCollection] = mongo.database.map(_.collection[JSONCollection](ThirdpartyApplication.COLLECTION_NAME))
+  def appsCollection: Future[JSONCollection] = mongo.database.map(_.collection[JSONCollection](ClientApp.COLLECTION_NAME))
 
   object Secured extends ActionBuilder[Request, AnyContent] {
 
@@ -47,12 +47,10 @@ class Oauth @Inject()(mongo: ReactiveMongoApi,
             throw AppException(ErrorCodes.INVALID_REQUEST, "Invalid application id")
           }
 
-          appsCollection.flatMap(_.find(Json.obj("_id" -> appId)).one[ThirdpartyApplication]).flatMap {
+          appsCollection.flatMap(_.find(Json.obj("_id" -> appId)).one[ClientApp]).flatMap {
             case Some(application) =>
-
               application.checkSecret(appSecret)
-
-              userService.getByAnyId(application.userId.toString).flatMap { user =>
+              userService.getByAnyId(application.ownerId).flatMap { user =>
                 block(request)
               }
 

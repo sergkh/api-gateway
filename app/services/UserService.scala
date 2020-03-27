@@ -1,28 +1,27 @@
 package services
 
 import akka.http.scaladsl.util.FastFuture
+import com.mohiva.play.silhouette.api.services.IdentityService
 import com.mohiva.play.silhouette.api.util.PasswordInfo
 import com.mohiva.play.silhouette.api.{AuthInfo, LoginInfo}
-import com.mohiva.play.silhouette.impl.providers.CommonSocialProfile
+import com.mohiva.play.silhouette.impl.providers.{CommonSocialProfile, CredentialsProvider}
 import javax.inject.{Inject, Singleton}
 import models._
+import utils.Logging
 import play.api.Configuration
 import play.api.cache.{AsyncCacheApi, NamedCache}
 import play.api.libs.json._
 import play.modules.reactivemongo.ReactiveMongoApi
 import reactivemongo.api.collections.bson.BSONCollection
+import reactivemongo.bson._
 import reactivemongo.api.{Cursor, QueryOpts, ReadPreference}
 import reactivemongo.core.errors.DatabaseException
 import reactivemongo.play.json._
 import services.auth.SocialAuthService
-import utils.Logging
-import reactivemongo.bson._
 import services.formats.MongoFormats._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
-import com.mohiva.play.silhouette.api.services.IdentityService
-import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 /**
   * Handles actions to users.
   */
@@ -32,6 +31,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
                             @NamedCache("dynamic-phones-cache") phonesCache: AsyncCacheApi,
                             @NamedCache("dynamic-social-cache") socialCache: AsyncCacheApi,
                             rolesCache: AsyncCacheApi,
+                            rolesService: UsersRolesService,
                             reactiveMongoApi: ReactiveMongoApi,
                             authService: SocialAuthService,
                             conf: Configuration)(implicit ec: ExecutionContext) extends IdentityService[User] with UserExistenceService with Logging {
@@ -43,8 +43,6 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   private def db = reactiveMongoApi.database
 
   private def usersCollection = db.map(_.collection[BSONCollection]("users"))
-
-  private def rolesCollection = db.map(_.collection[BSONCollection](RolePermissions.Collection))
 
   /**
     * Retrieves a user that matches the specified login info.
@@ -262,12 +260,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   }
 
   private def loadPermissions(roles: List[String]): Future[List[String]] = rolesCache.getOrElseUpdate(roles.mkString(",")) {
-    rolesCollection.flatMap(
-      _.find(BSONDocument("role" -> BSONDocument("$in" -> roles)))
-        .cursor[RolePermissions](ReadPreference.secondaryPreferred)
-        .collect[List](-1, errorHandler[RolePermissions])
-        .map(_.flatMap(_.permissions).distinct)
-    )
+    rolesService.get(roles).map(_.flatMap(_.permissions).distinct)
   }
 
   private def processUserDbEx[T](userId: String): PartialFunction[Throwable, T] = {

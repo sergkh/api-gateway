@@ -18,7 +18,7 @@ import scala.language.implicitConversions
 
 @Singleton
 class OAuthUIController @Inject()(oauth: Oauth,
-                                  oauthService: OAuthService,
+                                  oauthService: ClientAppsService,
                                   silh: Silhouette[JwtEnv],
                                   playEnv: play.api.Environment,
                                   assets: Assets,

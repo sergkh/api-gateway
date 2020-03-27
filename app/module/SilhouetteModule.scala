@@ -37,12 +37,11 @@ import play.api.Configuration
 import play.api.libs.openid.OpenIdClient
 import play.api.libs.ws.WSClient
 import play.api.mvc.Cookie
-import security.{CustomJWTAuthenticatorService, JWTTokensDao, JWTTokensDaoWrapper, KeysManager}
+import security.{CustomJWTAuthenticatorService, JWTTokensDao, KeysManager}
 import utils.{CustomEventBus, ServerErrorHandler}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
-
 
 /**
   * The Guice module which wires all Silhouette dependencies.
@@ -163,7 +162,6 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
                                   conf: Configuration,
                                   @Named("authenticator-crypter") crypter: Crypter,
                                   sessionsService: SessionsService,
-                                  mongoTokensDao: OAuthService,
                                   keyManager: KeysManager,
                                   clock: Clock): AuthenticatorService[JWTAuthenticator] = {
 
@@ -182,8 +180,6 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
     val store = conf.getOptional[String]("silhouette.authenticator.store").map(_.toLowerCase) match {
       case Some("none") => None
       case Some("redis") => Some(new JWTTokensDao(settings, encoder, conf, sessionsService))
-      case Some("mongo") => Some(mongoTokensDao)
-      case Some("combined") => Some(new JWTTokensDaoWrapper(new JWTTokensDao(settings, encoder, conf, sessionsService), mongoTokensDao))
       case Some(other) => throw new IllegalArgumentException(
         s"Setting silhouette.authenticator.store(AUTHENTICATOR_STORE) value $other is not supported." +
           s"Use: none, redis, mongo or combined")

@@ -2,11 +2,12 @@ package service.fakes
 
 import akka.actor.{Actor, ActorSystem, Props}
 import events.{AppEvent, EventsStream}
+import javax.inject.Inject
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
 
-class FakeEventsStream(implicit as: ActorSystem) extends EventsStream {
+class TestEventsStream @Inject ()(implicit as: ActorSystem) extends EventsStream {
   override def publish(evt: AppEvent): Future[Unit] = {
     as.eventStream.publish(evt)
     Future.unit

@@ -2,12 +2,11 @@ package services
 
 import com.mohiva.play.silhouette.api.util.PasswordHasherRegistry
 import javax.inject.Inject
-import models.{RolePermissions, ThirdpartyApplication, User}
+import models.{ClientApp, RolePermissions, User}
 import play.api.{Configuration, Logger}
 import play.modules.reactivemongo.ReactiveMongoApi
 import reactivemongo.api.bson.collection._
 import reactivemongo.api.indexes.{Index, IndexType}
-import reactivemongo.play.json.collection.JSONCollection
 import utils.RandomStringGenerator
 import reactivemongo.bson._
 import services.formats.MongoFormats._
@@ -92,7 +91,7 @@ class InitializationService @Inject()(config: Configuration,
   }
 
   def initDefaultOAuthApp(user: User): Unit = {
-    val collection = db.map(_.collection[JSONCollection](ThirdpartyApplication.COLLECTION_NAME))
+    val collection = db.map(_.collection[BSONCollection](ClientApp.COLLECTION_NAME))
 
     val appName = config.get[String]("swagger.appName")
     val clientId = RandomStringGenerator.generateSecret(11)
@@ -108,7 +107,7 @@ class InitializationService @Inject()(config: Configuration,
       """.stripMargin)
 
     collection.map(_.insert.one(
-      ThirdpartyApplication(user.id, appName, "Default application", "", "", "", "", true, clientId, clientSecret)
+      ClientApp(user.id, appName, "Default application", "", "", Nil, Nil, true, clientId, clientSecret)
     ))
   }
 

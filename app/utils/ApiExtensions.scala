@@ -6,6 +6,9 @@ import play.api.libs.json.{JsValue, _}
 import play.api.mvc.{Request, RequestHeader}
 
 import scala.language.dynamics
+import play.mvc.Http.HeaderNames
+import scala.util.Try
+import java.{util => ju}
 
 /**
   * Some useful json methods.
@@ -85,6 +88,14 @@ object RichRequest {
     }
 
     def clientAgent: String = r.headers.get("User-Agent").getOrElse("not set")
+
+    def basicAuth: Option[(String, String)] = 
+      r.headers.get(HeaderNames.AUTHORIZATION).map(_.split(" ")).collect {
+        case Array("Bearer", data) => Try {
+          val Array(user, pass) = new String(ju.Base64.getDecoder.decode(data)).split(":")
+          user -> pass
+        }.toOption
+      }.flatten
   }
 
 }

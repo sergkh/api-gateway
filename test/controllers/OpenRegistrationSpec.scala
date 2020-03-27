@@ -9,8 +9,8 @@ import com.typesafe.config.ConfigFactory
 import models.AppEvent.OtpGeneration
 import models.{AppException, ErrorCodes, User}
 import module.{GeneralModule, InitializationModule}
-import modules.FakeModule
-import modules.FakeModule._
+import modules.TestModule
+import modules.TestModule._
 import net.codingwell.scalaguice.ScalaModule
 import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
@@ -23,7 +23,7 @@ import play.api.mvc.Results
 import play.api.test.FakeRequest
 import play.api.test.Helpers._
 import play.api.{Application, Configuration, Mode}
-import services.impl.RegistrationFiltersChain
+import services.RegistrationFiltersChain
 import services.UserService
 
 import scala.concurrent.Future
@@ -66,7 +66,7 @@ class OpenRegistrationSpec extends PlaySpec
 
   implicit override lazy val app: Application = new GuiceApplicationBuilder()
     .loadConfig(Configuration(ConfigFactory.load("test.conf")))
-    .overrides(FakeModule)
+    .overrides(TestModule)
     .overrides(usersMockModule)
     .disable[GeneralModule].disable[InitializationModule]
     .configure("registration.schema" -> "open", "kafka.enabled" -> "false")

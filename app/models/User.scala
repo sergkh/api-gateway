@@ -1,14 +1,11 @@
 package models
 
-import java.util.Date
-
 import com.mohiva.play.silhouette.api.Identity
 import com.mohiva.play.silhouette.impl.providers.{OAuth1Info, OAuth2Info}
 import play.api.libs.functional.syntax._
 import play.api.libs.json._
 import utils.UuidGenerator
 import utils.StringHelpers._
-import akka.http.scaladsl.model.TransferEncodings.deflate
 import reactivemongo.bson.Macros.Annotations.{Key, Ignore}
 
 case class User(email: Option[String] = None,
