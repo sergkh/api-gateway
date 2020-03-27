@@ -8,8 +8,8 @@ import utils.Settings._
 object BranchForm {
   val createBranch = Form(
     mapping(
-      TAG_NAME -> text(3, 1024),
-      TAG_DESCRIPTION -> optional(text(3, 4096)),
+      "name" -> text(3, 1024),
+      "description" -> optional(text(3, 4096)),
       "parent" -> optional(text(6, 6))
     )(CreateBranch.apply)(CreateBranch.unapply)
   )

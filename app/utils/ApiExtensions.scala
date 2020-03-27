@@ -9,6 +9,8 @@ import scala.language.dynamics
 import play.mvc.Http.HeaderNames
 import scala.util.Try
 import java.{util => ju}
+import models.User
+import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
 
 /**
   * Some useful json methods.
@@ -96,6 +98,22 @@ object RichRequest {
           user -> pass
         }.toOption
       }.flatten
+  }  
+}
+
+object JwtExtension {
+  import RichJson._
+  implicit class RichJWTAuthenticator(val auth: JWTAuthenticator) extends AnyVal {
+    def withUserInfo(u: User, scope: Option[String] = None, audience: Option[String] = None): JWTAuthenticator = auth.copy(
+      customClaims = Some(Json.obj(
+        "id" -> u.id,
+        "roles" -> u.roles,
+        "name" -> u.fullName,
+        "email" -> u.email,
+        "permissions" ->  scope.fold(u.permissions)(_.split(" ").toList),
+        "aud" -> audience
+      ).filterNull)
+    )
   }
 
 }

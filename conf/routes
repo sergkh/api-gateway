@@ -690,35 +690,19 @@ POST          /oauth/token                                        @controllers.T
 POST          /users/oauth-apps                                 @controllers.OAuthController.createApp
 
 ###
-# summary: Returns list of OAuth tokens
+# summary: Returns list of refresh tokens for a user
 # tags:
 #   - OAuth
-# operationId: getUserOauthTokens
+# operationId: listUserOauthTokens
 # parameters:
 #   - name: userId
 #     in: path
 #     type: integer
 #     format: int64
 #     description: User identifier (uuid)
-#   - name: clientId
-#     in: query
-#     type: integer
-#     format: int64
-#     required: false
-#     description: User account identifier
-#   - name: limit
-#     in: query
-#     type: integer
-#     required: false
-#     description: Maximum number of transactions
-#   - name: offset
-#     in: query
-#     type: integer
-#     required: false
-#     description: Offset of transactions list begin
 # responses:
 #   200:
-#     description: User object
+#     description: Tokens list
 ###
 GET           /users/:userId/tokens                                       @controllers.TokenController.listUserTokens(userId: String)
 

@@ -51,9 +51,9 @@ class ClientAppsService @Inject()(userService: UserService,
 
   def updateApp(id: String, app: ClientApp): Future[ClientApp] = findAndUpdate(byId(id), app, id)
 
-  def removeApp(appId: String, user: User): Unit = {
+  def removeApp(appId: String, user: User): Future[Unit] = {
 
-    appsCollection.flatMap(_.delete.one(BSONDocument("_id" -> appId, "ownerId" -> user.id)))
+    appsCollection.flatMap(_.delete.one(BSONDocument("_id" -> appId, "ownerId" -> user.id))).map(_ => ())
 
     // TODO: clean application tokens
     // private def tokensCollection = mongo.database.map(_.collection[BSONCollection]("oauth_tokens"))

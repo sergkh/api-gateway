@@ -11,14 +11,14 @@ object ConfirmForm {
 
   val confirm = Form(
     mapping(
-      TAG_LOGIN -> nonEmptyText,
-      TAG_CODE -> nonEmptyText
+      "login" -> nonEmptyText,
+      "code" -> nonEmptyText
     )(ConfirmData.apply)(ConfirmData.unapply)
   )
 
   val reConfirm = Form(
     mapping(
-      TAG_LOGIN -> nonEmptyText
+      "login" -> nonEmptyText
     )(ReConfirm.apply)(ReConfirm.unapply)
   )
 

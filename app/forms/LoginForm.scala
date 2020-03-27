@@ -11,8 +11,8 @@ object LoginForm {
 
   val form = Form(
     mapping(
-      TAG_LOGIN -> nonEmptyText,
-      TAG_PASSWORD -> optional(nonEmptyText)
+      "login" -> nonEmptyText,
+      "password" -> optional(nonEmptyText)
     )(LoginCredentials.apply)(LoginCredentials.unapply)
   )
 

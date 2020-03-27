@@ -18,12 +18,18 @@ import security.{KeysManager, WithUser}
 import services.{ClientAppsService, TokensService, UserService}
 import utils.FutureUtils._
 import utils.RichRequest._
+import utils.RichJson._
 
 import scala.concurrent.ExecutionContext
 import play.api.mvc.Headers
 import play.api.http.HeaderNames
 import play.api.mvc.RequestHeader
 import scala.util.Try
+import models.ClientApp
+import forms.OAuthForm.AuthorizeUsingProvider
+import scala.concurrent.Future
+import models.RefreshToken
+import utils.Settings
 
 @Singleton
 class TokenController @Inject()(silh: Silhouette[JwtEnv],
@@ -72,6 +78,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
       app             <- oauth.getApp(clientId)
       _               <- conditionalFail(app.secret != clientSecret, ACCESS_DENIED, "Wrong client secret")
       refreshToken    <- tokens.get(refresh.refreshToken).orFail(AppException(AUTHORIZATION_FAILED, "Invalid refresh token"))
+      _               <- if (refreshToken.expired) cleanExpiredTokenAndFail(refreshToken) else Future.unit
       loginInfo       = LoginInfo(CredentialsProvider.ID, refreshToken.userId)
       user            <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
       authenticator   <- silh.env.authenticatorService.create(loginInfo)
@@ -87,24 +94,28 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
         "token_type" -> "Bearer",
         "access_token" -> token,
         "expires_in" -> expireIn,
-        "scope" -> refreshToken.scopes.mkString(" ")
+        "scope" -> refreshToken.scope
         // TODO: "id_token": "ID_token"        
-      ))
+      ).filterNull)
     }
   }
 
-    // TODO: fixme
   def listUserTokens(userId: String) = silh.SecuredAction(WithUser(userId)).async { implicit req =>
-    // val data = req.asForm(OAuthForm.getTokens)
-    // val limit = data.limit.getOrElse(DEFAULT_LIMIT)
-    // val offset = data.limit.getOrElse(DEFAULT_OFFSET)
+    tokens.list(userId).map { tokens =>
+      log.info(s"Getting refresh tokens for user: ${userId}, by ${req.identity.id}, items: ${tokens.size}")
 
-    // oauthService.list(data.userId, data.appId, limit, offset).map { tokens =>
-    //   log.info(s"Get oauth tokens for user: ${data.userId}, clientId: ${data.appId} by ${req.identity.id}")
-    //   Ok(Json.toJson(tokens))
-    // }
-
-    ???
+      Ok(Json.toJson(
+        "items" -> tokens.map { t =>
+          Json.obj(
+            "userId" -> t.userId,
+            "scope" -> t.scope,
+            "expirationTime" -> t.expirationTime,
+            "requestedTime" -> t.requestedTime,
+            "clientId" -> t.clientId
+          ).filterNull
+        }
+      ))
+    }
   }
 
 /*
@@ -216,6 +227,9 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
     }
   }
   */
+
+  private def cleanExpiredTokenAndFail(t: RefreshToken): Future[Unit] = 
+    tokens.delete(t.id).map { _ => throw AppException(AUTHORIZATION_FAILED, "Token expired") }
 
 }
 

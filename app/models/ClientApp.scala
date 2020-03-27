@@ -35,6 +35,8 @@ case class ClientApp(
     )
   }
 
+  def matchRedirect(url: String): Boolean = redirectUrlPatterns.contains(url)
+
   def checkSecret(otherSecret: String): Unit = {
     if (secret != otherSecret) {
       throw AppException(ErrorCodes.INVALID_REQUEST, s"Application secret don't match")

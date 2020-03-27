@@ -63,7 +63,7 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
       _ <- oauthService.updateApp(id, newApp)
       _ <- eventBus.publish(ApplicationUpdated(req.identity.id, app, req))
     } yield {
-      log.info("Updating thirdparty application " + id + ", for user: " + user.id)
+      log.info("Updating client application " + id + ", for user: " + user.id)
       Ok(Json.toJson(app))
     }
   }
@@ -71,7 +71,7 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
   def getAppByOwner(userId: String, id: String) = silh.SecuredAction(NotOauth && (readPerm || WithUser(userId))).async { req =>
     userService.getRequestedUser(userId, req.identity).flatMap { user =>
       oauthService.getApp4user(id, user.id).map { app =>
-        log.info("Getting thirdparty application info " + id)
+        log.info("Getting client application info " + id)
         Ok(Json.toJson(app))
       }
     }
@@ -79,7 +79,7 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
 
   def getPublicAppInformation(id: String) = Action.async { request =>
     oauthService.getApp(id).map { app =>
-      log.info("Getting thirdparty application info " + id)
+      log.info("Getting client application info " + id)
       Ok(Json.toJson(app).as[JsObject].without("secret"))
     }
   }
@@ -95,19 +95,20 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
         apps <- fApps
         count <- fCount
       } yield {
-        log.info("Getting thirdparty application list for user: " + user.id + ", count: " + count)
+        log.info("Getting client application list for user: " + user.id + ", count: " + count)
         Ok(Json.obj("items" -> apps, "count" -> count))
       }
     }
   }
 
   def removeApplication(userId: String, id: String) = silh.SecuredAction(NotOauth && (editPerm || WithUser(userId))).async { implicit req =>
-    userService.getRequestedUser(userId, req.identity).flatMap { user =>
-      oauthService.removeApp(id, user)
-      eventBus.publish(ApplicationRemoved(user.id, id, req)) map { _ =>
-        log.info("Disable thirdparty application " + id + ", for user: " + user.id)
-        NoContent
-      }
+    for {
+      user <- userService.getRequestedUser(userId, req.identity)
+      _    <- oauthService.removeApp(id, user)
+      _    <- eventBus.publish(ApplicationRemoved(user.id, id, req))
+    } yield {
+      log.info("Removed client application " + id + ", for user: " + user.id)
+      NoContent
     }
   }
 }

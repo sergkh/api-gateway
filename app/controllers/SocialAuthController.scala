@@ -2,7 +2,7 @@ package controllers
 
 //scalastyle:off public.methods.have.type
 
-import _root_.services.UserService
+import services.{ ClientAppsService, TokensService, UserService}
 import com.mohiva.play.silhouette.api._
 import com.mohiva.play.silhouette.api.actions.UserAwareRequest
 import com.mohiva.play.silhouette.api.exceptions.ProviderException
@@ -15,12 +15,23 @@ import play.api.i18n.I18nSupport
 import play.api.libs.json.Json
 import play.api.mvc.AnyContent
 import utils.RichRequest._
+import utils.RichJson._
+import utils.JwtExtension._
+import utils.FutureUtils._
 
 import scala.concurrent.{ExecutionContext, Future}
-import _root_.services.ClientAppsService
-import _root_.services.TokensService
+
 import forms.OAuthForm.AuthorizeUsingProvider
 import play.api.mvc.Flash
+import play.api.mvc.RequestHeader
+import forms.OAuthForm.ResponseType
+import play.api.mvc.Result
+import java.net.URLEncoder
+import java.time.LocalDateTime
+import java.time.ZoneOffset
+import models.RefreshToken
+import utils.RandomStringGenerator
+import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
 
 /**
   * The social auth controller.
@@ -37,6 +48,8 @@ class SocialAuthController @Inject()(
                                       authInfoRepository: AuthInfoRepository,
                                       socialProviderRegistry: SocialProviderRegistry)(implicit ec: ExecutionContext)
   extends BaseController with I18nSupport {
+
+    val RefreshTokenTTL = 365 * 24
 
   // TODO: old verison
   // def authorize = silh.SecuredAction(NotOauth).async { implicit request =>
@@ -57,8 +70,6 @@ class SocialAuthController @Inject()(
     // store original requests between redirects
     val authReq = AuthorizeUsingProvider.fromFlash(request.flash).getOrElse(request.asForm(OAuthForm.authorize))
 
-    // TODO: Add response_type Use code for server side flows and token for application side flows
-
     log.info(s"Starting auth using $provider, req: $authReq, query = ${request.queryString}")
 
     socialProviderRegistry.get[SocialProvider](provider) match {
@@ -77,24 +88,21 @@ class SocialAuthController @Inject()(
       case Left(result) => 
         log.info(s"Social auth redirect: $result")
         Future.successful(result.flashing(authReq.flash))
-      case Right(authInfo) => 
-
+      case Right(authInfo) =>
         for {
           app           <- oauth.getApp(authReq.clientId)
+          _             <- conditionalFail(!authReq.redirectUri.forall(app.matchRedirect), ErrorCodes.ACCESS_DENIED, "Invalid redirect URL")
           profile       <- p.retrieveProfile(authInfo)
           user          <- initUser(request.identity, profile, authInfo)
-          _             <- authInfoRepository.save(profile.loginInfo, authInfo)
-          authenticator <- silh.env.authenticatorService.create(profile.loginInfo)
-          value         <- silh.env.authenticatorService.init(authenticator)
-        } yield {
-          silh.env.eventBus.publish(LoginEvent(user, request))
+          _             <- conditionalFail(user.hasAllPermission(authReq.scopesList.filterNot(_ == "offline_access") :_*), ErrorCodes.ACCESS_DENIED, "Invalid redirect URL")
+          result        <- authReq.responseType match {
+            case ResponseType.Code =>
+              respondWithCode(profile, user, authInfo, authReq)
+            case ResponseType.Token => 
+              respondWithAccessToken(profile, user, authInfo, authReq)
 
-          log.info(s"User $user authenticated though $provierName")
-        
-          Ok(
-            Json.obj("token" -> value)
-          )
-        }
+          }
+        } yield result
     } recover {
       case ex: ProviderException =>
         log.warn("Oauth provider exception:" + ex.getMessage, ex.getCause)
@@ -112,4 +120,69 @@ class SocialAuthController @Inject()(
         userService.findOrCreateSocialUser(profile, authInfo)
     }
   }
+
+  private def respondWithAccessToken(profile: CommonSocialProfile, user: User, authInfo: AuthInfo, authReq: AuthorizeUsingProvider)
+                                    (implicit request: RequestHeader): Future[Result] = {
+
+    import URLEncoder._
+    // TODO: add scopes and audience
+    for {
+      _                 <- authInfoRepository.save(profile.loginInfo, authInfo)
+      authenticator     <- silh.env.authenticatorService.create(profile.loginInfo)
+      userAuthenticator  = authenticator.withUserInfo(user, authReq.scope, authReq.audience)
+      token             <- silh.env.authenticatorService.init(userAuthenticator)
+      refreshTokenOpt   <- optRefreshToken(user, authReq)
+    } yield {
+        silh.env.eventBus.publish(LoginEvent(user, request))
+
+        log.info(s"User $user access token created")
+
+        val expireIn = ((authenticator.expirationDateTime.toInstant.getMillis / 1000) - 
+            LocalDateTime.now().toInstant(ZoneOffset.UTC).getEpochSecond())
+
+        authReq.redirectUri.map { uri =>
+          val accessToken = s"access_token=${encode(token, "UTF-8")}"
+          val state = authReq.state.map(s => s"&state=$s").getOrElse("")
+          val scope = authReq.scope.map(s => "&scope=" + encode(s, "UTF-8")) 
+          var refreshToken = refreshTokenOpt.map(t => s"&refresh_token=${t.id}").getOrElse("")  
+          val fullUri = uri + s"?$accessToken&expires_in=${expireIn}$scope&token_type=Bearer$refreshToken$state"
+          
+          Redirect(fullUri)
+        }  getOrElse {
+
+          val json = Json.obj(
+            "token_type" -> "Bearer",
+            "refresh_token" -> refreshTokenOpt.map(_.id),
+            "access_token" -> token,
+            "expires_in" -> expireIn,
+            "scope" -> authReq.scope
+          ).filterNull
+
+          Ok(json)
+        }      
+    }
+  }
+
+  private def optRefreshToken(user: User, authReq: AuthorizeUsingProvider): Future[Option[RefreshToken]] = 
+    if (authReq.scope.exists(_.split(" ").contains("offline_access"))) newRefreshToken(user, authReq).map(Some(_))
+    else Future.successful(None)
+
+  private def newRefreshToken(user: User, authReq: AuthorizeUsingProvider): Future[RefreshToken] = {
+    val refreshToken = RefreshToken(
+      user.id, 
+      authReq.scope, 
+      expirationTime = LocalDateTime.now().plusHours(RefreshTokenTTL),
+      clientId = authReq.clientId,
+      id = RandomStringGenerator.generateSecret(64)
+    )
+
+    tokens.store(refreshToken)
+  }
+
+  private def respondWithCode(profile: CommonSocialProfile, user: User, authInfo: AuthInfo, authReq: AuthorizeUsingProvider)
+                                    (implicit request: RequestHeader): Future[Result] = {
+    // TODO: code response
+    ???
+  }  
+
 }

@@ -8,7 +8,6 @@ import play.api.data.format.Formatter
 import play.api.data.validation.{Constraint, Invalid, Valid, ValidationError}
 import play.api.data.{Form, FormError, Forms, Mapping}
 import utils.DateHelpers
-import utils.Settings._
 
 import scala.util.matching.Regex
 import FormConstraints._
@@ -17,26 +16,19 @@ object UserForm {
 
   val updatePass = Form(
     mapping(
-      TAG_PASS -> optional(password),
-      TAG_NEW_PASS -> password,
-      TAG_LOGIN -> optional(nonEmptyText)
+      "pass" -> optional(password),
+      "newPass" -> password,
+      "login" -> optional(nonEmptyText)
     )(UpdatePass.apply)(UpdatePass.unapply)
-  )
-
-  val passwordTTL = Form(
-    mapping(
-      "passTtl" -> optional(longNumber),
-      "expireOnce" -> optional(boolean),
-    )(PasswordTTL.apply)(PasswordTTL.unapply)
   )
 
   val updateUser = Form(
     mapping(
-      TAG_EMAIL -> optional(nonEmptyText.verifying(_.contains("@")).transform(_.toLowerCase, (a: String) => a)),
-      TAG_PHONE -> optional(nonEmptyText.verifying(phoneNumber)),
-      TAG_FIRST_NAME -> optional(nonEmptyText),
-      TAG_LAST_NAME -> optional(nonEmptyText),
-      TAG_FLAGS -> default(list(nonEmptyText), Nil),
+      "email" -> optional(nonEmptyText.verifying(_.contains("@")).transform(_.toLowerCase, (a: String) => a)),
+      "phone" -> optional(nonEmptyText.verifying(phoneNumber)),
+      "firstName" -> optional(nonEmptyText),
+      "lastName" -> optional(nonEmptyText),
+      "flags" -> default(list(nonEmptyText), Nil),
       "roles" -> default(list(nonEmptyText), Nil),
       "branch" -> optional(text(Branch.BranchIdSize, Branch.BranchIdSize)),
       "version" -> default(number(min = 0), 0)
@@ -45,23 +37,23 @@ object UserForm {
 
   val searchUser = Form(
     mapping(
-      TAG_Q -> nonEmptyText(3),
-      TAG_LIMIT -> optional(limit)
+      "q" -> nonEmptyText(3),
+      "limit" -> optional(limit)
     )(SearchUser.apply)(SearchUser.unapply)
   )
 
   val queryUser = Form(
     mapping(
-      TAG_SINCE -> optional(isoDate),
-      TAG_UNTIL -> optional(isoDate),
-      TAG_LIMIT -> optional(limit),
-      TAG_OFFSET -> optional(offset)
+      "since" -> optional(isoDate),
+      "until" -> optional(isoDate),
+      "limit" -> optional(limit),
+      "offset" -> optional(offset)
     )(QueryParams.apply)(QueryParams.unapply)
   )
 
   val blockUser = Form(
     mapping(
-      TAG_BLOCK -> boolean
+      "block" -> boolean
     )(BlockUser.apply)(BlockUser.unapply)
   )
 
