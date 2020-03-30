@@ -11,7 +11,7 @@ import com.mohiva.play.silhouette.api.{LoginInfo, Silhouette}
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import com.mohiva.play.silhouette.persistence.daos.DelegableAuthInfoDAO
 import events.EventsStream
-import forms.{ResetPasswordForm, UserForm}
+import forms.{CommonForm, ResetPasswordForm, UserForm}
 import javax.inject.{Inject, Singleton}
 import models.AppEvent.{UserBlocked, _}
 import models.User._
@@ -22,12 +22,12 @@ import play.api.libs.json.Json._
 import play.api.libs.json._
 import play.api.mvc.{RequestHeader, Result}
 import reactivemongo.play.json._
-import security.{ConfirmationCodeService, WithAnyPermission, WithUser}
-import services.{BranchesService, ConfirmationProvider, ExtendedUserInfoService, UserService}
+import security.{ConfirmationCodeService, WithPermission, WithUser, WithUserAndPerm}
+import services.{BranchesService, ConfirmationProvider, UserService}
 import utils.FutureUtils._
 import utils.Responses._
-import utils.RichJson._
 import utils.RichRequest._
+import utils.Settings
 import utils.StringHelpers._
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -44,7 +44,6 @@ class UserController @Inject()(
                                 passwordHashers: PasswordHasherRegistry,
                                 confirmationService: ConfirmationCodeService,
                                 confirmationValidator: ConfirmationProvider,
-                                extendedInfoService: ExtendedUserInfoService,
                                 branches: BranchesService
                               )(implicit exec: ExecutionContext, system: ActorSystem)
   extends BaseController {
@@ -57,24 +56,24 @@ class UserController @Inject()(
     override def writes(o: Seq[User]): JsValue = JsArray(for (obj <- o) yield Json.toJson(obj))
   }
 
-  val readPerm = WithAnyPermission("users:read")
-  val editPerm = WithAnyPermission("users:edit")
-  val blockPerm = WithAnyPermission("users:block")
+  val adminReadPerm = WithPermission("users:read")
+  val adminEditPerm = WithPermission("users:edit")
+  val blockPerm = WithPermission("users:block")
 
-  def get(id: String) = silh.SecuredAction(readPerm || WithUser(id)).async { request =>
+  def get(id: String) = silh.SecuredAction(adminReadPerm || WithUser(id)).async { request =>
     userService.getRequestedUser(id, request.identity).map { user =>
       log.info(s"Obtained user $user")
       Ok(Json.toJson(user))
     }
   }
 
-  def list() = silh.SecuredAction(readPerm).async { implicit request =>
-    val queryParams = request.asForm(UserForm.queryUser)
+  def list() = silh.SecuredAction(adminReadPerm).async { implicit request =>
+    val page = request.asForm(CommonForm.paginated)
     val branchCritOpt = request.identity.branch map { b => Json.obj("hierarchy" -> b) }
 
-    userService.list(branchCritOpt, queryParams).flatMap { users =>
+    userService.list(branchCritOpt, page.offset, page.limit).flatMap { users =>
 
-      log.info(s"Obtained users list for ${request.identity}")
+      log.info(s"Obtained users list for ${request.identity}, offset: ${page.offset}")
 
       Ok(Json.obj(
         "items" -> Json.toJson(users))
@@ -97,15 +96,14 @@ class UserController @Inject()(
 
       val loginInfo = LoginInfo(CredentialsProvider.ID, user.identifier)
 
-      val updUser = user.copy(
-        passHash = passwordHashers.current.hash(data.newPass).password
-      )
+      val updPass = passwordHashers.current.hash(data.newPass).password
+      val updUser = user.copy(passHash = Some(updPass))
 
       passDao.find(loginInfo).flatMap {
         case Some(passInfo) if data.pass.isDefined =>
           if (passwordHashers.all.exists(_.matches(passInfo, data.pass.get))) {
 
-            passDao.update(loginInfo, PasswordInfo(passwordHashers.current.id, updUser.passHash)).flatMap { _ =>
+            passDao.update(loginInfo, PasswordInfo(passwordHashers.current.id, updPass)).flatMap { _ =>
               eventBus.publish(PasswordChange(updUser, request, request2lang)) map { _ =>
 
                 log.info(s"User $user changed password")
@@ -117,7 +115,7 @@ class UserController @Inject()(
             throw AppException(ErrorCodes.ACCESS_DENIED, s"Old password is wrong")
           }
         case None if data.login.isEmpty =>
-          passDao.update(loginInfo, PasswordInfo(passwordHashers.current.id, updUser.passHash)).flatMap { _ =>
+          passDao.update(loginInfo, PasswordInfo(passwordHashers.current.id, updPass)).flatMap { _ =>
             eventBus.publish(PasswordChange(updUser, request, request2lang)) map { _ =>
               log.info(s"User $user set password")
               NoContent.discardingCookies()
@@ -173,9 +171,10 @@ class UserController @Inject()(
                   log.info(s"Code $confirmCode not found for login $reqLogin")
                   throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User ${code.login} not found")
                 } else {
-                  val updUser = u.copy(passHash = passwordHashers.current.hash(data.password).password)
+                  val updPass = passwordHashers.current.hash(data.password).password
+                  val updUser = u.copy(passHash = Some(updPass) )
 
-                  passDao.update(loginInfo, PasswordInfo(passwordHashers.current.id, updUser.passHash)).flatMap { _ =>
+                  passDao.update(loginInfo, PasswordInfo(passwordHashers.current.id, updPass)).flatMap { _ =>
                     eventBus.publish(PasswordChange(updUser, request, request2lang)) map { _ =>
                       confirmationService.consumeByLogin(reqLogin)
                     }
@@ -196,7 +195,7 @@ class UserController @Inject()(
     }
   }
 
-  def put(id: String) = silh.SecuredAction(editPerm || WithUser(id)).async(parse.json) { implicit request =>
+  def put(id: String) = silh.SecuredAction(adminEditPerm || WithUserAndPerm(id, "user:update")).async(parse.json) { implicit request =>
     log.info(s"Updating user: ${request.body}")
 
     val data = request.asForm(UserForm.updateUser)
@@ -251,12 +250,11 @@ class UserController @Inject()(
     }
   }
 
-  def delete(id: String, comment: Option[String]) = silh.SecuredAction(editPerm || WithUser(id)).async { implicit request =>
+  def delete(id: String, comment: Option[String]) = silh.SecuredAction(adminEditPerm || WithUserAndPerm(id, "user:update")).async { implicit request =>
     for {
       user <- userService.getRequestedUser(id, request.identity)
       _ <- validateBranchAccess(user.branch, request.identity)
       _ <- userService.delete(user)
-      - <- extendedInfoService.delete(Json.obj("_id" -> user.id))
       _ <- eventBus.publish(UserDelete(user, comment, request, request2lang))
     } yield {
       log.info(s"User $user was deleted by $id ${comment.map(c => "with comment: " + c ).getOrElse("without comment")}")
@@ -264,7 +262,7 @@ class UserController @Inject()(
     }
   }
 
-  def count = silh.SecuredAction(readPerm).async { req =>
+  def count = silh.SecuredAction(adminReadPerm).async { req =>
     userService.count(req.identity.branch).map { count =>
       log.info(
         s"Get count of users requested by ${req.identity.identifier}, branch: ${req.identity.branch.getOrElse("none")}, count: $count"
@@ -273,7 +271,7 @@ class UserController @Inject()(
     }
   }
 
-  def search = silh.SecuredAction(readPerm).async { request =>
+  def search = silh.SecuredAction(adminReadPerm).async { request =>
     val data = request.asForm(UserForm.searchUser)
     val user = request.identity
 
@@ -285,7 +283,7 @@ class UserController @Inject()(
 
     val branchCrit = user.branch map { b => Json.obj("hierarchy" -> b) } getOrElse Json.obj()
 
-    userService.search(criteria ++ branchCrit, QueryParams(_limit = data.limit)).map { users =>
+    userService.search(criteria ++ branchCrit, offset = 0, limit = data.limit.getOrElse(Settings.DEFAULT_LIMIT)).map { users =>
       log.info(
         s"Find users with query:${data.q}, cnt:${users.length} requested by ${user.identifier} branch: ${user.branch.getOrElse("none")}"
       )
@@ -319,81 +317,6 @@ class UserController @Inject()(
     } yield {
       log.info(s"User $user was ${if(blockFlag) "blocked" else "unblocked" } by ${request.identity.id}")
       NoContent
-    }
-  }
-
-  def retrieveExtendedInfo(anyId: String) = silh.SecuredAction(editPerm || WithUser(anyId)).async { implicit request =>
-    userService.getRequestedUser(anyId, request.identity).flatMap { user =>
-      extendedInfoService.retrieve4user(user.id).map { optInfo =>
-        log.info(s"Obtained extended user info for ${user.id} by ${request.identity.id}")
-        Ok(optInfo.map(_.rename("_id", "uuid")).getOrElse(JsObject(Nil)))
-      }
-    }
-  }
-
-  def createExtendedInfo(anyId: String) = silh.SecuredAction(WithUser(anyId)).async(parse.json) { implicit request =>
-    val extendedInfo = request.body.as[JsObject] ++ Json.obj("_id" -> request.identity.id)
-
-    extendedInfoService.create(extendedInfo).map { info =>
-      log.info(s"Save extended user info for ${request.identity.id} with $info")
-      Ok(info)
-    }
-  }
-
-  def updateExtendedInfo(anyId: String) = silh.SecuredAction(editPerm || WithUser(anyId)).async(parse.json) { implicit request =>
-    userService.getRequestedUser(anyId, request.identity).flatMap { user =>
-      val selector = Json.obj("_id" -> user.id)
-
-      val update = request.body.as[JsObject].without("id")
-
-      if (update.fields.isEmpty) {
-        log.info(s"Update object can not be empty")
-        throw AppException(ErrorCodes.INVALID_REQUEST, "Nothing to update")
-      }
-
-      val updateObj = Json.obj("$set" -> update)
-
-      extendedInfoService.update(selector, updateObj).map {
-        case Some(info) =>
-          log.info(s"Update extended user info for ${user.id} by ${request.identity.id} with $info")
-          Ok(info)
-        case None =>
-          log.warn(s"Extended info for user ${user.id} not found")
-          throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Extended info for user ${user.id} not found")
-      }
-    }
-  }
-
-  def retrieveOwnStructure(anyId: String) = silh.SecuredAction(WithUser(anyId)).async { implicit request =>
-    val user = request.identity
-    val queryParams = request.asForm(UserForm.queryUser)
-
-    extendedInfoService.retrieve4user(user.id).flatMap {
-      case Some(info) =>
-        val referralCode = (info \ "invitationCode").as[String]
-        val selector = Json.obj(
-          "inviterCode" -> referralCode,
-          "created" -> Json.obj("$gte" -> queryParams.since, "$lte" -> queryParams.until)
-        )
-
-        val fCount = extendedInfoService.count(selector)
-        val fItems = extendedInfoService.retrieveList(selector, queryParams.limit, queryParams.offset, "_id")
-
-        for {
-          count <- fCount
-          items <- fItems
-          userIds = items.map(o => (o \ "_id").as[Long])
-          criteria = Json.obj("_id" -> Json.obj("$in" -> userIds))
-          users <- userService.list(Some(criteria), queryParams)
-        } yield {
-          val usersJson = users.map(u => Json.toJson(u).as[JsObject].without("permissions", "flags"))
-          log.info(s"Obtained own user structure for ${user.id}")
-          Ok(Json.obj("items" -> usersJson, "count" -> count))
-        }
-
-      case None =>
-        log.warn(s"Extended info for user ${user.id} not found")
-        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Extended info for user ${user.id} not found")
     }
   }
 

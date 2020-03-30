@@ -1,6 +1,6 @@
 package module
 
-import _root_.services._
+import services._
 import com.google.inject.name.Named
 import com.google.inject.{AbstractModule, Provides}
 import com.mohiva.play.silhouette.api.actions.{SecuredErrorHandler, UnsecuredErrorHandler}
@@ -37,7 +37,7 @@ import play.api.Configuration
 import play.api.libs.openid.OpenIdClient
 import play.api.libs.ws.WSClient
 import play.api.mvc.Cookie
-import security.{CustomJWTAuthenticatorService, JWTTokensDao, KeysManager}
+import security.{CustomJWTAuthenticatorService, KeysManager}
 import utils.{CustomEventBus, ServerErrorHandler}
 
 import scala.collection.JavaConverters._
@@ -177,15 +177,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
         )
     }
 
-    val store = conf.getOptional[String]("silhouette.authenticator.store").map(_.toLowerCase) match {
-      case Some("none") => None
-      case Some("redis") => Some(new JWTTokensDao(settings, encoder, conf, sessionsService))
-      case Some(other) => throw new IllegalArgumentException(
-        s"Setting silhouette.authenticator.store(AUTHENTICATOR_STORE) value $other is not supported." +
-          s"Use: none, redis, mongo or combined")
-    }
-
-    new CustomJWTAuthenticatorService(settings, store, encoder, idGenerator, keyManager, clock)
+    new CustomJWTAuthenticatorService(settings, None, encoder, idGenerator, keyManager, clock)
   }
 
 

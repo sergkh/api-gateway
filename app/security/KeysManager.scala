@@ -23,14 +23,12 @@ class KeysManager {
     Security.addProvider(new BouncyCastleProvider())
   }
 
-  // http://pauldijou.fr/jwt-scala/samples/jwt-ecdsa/
   val g = KeyPairGenerator.getInstance("ECDSA", "BC")
   g.initialize(new ECGenParameterSpec("P-521"), new SecureRandom())
 
   val authKeyPair = g.generateKeyPair()
 
-  val authCertificate = genCertificate(authKeyPair) 
-  // val token = Jwt.encode("""{"user":1}""", ecKey.getPrivate, JwtAlgorithm.ES512)
+  val authCertificate = genCertificate(authKeyPair)
 
   def authCertificates: Map[String, X509Certificate] = Map("default" -> authCertificate)
 

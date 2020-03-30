@@ -2,6 +2,7 @@ package models
 
 import java.time.LocalDateTime
 import reactivemongo.bson.Macros.Annotations.Key
+import java.time.ZoneOffset
 
 case class DBLoginInfo(id: Option[Long], providerId: String, providerKey: String)
 case class DBUserLoginInfo(id: Option[Long], userId: Long, loginInfoId: Long)
@@ -10,6 +11,24 @@ case class DBOAuth1Info(id: Option[Long], token: String, secret: String, loginIn
 case class DBOAuth2Info(id: Option[Long], accessToken: String, tokenType: Option[String], expiresIn: Option[Int],
                         refreshToken: Option[String], loginInfoId: Long)
 
+/**
+  * Short term authorization code (10 min MAX), that can be exchanged to access token or
+  * refresh token.
+  */                    
+case class AuthCode(userId: String,
+                        scope: Option[String],
+                        expirationTime: LocalDateTime,
+                        clientId: String,
+                        @Key("_id") id: String,
+                        requestedTime: LocalDateTime = LocalDateTime.now()) {
+  def expireIn: Int = ((expirationTime.toInstant(ZoneOffset.UTC).toEpochMilli / 1000) - LocalDateTime.now().toInstant(ZoneOffset.UTC).getEpochSecond()).toInt
+  def expired: Boolean = expirationTime.isBefore(LocalDateTime.now())
+}
+
+/**
+  * Long term Refresh token, that can be used in TokenController.getAccessToken to 
+  * obtain an access token.
+  */
 case class RefreshToken(userId: String,
                         scope: Option[String],
                         expirationTime: LocalDateTime,

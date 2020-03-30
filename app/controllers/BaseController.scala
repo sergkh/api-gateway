@@ -30,9 +30,9 @@ trait BaseController extends InjectedController {
     }
   }
 
-  implicit def securedRequestToProxyReq(req: SecuredRequest[JwtEnv, JsValue]): StreamedProxyRequest = {
-    StreamedProxyRequest(req, Some(req.identity), Option(Source.single(ByteString(Json.stringify(req.body).getBytes))))
-  }
+//  implicit def securedRequestToProxyReq(req: SecuredRequest[JwtEnv, JsValue]): StreamedProxyRequest = {
+//    StreamedProxyRequest(req, Some(req.identity), Option(Source.single(ByteString(Json.stringify(req.body).getBytes))))
+//  }
 
   @deprecated("See https://www.playframework.com/documentation/2.6.x/MessagesMigration26", "2.6.0")
   implicit def request2lang(implicit request: RequestHeader): Lang = play.api.i18n.Lang.defaultLang

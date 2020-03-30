@@ -4,15 +4,9 @@ import play.api.data.Form
 import play.api.data.Forms._
 import FormConstraints._
 
-/**
-  * The form which handles the sign up process.
-  */
+/** The form which handles the sign up process. */
 object RegisterForm {
 
-  /**
-    * A play framework form.
-    */
-  //noinspection ForwardReference
   val openForm = Form(
     mapping(
       "login" -> nonEmptyText.verifying(or(emailAddress, phoneNumber)),
@@ -22,12 +16,6 @@ object RegisterForm {
 
 }
 
-
-/**
-  * The form data.
-  *
-  * @param password The password of the user.
-  */
 case class OpenFormData(login: String, password: Option[String]) extends RegisterOptData
 
 sealed trait RegisterOptData {

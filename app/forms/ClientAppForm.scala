@@ -1,11 +1,9 @@
 package forms
 
 import forms.FormConstraints._
-import models.OAuthAuthorizeRequest
 import play.api.data.Form
 import play.api.data.Forms._
 import utils.Settings
-import utils.Settings._
 
 object ClientAppForm {
 
@@ -32,23 +30,7 @@ object ClientAppForm {
     )(UpdateApps.apply)(UpdateApps.unapply)
   )
 
-  val authorize = Form[OAuthAuthorizeRequest](
-    mapping(
-      "clientId" -> nonEmptyText,
-      "permissions" -> list(nonEmptyText),
-      "responseType" -> enum(OAuthAuthorizeRequest.Type),
-      "redirectUrl" -> optional(nonEmptyText)
-    )(OAuthAuthorizeRequest.apply)(OAuthAuthorizeRequest.unapply)
-  )
-
   val code = Form(single("code" -> nonEmptyText))
-
-  val filter = Form[GetApps](
-    mapping(
-      "limit" -> optional(limit),
-      "offset" -> optional(offset)
-    )(GetApps.apply)(GetApps.unapply)
-  )
 
   case class CreateApps(name: String,
                         description: String,
@@ -64,10 +46,4 @@ object ClientAppForm {
                         url: Option[String],
                         contacts: Option[List[String]],
                         redirectUrlPattern: Option[List[String]])
-
-  case class GetApps(private val l: Option[Int], private val o: Option[Int]) {
-    val limit = l.getOrElse(Settings.DEFAULT_LIMIT)
-    val offset = o.getOrElse(Settings.DEFAULT_OFFSET)
-  }
-
 }

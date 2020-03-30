@@ -24,9 +24,9 @@ import play.api.test.FakeRequest
 import play.api.test.Helpers._
 import play.api.{Application, Configuration, Mode}
 import services.RegistrationFiltersChain
-import services.UserService
 
 import scala.concurrent.Future
+import services.UserExistenceService
 
 /**
   * @author Yaroslav Derman <yaroslav.derman@gmail.com>.
@@ -39,28 +39,13 @@ class OpenRegistrationSpec extends PlaySpec
 
   import helpers.EventBusHelpers._
 
-  private val userServiceMock = {
-    val m = mock[UserService]
-
-    when(m.save(any[User]())).thenAnswer { user: User =>
-      Future.successful(user)
-    }
-
-    when(m.updatePassHash(anyString(), any[PasswordInfo]())).thenReturn(Future.successful({}))
-
-    when(m.updateFlags(any[User]())).thenAnswer { user: User =>
-      Future.successful(user)
-    }
-
-    m
-  }
-
-  private val restrictionServiceMock = mock[RegistrationFiltersChain]
+  private val userServiceMock = mock[UserExistenceService]
+  private val filtersChaingMock = mock[RegistrationFiltersChain]
 
   val usersMockModule = new ScalaModule {
     override def configure(): Unit = {
-      bind[UserService].toInstance(userServiceMock)
-      bind[RegistrationFiltersChain].toInstance(restrictionServiceMock)
+      bind[UserExistenceService].toInstance(userServiceMock)
+      bind[RegistrationFiltersChain].toInstance(filtersChaingMock)
     }
   }
 
@@ -78,12 +63,7 @@ class OpenRegistrationSpec extends PlaySpec
       implicit val actorSystem = app.actorSystem
       val codeFuture = catchEvent[OtpGeneration]
 
-      when(userServiceMock.retrieve(LoginInfo("credentials", newIdentity.email.get)))
-        .thenReturn(Future.successful(None.asInstanceOf[Option[User]]))
-
-      when(restrictionServiceMock.apply(any())).thenAnswer { js: JsValue =>
-        Future.successful(js)
-      }
+      when(userServiceMock.exists(newIdentity.email.get)).thenReturn(Future.successful(false))
 
       val requestBody = Json.obj("login" -> newIdentity.email.get, "password" -> newIdentity.passHash)
       val Some(result) = route(app, FakeRequest(routes.ApplicationController.register()).withJsonBody(requestBody))
@@ -105,14 +85,10 @@ class OpenRegistrationSpec extends PlaySpec
 
       val confirmation = await(codeFuture, 1, TimeUnit.SECONDS)
 
-      when(userServiceMock.retrieve(LoginInfo(CredentialsProvider.ID, newIdentity.email.get)))
-        .thenReturn(Future.successful(Some(newIdentity)))
-
       val Some(successConfirm) = route(app, FakeRequest(routes.ApplicationController.confirm())
         .withJsonBody(Json.obj("code" -> confirmation.code, "login" -> newIdentity.email.get)))
 
       status(successConfirm) mustBe OK
-
     }
   }
 

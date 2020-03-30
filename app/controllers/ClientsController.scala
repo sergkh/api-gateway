@@ -4,20 +4,18 @@ package controllers
 
 import akka.actor.ActorSystem
 import com.mohiva.play.silhouette.api.Silhouette
-import com.mohiva.play.silhouette.api.services.AuthenticatorService
-import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
 import events.EventsStream
-import forms.{OAuthForm, ClientAppForm}
+import forms.{ClientAppForm, CommonForm}
 import javax.inject.{Inject, Singleton}
 import utils.RichJson._
 import utils.RichRequest._
-import utils.Settings._
 import models.AppEvent._
 import models._
 import play.api.Configuration
 import play.api.libs.json.{JsObject, Json}
 import security._
 import services.{ClientAppsService, UserService}
+
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.language.implicitConversions
 
@@ -26,21 +24,18 @@ import scala.language.implicitConversions
   * @author Yaroslav Derman   <yaroslav.derman@gmail.com>.
   */
 @Singleton
-class OAuthController @Inject()(silh: Silhouette[JwtEnv],
+class ClientsController @Inject()(silh: Silhouette[JwtEnv],
                                 userService: UserService,
                                 oauthService: ClientAppsService,
                                 eventBus: EventsStream,
                                 oauth: Oauth,
                                 conf: Configuration)(implicit system: ActorSystem) extends BaseController {
 
-  implicit def toService(authService: AuthenticatorService[JWTAuthenticator]): CustomJWTAuthenticatorService =
-    authService.asInstanceOf[CustomJWTAuthenticatorService]
-
-  val readPerm = WithAnyPermission("users:read")
-  val editPerm = WithAnyPermission("users:edit")
+  val readPerm = WithPermission("users:read")
+  val editPerm = WithPermission("users:edit")
   val oauthCreatePerm = WithPermission("oauth_token:create")
 
-  def createApp = silh.SecuredAction(editPerm && NotOauth).async(parse.json) { req =>
+  def createApp = silh.SecuredAction.async(parse.json) { req =>
     val data = req.asForm(ClientAppForm.create)
 
     val app = ClientApp(req.identity.id, data.name, data.description, data.logo, data.url, data.contacts, data.redirectUrlPattern)
@@ -54,7 +49,7 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
     }
   }
 
-  def updateApp(userId: String, id: String) = silh.SecuredAction(NotOauth && (editPerm || WithUser(userId))).async(parse.json) { req =>
+  def updateApp(userId: String, id: String) = silh.SecuredAction(editPerm || WithUserAndPerm(userId, "user:edit")).async(parse.json) { req =>
     val data = req.asForm(ClientAppForm.update)
     for {
       user <- userService.getRequestedUser(userId, req.identity)
@@ -68,7 +63,7 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
     }
   }
 
-  def getAppByOwner(userId: String, id: String) = silh.SecuredAction(NotOauth && (readPerm || WithUser(userId))).async { req =>
+  def getAppByOwner(userId: String, id: String) = silh.SecuredAction(WithUser(userId)).async { req =>
     userService.getRequestedUser(userId, req.identity).flatMap { user =>
       oauthService.getApp4user(id, user.id).map { app =>
         log.info("Getting client application info " + id)
@@ -77,18 +72,18 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
     }
   }
 
-  def getPublicAppInformation(id: String) = Action.async { request =>
+  def getPublicAppInformation(id: String) = Action.async { _ =>
     oauthService.getApp(id).map { app =>
       log.info("Getting client application info " + id)
       Ok(Json.toJson(app).as[JsObject].without("secret"))
     }
   }
 
-  def listApplications(userId: String) = silh.SecuredAction(NotOauth && (readPerm || WithUser(userId))).async { req =>
+  def listApplications(userId: String) = silh.SecuredAction(readPerm || WithUser(userId)).async { req =>
     userService.getRequestedUser(userId, req.identity).flatMap { user =>
-      val data = req.asForm(ClientAppForm.filter)
+      val page = req.asForm(CommonForm.paginated)
 
-      val fApps = oauthService.getApps(user.id, data.limit, data.offset)
+      val fApps = oauthService.getApps(user.id, page.limit, page.offset)
       val fCount = oauthService.countApp(Some(user.id))
 
       for {
@@ -101,7 +96,7 @@ class OAuthController @Inject()(silh: Silhouette[JwtEnv],
     }
   }
 
-  def removeApplication(userId: String, id: String) = silh.SecuredAction(NotOauth && (editPerm || WithUser(userId))).async { implicit req =>
+  def removeApplication(userId: String, id: String) = silh.SecuredAction(editPerm || WithUserAndPerm(userId, "user:edit")).async { implicit req =>
     for {
       user <- userService.getRequestedUser(userId, req.identity)
       _    <- oauthService.removeApp(id, user)

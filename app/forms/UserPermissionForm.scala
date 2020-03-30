@@ -11,5 +11,4 @@ object UserPermissionForm {
   )
 
   val updateForm = Form(single("permissions" -> list(text)))
-
 }

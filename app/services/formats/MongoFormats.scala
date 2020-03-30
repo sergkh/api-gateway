@@ -18,7 +18,7 @@ object MongoFormats {
     User(
       email = doc.getAs[String]("email"),
       phone = doc.getAs[String]("phone"),
-      passHash = doc.getAs[String]("passHash").get,
+      passHash = doc.getAs[String]("passHash"),
       flags = doc.getAs[List[String]]("flags").getOrElse(Nil),
       roles = doc.getAs[List[String]]("roles").getOrElse(Nil),
       hierarchy = doc.getAs[List[String]]("hierarchy").getOrElse(Nil),
@@ -37,6 +37,8 @@ object MongoFormats {
   implicit val sessionFormat = Macros.handler[Session]
 
   implicit val clientAppFormat = Macros.handler[ClientApp]
+
+  implicit val branchFormat = Macros.handler[Branch]
 
   @inline def byField(name: String, v: String): BSONDocument = BSONDocument(name -> v)
   @inline def byId[T](v: String): BSONDocument = BSONDocument("_id" -> v)

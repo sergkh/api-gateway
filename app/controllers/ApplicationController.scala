@@ -195,9 +195,8 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
       .flatMap {
         case Some(code) if ConfirmationCode.OP_REGISTER == code.operation => confirmUserRegistration(code)
         case Some(code) if ConfirmationCode.OP_LOGIN == code.operation => confirmUserAuthorization(code)
-        case Some(code) => sendConfirmed(code, confirmation.code)
-        case None =>
-          log.info(s"Code $confirmation not found")
+        case code =>
+          log.info(s"Code $confirmation not found $code")
           throw AppException(ErrorCodes.CONFIRM_CODE_NOT_FOUND, s"Code for login ${confirmation.login} is not found")
       }
   }
@@ -220,36 +219,6 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
                                 .map(phone => confirmationService.retrieveByLogin(phone))
                                 .getOrElse(FastFuture.successful(None))
         } yield codeByUuid orElse codeByEmail orElse codeByPhone
-    }
-  }
-
-  private def sendConfirmed(code: ConfirmationCode, otp: String)(implicit request: RequestHeader): Future[Result] = {
-    userService.retrieve(LoginInfo(CredentialsProvider.ID, code.login)) flatMap {
-      case Some(user) =>
-        val Array(method, path) = code.operation.split(" ") // example: POST /someurl
-
-        val base = config.get[String]("app.host").stripSuffix("/") + baseUrl
-
-        log.info(s"Confirming $method request to $path using URL: ${base + path}")
-
-        val originalReq = code.request.get
-        val (originalHeaders, Some(body)) = originalReq
-        // update content length to fully match new request size
-        val headers = originalHeaders :+ ("Content-Length" -> body.size.toString)
-
-        val newReq = Request(request.withMethod(method), body).withHeaders(Headers(headers:_*))
-
-        proxy.passToUrl(
-          base + path,
-          appSecret,
-          StreamedProxyRequest(newReq, Some(user), Some(Source.single(body)), Some(method)),
-          headers = Seq(confirmations.confirmationHeader(otp, appSecret))).map { res =>
-          confirmationService.consumeByLogin(code.login)
-          res
-        }
-      case None =>
-        log.info(s"User ${code.login} for code $code not found")
-        throw AppException(ErrorCodes.ACCESS_DENIED, s"Access denied for unknown user: ${code.login}")
     }
   }
 
@@ -313,7 +282,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
 
     def codeToUser(c: Option[ConfirmationCode]): Future[Option[User]] = c.map(_.operation match {
       case ConfirmationCode.OP_REGISTER => registration.getUnconfirmedRegistrationData(login).map {
-        _.map(data => User(email = data.optEmail.map(_.toLowerCase), phone = data.optPhone, passHash = data.passHash))        
+        _.map(data => User(email = data.optEmail.map(_.toLowerCase), phone = data.optPhone, passHash = data.passHash))
       }
       case _ => userService.getByAnyIdOpt(login)
     }).getOrElse(Future.successful(None))

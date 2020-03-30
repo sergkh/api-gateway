@@ -10,7 +10,7 @@ import reactivemongo.bson.Macros.Annotations.{Key, Ignore}
 
 case class User(email: Option[String] = None,
                 phone: Option[String] = None,
-                passHash: String,
+                passHash: Option[String] = None,
                 flags: List[String] = Nil,
                 roles: List[String] = Nil,
                 @Ignore permissions: List[String] = Nil,
@@ -35,7 +35,7 @@ case class User(email: Option[String] = None,
 
   def hasAnyRole(r: String*): Boolean = roles.exists(hasRole)
 
-  def hasPermission(p: String): Boolean = permissions.contains(p)
+  def hasPermission(p: String): Boolean = permissions.contains(p) || User.SelfManagePermissions.contains(p)
 
   def hasAllPermission(p: String*): Boolean = p.forall(hasPermission)
 
@@ -55,6 +55,9 @@ case class User(email: Option[String] = None,
 }
 
 object User {
+  /** Internal scopes that are required for tokens, but not stored as user permissions */
+  val SelfManagePermissions = List("user:update", "offline_access")
+
   def fromRegistration(r: RegistrationData) = User(
     email = r.optEmail,
     phone = r.optPhone,
@@ -90,7 +93,7 @@ object User {
   implicit val reader: Reads[User] = (      
       (JsPath \ "email").readNullable[String] and
       (JsPath \ "phone").readNullable[String] and
-      (JsPath \ "passHash").read[String].orElse(Reads.pure("")) and
+      (JsPath \ "passHash").readNullable[String] and
       (JsPath \ "flags").read[List[String]].orElse(Reads.pure(Nil)) and
       (JsPath \ "roles").read[List[String]].orElse(Reads.pure(Nil)) and
       (JsPath \ "permissions").read[List[String]].orElse(Reads.pure(Nil)) and
@@ -115,37 +118,6 @@ object User {
       "lastName" -> u.lastName,
       "version" -> u.version
     ).filterNulls
-  }
-
-  val mongoReader: Reads[User] = (    
-    (JsPath \ "email").readNullable[String] and
-    (JsPath \ "phone").readNullable[String] and
-    (JsPath \ "passHash").read[String].orElse(Reads.pure("")) and
-    (JsPath \ "flags").read[List[String]].orElse(Reads.pure(Nil)) and
-    (JsPath \ "roles").read[List[String]].orElse(Reads.pure(Nil)) and
-    Reads.pure(Nil) and
-    (JsPath \ "hierarchy").read[List[String]].orElse(Reads.pure(Nil)) and
-    (JsPath \ "firstName").readNullable[String] and
-    (JsPath \ "lastName").readNullable[String] and
-    (JsPath \ "_id").read[String] and
-    (JsPath \ "version").read[Int].orElse(Reads.pure(0))
-  ) (User.apply _)
-
-  val mongoWriter: OWrites[User] = new OWrites[User] {
-    def writes(u: User): JsObject = {
-      Json.obj(
-        "_id" -> u.id,
-        "email" -> u.email,
-        "phone" -> u.phone,
-        "passHash" -> u.passHash,
-        "flags" -> u.flags,
-        "roles" -> u.roles,
-        "hierarchy" -> u.hierarchy,
-        "firstName" -> u.firstName,
-        "lastName" -> u.lastName,
-        "version" -> u.version
-      ).filterNulls
-    }
   }
 
   val shortUserWriter = new OWrites[User] {

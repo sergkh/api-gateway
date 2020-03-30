@@ -1,16 +1,9 @@
 package forms
 
-import java.util.Date
-
-import models.{Branch, QueryParams, User}
+import forms.FormConstraints._
+import models.{Branch, User}
+import play.api.data.Form
 import play.api.data.Forms._
-import play.api.data.format.Formatter
-import play.api.data.validation.{Constraint, Invalid, Valid, ValidationError}
-import play.api.data.{Form, FormError, Forms, Mapping}
-import utils.DateHelpers
-
-import scala.util.matching.Regex
-import FormConstraints._
 
 object UserForm {
 
@@ -40,15 +33,6 @@ object UserForm {
       "q" -> nonEmptyText(3),
       "limit" -> optional(limit)
     )(SearchUser.apply)(SearchUser.unapply)
-  )
-
-  val queryUser = Form(
-    mapping(
-      "since" -> optional(isoDate),
-      "until" -> optional(isoDate),
-      "limit" -> optional(limit),
-      "offset" -> optional(offset)
-    )(QueryParams.apply)(QueryParams.unapply)
   )
 
   val blockUser = Form(

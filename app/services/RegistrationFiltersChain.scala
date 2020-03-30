@@ -4,7 +4,6 @@ import akka.http.scaladsl.util.FastFuture
 import javax.inject.{Inject, Singleton}
 import play.api.Configuration
 import play.api.libs.json.JsValue
-import services.RegistrationFilter
 import java.util.{Set => JSet}
 
 import org.slf4j.LoggerFactory

@@ -1,5 +1,6 @@
 package forms
 
+import akka.http.scaladsl.model.Uri
 import forms.FormConstraints._
 import play.api.data.Form
 import play.api.data.Forms._
@@ -22,7 +23,7 @@ object OAuthForm {
       "client_id" -> nonEmptyText,
       "response_type" -> enum(ResponseType),
       "scope" -> optional(nonEmptyText),
-      "redirect_uri" -> optional(nonEmptyText),
+      "redirect_uri" -> optional(nonEmptyText.transform(Uri.apply, (uri: Uri) => uri.toString)),
       "state" -> optional(nonEmptyText),
       "audience" -> optional(nonEmptyText)
     )(AuthorizeUsingProvider.apply)(AuthorizeUsingProvider.unapply)
@@ -60,16 +61,18 @@ object OAuthForm {
   case class AuthorizeUsingProvider(clientId: String, 
                            responseType: ResponseType, 
                            scope: Option[String], 
-                           redirectUri: Option[String], 
+                           redirectUri: Option[Uri],
                            state: Option[String], 
                            audience: Option[String]) {
+    def implicitFlow: Boolean = responseType == ResponseType.Token
+
     def scopesList: List[String] = scope.map(_.split(" ").toList).getOrElse(Nil)
 
     def flash: Flash = Flash(Map(
       "c" -> clientId,
       "t" -> responseType.toString,
       "sc" -> scope.getOrElse(""),
-      "r" -> redirectUri.getOrElse(""),      
+      "r" -> redirectUri.map(_.toString).getOrElse(""),
       "st" -> state.getOrElse(""),
       "a" -> audience.getOrElse("")
     ))
@@ -84,7 +87,7 @@ object OAuthForm {
           clientId, 
           ResponseType.withName(responseType),
           f.get("sc").filter(_.isEmpty), 
-          f.get("r").filter(_.isEmpty),
+          f.get("r").filter(_.isEmpty).map(Uri.apply),
           f.get("st").filter(_.isEmpty),
           f.get("a").filter(_.isEmpty)
         )

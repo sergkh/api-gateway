@@ -20,7 +20,7 @@ import play.api.mvc.{Request, RequestHeader}
 import scala.concurrent.duration.Duration
 import scala.concurrent.{ExecutionContext, Future}
 import play.api.libs.json.JsObject
-
+import utils.RichRequest._
 
 trait RegistrationService {
   def userRegistrationRequest(req: Request[_]): Future[RegistrationData]
@@ -52,10 +52,7 @@ class OpenRegistrationService @Inject()(config: Configuration,
   val requirePass = config.get[Boolean]("app.requirePassword")
 
   override def userRegistrationRequest(req: Request[_]): Future[RegistrationData] = {
-    val data = RegisterForm.openForm.bindFromRequest()(req).fold(
-      error => throw AppException(ErrorCodes.INVALID_REQUEST, error.toString),
-      data => data
-    )
+    val data = req.asForm(RegisterForm.openForm)
 
     if (requirePass && data.password.isEmpty) {
       log.warn("Password required but not set")
@@ -67,15 +64,11 @@ class OpenRegistrationService @Inject()(config: Configuration,
         throw AppException(ErrorCodes.ALREADY_EXISTS, "User with such login already exists")
 
       case false =>
-        val passwordInfo = passwordHashers.current.hash(data.password.getOrElse {
-          val random = new Array[Byte](50)
-          new SecureRandom().nextBytes(random)
-          new String(random)
-        })
+        val passwordInfoOpt = data.password.map(passwordHashers.current.hash).map(_.password)
 
         val (key, ttl) = if (data.loginFormatted.contains("@")) emailCode -> emailTtl else phoneCode -> phoneTtl
 
-        val openData = OpenRegistrationData(data.loginFormatted, passwordInfo.password, Some(ttl))
+        val openData = OpenRegistrationData(data.loginFormatted, passwordInfoOpt, Some(ttl))
 
         redis.setNxAsync[String](key + data.loginFormatted, Json.toJson(openData).toString(), ttl).map {
           case true => openData

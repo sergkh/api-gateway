@@ -420,99 +420,6 @@ PUT         /users/:userId/block                                  @controllers.U
 DELETE         /users/:userId                                     @controllers.UserController.delete(userId: String, comment: Option[String])
 
 ###
-# summary: Returns user extended information
-# tags:
-#   - Users
-# operationId: getUserExtendedInfo
-# parameters:
-#   - name: userId
-#     in: path
-#     type: string
-#     required: true
-#     description: User identifier (email/phone/uuid) or 'me' to identify self
-# responses:
-#   200:
-#     description: Retrieve user extended info
-#     schema:
-#       type: object
-###
-GET             /users/:userId/extended-info                      @controllers.UserController.retrieveExtendedInfo(userId: String)
-
-###
-# summary: Create user extended information
-# tags:
-#   - Users
-# operationId: createUserExtendedInfo
-# parameters:
-#   - name: userId
-#     in: path
-#     type: string
-#     required: true
-#     description: User identifier (email/phone/uuid) or 'me' to identify self
-# responses:
-#   200:
-#     description: Created user extended info
-#     schema:
-#       type: object
-###
-POST            /users/:userId/extended-info                      @controllers.UserController.createExtendedInfo(userId: String)
-
-###
-# summary: Update user extended information
-# tags:
-#   - Users
-# operationId: updateUserExtendedInfo
-# parameters:
-#   - name: userId
-#     in: path
-#     type: string
-#     required: true
-#     description: User identifier (email/phone/uuid) or 'me' to identify self
-# responses:
-#   200:
-#     description: Updated user extended info
-#     schema:
-#       type: object
-###
-PUT             /users/:userId/extended-info                      @controllers.UserController.updateExtendedInfo(userId: String)
-
-###
-# summary: Retrieve user structure
-# tags:
-#   - Branches
-# operationId: getUserStructure
-# parameters:
-#   - name: userId
-#     in: path
-#     type: string
-#     required: true
-#     description: User identifier (email/phone/uuid) or 'me' to identify self
-#   - name: limit
-#     in: query
-#     type: integer
-#     required: false
-#     description: Maximum number of users
-#   - name: offset
-#     in: query
-#     type: integer
-#     required: false
-#     description: Offset of users list begin
-#   - name: since
-#     in: query
-#     type: string
-#     required: false
-#     default: Month before
-#     description: Date from which users will be taken, format ISO 8601-2004
-#   - name: until
-#     in: query
-#     type: string
-#     required: false
-#     default: Current time
-#     description: Date to which users will be taken, format ISO 8601-2004
-###
-GET             /users/:userId/structure                          @controllers.UserController.retrieveOwnStructure(userId: String)
-
-###
 # summary: Authenticates a user against a social provider
 # tags:
 #   - Login
@@ -667,7 +574,7 @@ POST          /oauth/token                                        @controllers.T
 #               The result is the application identifier (clientId) and the application secret code (clientSecret)
 #               which require for basic authorization.
 # tags:
-#   - OAuth
+#   -  Clients management
 # operationId: registerOauthApplication
 # parameters:
 #   - name: body
@@ -687,7 +594,7 @@ POST          /oauth/token                                        @controllers.T
 #           format: int64
 #           description: Application unique identifier     
 ###
-POST          /users/oauth-apps                                 @controllers.OAuthController.createApp
+POST          /users/oauth-apps                                 @controllers.ClientsController.createApp
 
 ###
 # summary: Returns list of refresh tokens for a user
@@ -709,7 +616,7 @@ GET           /users/:userId/tokens                                       @contr
 ###
 # summary: Returns Thirdparty application by given id
 # tags:
-#   - OAuth
+#   - Clients management
 # operationId: getOAuthApplication
 # parameters:
 #   - name: userId
@@ -728,12 +635,12 @@ GET           /users/:userId/tokens                                       @contr
 #     schema:
 #       $ref: '#/definitions/models.ClientApp'
 ###
-GET           /users/:userId/oauth-apps/:id                             @controllers.OAuthController.getAppByOwner(userId: String, id: String)
+GET           /users/:userId/oauth-apps/:id                             @controllers.ClientsController.getAppByOwner(userId: String, id: String)
 
 ###
 # summary: Returns Thirdparty application by id
 # tags:
-#   - OAuth
+#   - Clients management
 # operationId: getOAuthApplicationById
 # parameters:
 #   - name: id
@@ -748,13 +655,13 @@ GET           /users/:userId/oauth-apps/:id                             @control
 #     schema:
 #       $ref: '#/definitions/models.ClientApp'
 ###
-GET           /oauth-apps/:id                                     @controllers.OAuthController.getPublicAppInformation(id: String)
+GET           /oauth-apps/:id                                     @controllers.ClientsController.getPublicAppInformation(id: String)
 
 
 ###
 # summary: Updates Thirdparty application by given id
 # tags:
-#   - OAuth
+#   - Clients management
 # operationId: updateOAuthApplication
 # parameters:
 #   - name: userId
@@ -776,12 +683,12 @@ GET           /oauth-apps/:id                                     @controllers.O
 #     schema:
 #       $ref: '#/definitions/models.ClientApp'
 ###
-PUT           /users/:userId/oauth-apps/:id                             @controllers.OAuthController.updateApp(userId: String, id: String)
+PUT           /users/:userId/oauth-apps/:id                             @controllers.ClientsController.updateApp(userId: String, id: String)
 
 ###
 # summary: Removes Thirdparty application by given id
 # tags:
-#   - OAuth
+#   - Clients management
 # operationId: removeOAuthApplication
 # parameters:
 #   - name: userId
@@ -798,12 +705,12 @@ PUT           /users/:userId/oauth-apps/:id                             @control
 #   204:
 #     description: Application successfully removed
 ###
-DELETE        /users/:userId/oauth-apps/:id                             @controllers.OAuthController.removeApplication(userId: String, id: String)
+DELETE        /users/:userId/oauth-apps/:id                             @controllers.ClientsController.removeApplication(userId: String, id: String)
 
 ###
 # summary: Returns all Thirdparty applications for given user
 # tags:
-#   - OAuth
+#   - Clients management
 # operationId: getUserOAuthApplications
 # parameters:
 #   - name: userId
@@ -826,7 +733,7 @@ DELETE        /users/:userId/oauth-apps/:id                             @control
 #           format: int64
 #           description: Count
 ###
-GET           /users/:userId/oauth-apps                                 @controllers.OAuthController.listApplications(userId: String)
+GET           /users/:userId/oauth-apps                                 @controllers.ClientsController.listApplications(userId: String)
 
 
 ###

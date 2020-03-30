@@ -15,7 +15,7 @@ trait RegistrationData {
 
   def login: String
 
-  def passHash: String
+  def passHash: Option[String]
 
   def optEmail: Option[String] = if (login.contains("@")) Some(login) else None
 
@@ -25,7 +25,7 @@ trait RegistrationData {
 
 }
 
-case class OpenRegistrationData(login: String, passHash: String, ttl: Option[Int]) extends RegistrationData {
+case class OpenRegistrationData(login: String, passHash: Option[String], ttl: Option[Int]) extends RegistrationData {
   override def format: String = "open"
 }
 

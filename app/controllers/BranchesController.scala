@@ -10,7 +10,7 @@ import javax.inject.{Inject, Singleton}
 import models.AppEvent._
 import models.{AppException, ErrorCodes, JwtEnv}
 import play.api.libs.json.Json
-import security.{WithAnyPermission, WithBranchPermission}
+import security.{WithBranchPermission, WithPermission}
 import services.BranchesService
 import utils.RichRequest._
 
@@ -25,7 +25,7 @@ class BranchesController @Inject()(
  extends BaseController {
   implicit val branchesService = branches
 
-  val editPerm = WithAnyPermission("branches:edit")
+  val editPerm = WithPermission("branches:edit")
   val readPerm = WithBranchPermission("branches:read")
 
   def create = silh.SecuredAction(editPerm).async { request =>

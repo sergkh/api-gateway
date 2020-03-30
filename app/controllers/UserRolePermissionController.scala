@@ -11,13 +11,12 @@ import models.AppEvent.{RoleCreated, RoleDeleted, RoleUpdated}
 import models.{AppException, ErrorCodes, JwtEnv, RolePermissions}
 import play.api.libs.json.Json
 import security.WithPermission
-import services.{UserService, UsersRolesService}
+import services.UsersRolesService
 import utils.RichRequest._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 
 class UserRolePermissionController @Inject()(usersPermissionsService: UsersRolesService,
-                                             usersService: UserService,
                                              eventBus: EventsStream,
                                              silh: Silhouette[JwtEnv])
                                             (implicit system: ActorSystem) extends BaseController {
@@ -30,7 +29,7 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoles
     val role = request.asForm(createForm)
 
     usersPermissionsService.get(role.role.toString) flatMap {
-      case Some(job) =>
+      case Some(_) =>
         log.info(s"Permissions for role ${role.role} already exist")
         throw AppException(ErrorCodes.ALREADY_EXISTS, s"Role ${role.role} already exist")
 
@@ -64,7 +63,6 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoles
     for {
       _ <- usersPermissionsService.update(rolePerms)
       _ <- eventBus.publish(RoleUpdated(rolePerms))
-      _ <- usersService.clearUserCaches()
     } yield {
       log.info(s"Permission for $role was updated by ${request.identity.id}")
       NoContent.withHeaders("Content-Type" -> "application/json")

@@ -26,17 +26,12 @@ import scala.concurrent.{ExecutionContext, Future}
   * Handles actions to users.
   */
 @Singleton
-class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: AsyncCacheApi,
-                            @NamedCache("dynamic-emails-cache") emailsCache: AsyncCacheApi,
-                            @NamedCache("dynamic-phones-cache") phonesCache: AsyncCacheApi,
-                            @NamedCache("dynamic-social-cache") socialCache: AsyncCacheApi,
+class UserService @Inject()(
                             rolesCache: AsyncCacheApi,
                             rolesService: UsersRolesService,
                             reactiveMongoApi: ReactiveMongoApi,
                             authService: SocialAuthService,
                             conf: Configuration)(implicit ec: ExecutionContext) extends IdentityService[User] with UserExistenceService with Logging {
-
-  private[this] final val futureNoneUser: Future[Option[User]] = FastFuture.successful(None)
 
   val cachedTime = conf.get[FiniteDuration]("session.cache")
 
@@ -51,21 +46,14 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     * @return The retrieved user or None if no user could be retrieved for the given login info.
     */
   def retrieve(login: LoginInfo): Future[Option[User]] = {
-    log.debug(s"Getting user: $login")
+    log.debug("Getting user by from DB: " + login)
 
-    getFromCacheByAnyId(login.providerKey) flatMap {
-      case Some(user) =>
-        FastFuture.successful(Some(user))
-      case None =>
-        log.debug("Getting user by from DB: " + login)
-        getByAnyIdOpt(login.providerKey) map {
-          case Some(u) if u.hasFlag(User.FLAG_BLOCKED) =>
-            throw AppException(ErrorCodes.BLOCKED_USER, s"User ${u.identifier} is blocked")
-          case Some(u) if u.hasFlag(User.FLAG_PASSWORD_EXP) =>
-            throw AppException(ErrorCodes.EXPIRED_PASSWORD, s"User ${u.identifier} has expired password! Please change it.")
-          case Some(u) => Some(cacheUser(u))
-          case None => None
-        }
+    getByAnyIdOpt(login.providerKey) map {
+      case Some(u) if u.hasFlag(User.FLAG_BLOCKED) =>
+        throw AppException(ErrorCodes.BLOCKED_USER, s"User ${u.identifier} is blocked")
+      case Some(u) if u.hasFlag(User.FLAG_PASSWORD_EXP) =>
+        throw AppException(ErrorCodes.EXPIRED_PASSWORD, s"User ${u.identifier} has expired password! Please change it.")
+      case userOpt: Any => userOpt
     }
   }
 
@@ -78,18 +66,14 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     * @return The saved user.
     */
   def save(user: User): Future[User] = {
-    removeFromCaches(user)
-  
     usersCollection.flatMap(_.insert.one(user))
                    .map(_ => user)
                    .recover(processUserDbEx[User](user.id))
   }
 
   def updateFlags(user: User): Future[User] = {
-    removeFromCaches(user)
-
     usersCollection.flatMap(_.update.one(
-      byField("_id", user.id),
+      byId(user.id),
       BSONDocument(
         "$set" -> BSONDocument("flags" -> user.flags),
         "$inc" -> BSONDocument("version" -> 1)
@@ -112,25 +96,6 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
       userOpt <- profile.email.map(getByAnyIdOpt) getOrElse Future.successful(None)
       _       <- Future.successful(log.info(s"User $userOpt"))
       user    <- userOpt.map(Future.successful).getOrElse(createUserFromSocialProfile(providerKey, profile, authInfo))
-    } yield user
-  }
-
-  private def createUserFromSocialProfile(providerKey: String, profile: CommonSocialProfile, authInfo: => AuthInfo): Future[User] = {
-      
-    val user = User(
-      email = profile.email.map(_.toLowerCase()),
-      passHash = "",
-      firstName = profile.firstName,
-      lastName = profile.lastName
-    )
-
-    log.info(s"Creating a new user for a social profile: $user")
-
-    for {
-      _ <- Future.successful(log.info("Saving social profile"))
-      _ <- authService.save(user.id, profile.loginInfo, authInfo)
-      _ <- Future.successful(log.info("Saved social profile"))
-      _ <- usersCollection.flatMap(_.insert.one(user).recover(processUserDbEx[User](user.id)))
     } yield user
   }
 
@@ -172,7 +137,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   def updatePassHash(login: String, pass: PasswordInfo): Future[Unit] = {
     usersCollection.flatMap { users =>
       val criteria = login match {
-        case uuid: String if User.checkUuid(uuid) => byField("_id", uuid)
+        case id: String if User.checkUuid(id) => byId(id)
         case email: String if User.checkEmail(email) => byField("email", email.toLowerCase)
         case phone: String if User.checkPhone(phone) => byField("phone", phone)
       }
@@ -182,7 +147,7 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
         "$inc" -> BSONDocument("version" -> 1)
       )
 
-      users.update(criteria, obj).map(Function.const(()))
+      users.update.one(criteria, obj).map(Function.const(()))
     }
   }
 
@@ -201,22 +166,18 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
   }
 
   def delete(user: User): Future[Unit] = {
-    usersCollection.map { users =>
-
-      users.delete(true).one(byField("_id", user.id))
-
-      removeFromCaches(user)
-
-      authService.removeAll(user.id)
-    }
+    for {
+      _ <- usersCollection.flatMap(_.delete(true).one(byField("_id", user.id)))
+      _ <- authService.removeAll(user.id)
+    } yield ()
   }
 
-  def list(criteria: Option[JsObject], query: QueryParams): Future[Seq[User]] = {
-    val opts = QueryOpts(skipN = query.offset)
+  def list(criteria: Option[JsObject], limit: Int, offset: Int): Future[Seq[User]] = {
+    val opts = QueryOpts(skipN = offset)
     val _criteria = criteria.getOrElse(JsObject(Nil))
 
     usersCollection.flatMap(_.find(_criteria).options(opts)
-      .cursor[User](ReadPreference.secondaryPreferred).collect[List](query.limit, errorHandler[User]))
+      .cursor[User](ReadPreference.secondaryPreferred).collect[List](limit, errorHandler[User]))
   }
 
   def count(branch: Option[String] = None): Future[Int] = {
@@ -224,10 +185,10 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     usersCollection.flatMap(_.count(selector))
   }
 
-  def search(criteria: JsObject, query: QueryParams): Future[Seq[User]] = {
-    val opts = QueryOpts(skipN = query.offset)
+  def search(criteria: JsObject, limit: Int, offset: Int): Future[Seq[User]] = {
+    val opts = QueryOpts(skipN = offset)
     usersCollection.flatMap(_.find(criteria).options(opts)
-      .cursor[User](ReadPreference.secondaryPreferred).collect[List](query.limit, errorHandler[User]))
+      .cursor[User](ReadPreference.secondaryPreferred).collect[List](limit, errorHandler[User]))
   }
 
   def getByAnyId(id: String): Future[User] = getByAnyIdOpt(id).map(_ getOrElse (throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User '$id' not found")))
@@ -248,6 +209,15 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
       optUser.map(withPermissions(_).map(Some(_))).getOrElse(Future.successful(None))
     }
   }
+
+  def updateHierarchy(hierarchy: List[String], newHierarchy: List[String]): Future[Unit] = for {
+    col <- usersCollection
+    selector = Json.obj("hierarchy" -> Json.obj("$all" -> hierarchy))
+    push = Json.obj("$push" -> Json.obj("hierarchy" -> Json.obj("$each" -> hierarchy.drop(1))))
+    pull = Json.obj("$pullAll" -> Json.obj("hierarchy" -> newHierarchy))
+    _ <- col.update.one(selector, push, multi = true)
+    _ <- col.update.one(selector, pull, multi = true)
+  } yield ()
 
   def withPermissions(u: User): Future[User] =
     loadPermissions(u.roles).map(p => u.copy(permissions = p))
@@ -283,51 +253,21 @@ class UserService @Inject()(@NamedCache("dynamic-users-cache")   usersCache: Asy
     log.warn("Error occurred on users reading", ex)
   })
 
-  private def getFromCacheByAnyId(id: String): Future[Option[User]] = id match {
-    case uuid: String if User.checkUuid(uuid) =>
-      usersCache.get[User](uuid)
-    case email: String if User.checkEmail(email) =>
-      emailsCache.get[String](email).flatMap(_.map(usersCache.get[User]).getOrElse(futureNoneUser))
-    case phone: String if User.checkPhone(phone) =>
-      phonesCache.get[String](phone).flatMap(_.map(usersCache.get[User]).getOrElse(futureNoneUser))
-    case socialId: String if User.checkSocialProviderKey(socialId) =>
-      socialCache.get[String](socialId).flatMap(_.map(usersCache.get[User]).getOrElse(futureNoneUser))
-    case _ => futureNoneUser
-  }
+  private def createUserFromSocialProfile(providerKey: String, profile: CommonSocialProfile, authInfo: => AuthInfo): Future[User] = {
 
-  private def cacheUser(user: User): User = {
-    usersCache.set(user.id, user, cachedTime)
+    val user = User(
+      email = profile.email.map(_.toLowerCase()),
+      firstName = profile.firstName,
+      lastName = profile.lastName
+    )
 
-    for (email <- user.email) {
-      emailsCache.set(email, user.id, cachedTime)
-    }
+    log.info(s"Creating a new user for a social profile: $user")
 
-    for (phone <- user.phone) {
-      phonesCache.set(phone, user.id, cachedTime)
-    }
-
-    authService.retrieveAllSocialInfo(user.id) map { socialIdLst =>
-      for (socialId <- socialIdLst) {
-        socialCache.set(socialId, user.id, cachedTime)
-      }
-    }
-
-    user
-  }
-
-  private def removeFromCaches(user: User): Unit = {
-    usersCache.remove(user.id)
-    for (email <- user.email) emailsCache.remove(email)
-    for (phone <- user.phone) phonesCache.remove(phone)
-  }
-
-  def clearUserCaches(): Future[Unit] = {
     for {
-     _ <- usersCache.removeAll()
-     _ <- emailsCache.removeAll()
-     _ <- phonesCache.removeAll()
-     _ <- socialCache.removeAll()
-     _ <- rolesCache.removeAll()
-    } yield ()
+      _ <- Future.successful(log.info("Saving social profile"))
+      _ <- authService.save(user.id, profile.loginInfo, authInfo)
+      _ <- Future.successful(log.info("Saved social profile"))
+      _ <- usersCollection.flatMap(_.insert.one(user).recover(processUserDbEx[User](user.id)))
+    } yield user
   }
 }

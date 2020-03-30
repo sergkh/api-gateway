@@ -52,7 +52,6 @@ class InitializationService @Inject()(config: Configuration,
 
 
   def initAdminUser(): User = {
-    implicit val userWriter = User.mongoWriter
     val usersCollection = db.map(_.collection[BSONCollection]("users"))
     
     usersCollection.map(_.indexesManager) map { manager =>
@@ -64,7 +63,7 @@ class InitializationService @Inject()(config: Configuration,
 
     val admin = User(
       email = Some(config.get[String]("app.defaultAdmin")),
-      passHash = passwordHasher.current.hash(password).password,
+      passHash = Some(passwordHasher.current.hash(password).password),
       roles = List(AdminRole)
     )
 

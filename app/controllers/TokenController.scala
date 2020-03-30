@@ -12,7 +12,7 @@ import forms.OAuthForm
 import javax.inject.{Inject, Singleton}
 import models.AppEvent.Login
 import models.ErrorCodes._
-import models.{AppException, ErrorCodes, JwtEnv}
+import models.{AppException, JwtEnv}
 import play.api.libs.json.Json
 import security.{KeysManager, WithUser}
 import services.{ClientAppsService, TokensService, UserService}
@@ -21,18 +21,15 @@ import utils.RichRequest._
 import utils.RichJson._
 
 import scala.concurrent.ExecutionContext
-import play.api.mvc.Headers
-import play.api.http.HeaderNames
-import play.api.mvc.RequestHeader
-import scala.util.Try
-import models.ClientApp
-import forms.OAuthForm.AuthorizeUsingProvider
 import scala.concurrent.Future
 import models.RefreshToken
-import utils.Settings
+import play.api.Configuration
+
+import scala.concurrent.duration.FiniteDuration
 
 @Singleton
 class TokenController @Inject()(silh: Silhouette[JwtEnv],
+                                conf: Configuration,
                                 oauth: ClientAppsService,
                                 tokens: TokensService,
                                 keyManager: KeysManager,
@@ -40,6 +37,8 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
                                 eventBus: EventsStream
                               )
                                (implicit exec: ExecutionContext) extends BaseController {
+
+  val RefreshTokenTTL = conf.get[FiniteDuration]("oauth.refreshTokenTTL")
 
   def authCerts = Action { _ =>
 
@@ -65,7 +64,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
   //   }
   // }
 
-  def getAccessToken = Action.async { implicit request =>    
+  def getAccessToken = Action.async { implicit request =>
     val refresh = request.asForm(OAuthForm.getAccessTokenFromRefreshToken) // TODO: implement other forms
     
     val (clientId, clientSecret) = request.basicAuth.getOrElse {
@@ -87,7 +86,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
     } yield {
       log.info(s"Succeed user authentication ${loginInfo.providerKey}")
       
-      val expireIn = ((authenticator.expirationDateTime.toInstant.getMillis / 1000) - 
+      val expireIn = ((authenticator.expirationDateTime.toInstant.getMillis / 1000) -
                   LocalDateTime.now().toInstant(ZoneOffset.UTC).getEpochSecond())
 
       Ok(Json.obj(
@@ -95,7 +94,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
         "access_token" -> token,
         "expires_in" -> expireIn,
         "scope" -> refreshToken.scope
-        // TODO: "id_token": "ID_token"        
+        // TODO: "id_token": "ID_token"
       ).filterNull)
     }
   }

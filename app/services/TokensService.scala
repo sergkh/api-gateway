@@ -8,7 +8,6 @@ import services.formats.MongoFormats._
 import utils.Logging
 
 import scala.concurrent.{ExecutionContext, Future}
-import reactivemongo.api.QueryOpts
 import reactivemongo.api.ReadPreference
 import reactivemongo.bson.BSONDocument
 import reactivemongo.api.Cursor

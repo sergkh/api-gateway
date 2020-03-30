@@ -119,7 +119,7 @@ class CustomJWTAuthenticatorService(settings: JWTAuthenticatorSettings,
       jwtId = Some(authenticator.id)
     )
 
-    Jwt.encode(header, claim, privKey)
+    JwtJson.encode(header, claim, privKey)
   }
 
     /**
@@ -138,9 +138,9 @@ class CustomJWTAuthenticatorService(settings: JWTAuthenticatorSettings,
     for {
       keyId     <- getKeyId(token)
       publicKey <- Try(keysManager.authPubKey(keyId).getOrElse(throw new RuntimeException("Unknown key ID")))
-      claim     <- Jwt.decode(token, publicKey, List(algorithm))
+      claim     <- JwtJson.decode(token, publicKey, List(algorithm))
     } yield {
-      if (!claim.issuer.contains(settings.issuerClaim)) throw new RuntimeException("Token issued by a different issuer")
+      if (!claim.issuer.contains(settings.issuerClaim)) throw new RuntimeException(s"Token issued by a different issuer: '${claim.issuer}', required: ${settings.issuerClaim}'\n${token}")
       val subject = authenticatorEncoder.decode(claim.subject.getOrElse{throw new RuntimeException("Subject is not present")})
 
       val loginInfo = Json.parse(subject).as[LoginInfo]

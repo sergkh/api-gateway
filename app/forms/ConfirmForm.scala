@@ -24,5 +24,4 @@ object ConfirmForm {
 
   case class ConfirmData(login: String, code: String)
   case class ReConfirm(login: String)
-
 }

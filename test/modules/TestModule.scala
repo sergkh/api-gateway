@@ -40,7 +40,6 @@ object TestModule extends ScalaModule with Context with MockitoSugar {
   val eventBus = new CustomEventBus(actorSystem)
   private val db = mock[ReactiveMongoApi]
 
-
   /**
     * A Silhouette fake environment.
     */
@@ -105,7 +104,7 @@ object TestModule extends ScalaModule with Context with MockitoSugar {
     None,
     new Base64AuthenticatorEncoder(),
     new SecureRandomIDGenerator(),
-    mock[KeysManager],
+    new KeysManager(),
     Clock())
 
 

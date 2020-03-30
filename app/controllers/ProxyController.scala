@@ -16,7 +16,7 @@ import play.api.cache.SyncCacheApi
 import play.api.libs.json.Json
 import play.api.libs.streams.Accumulator
 import play.api.mvc.BodyParser
-import security.{ConfirmationCodeService, WithAnyPermission}
+import security.{ConfirmationCodeService, WithPermission}
 import services.{ProxyService, RoutingService, StreamedProxyRequest}
 import utils.Responses._
 import utils.RichJson._
@@ -43,8 +43,6 @@ class ProxyController @Inject()(silh: Silhouette[JwtEnv],
 
   val otpLength = conf.getOptional[Int]("confirmation.otp.length").getOrElse(ConfirmationCodeService.DEFAULT_OTP_LEN)
 
-  private val specialPermission = "confirmation:not_required"
-
   val meRegex = """(.*)(\/me\b)(\/?.*)""".r
 
   implicit val servicesFormat = Json.format[Service]
@@ -53,7 +51,7 @@ class ProxyController @Inject()(silh: Silhouette[JwtEnv],
     Accumulator.source[ByteString].map(Right.apply)
   }
 
-  def listServices = silh.SecuredAction(WithAnyPermission("swagger:read")) { request =>
+  def listServices = silh.SecuredAction(WithPermission("swagger:read")) { _ =>
 
   val services = router.listServices
     Ok(
@@ -75,13 +73,9 @@ class ProxyController @Inject()(silh: Silhouette[JwtEnv],
 
     validateContentType(request, service)
 
-    val optUser = getUser(request)
+    val url = service.makeUrl(replaceMe(path, request.identity)).get
 
-    val url = service.makeUrl(replaceMe(path, optUser)).get
-
-    streamedProxy.passToUrl(url, service.secret, StreamedProxyRequest(
-      request, optUser, Option(request.body)
-    ))
+    streamedProxy.passToUrl(url, service.secret, StreamedProxyRequest(request, Option(request.body)))
   }
 
   private def validateContentType(request: UserAwareRequest[JwtEnv, Source[ByteString, _]], service: Service): Unit = {
@@ -107,13 +101,6 @@ class ProxyController @Inject()(silh: Silhouette[JwtEnv],
 
       case url: Any => url
     }
-  }
-
-  private def getUser(request: UserAwareRequest[JwtEnv, Source[ByteString, _]]): Option[User] = request.authenticator match {
-    case Some(a) if a.isOauth =>
-      val oauthPermissions = cache.getOrElseUpdate[List[String]]("login:" + a.id, 20.minute)(a.oauthPermissions)
-      request.identity.map(_.copy(permissions = oauthPermissions))
-    case _ => request.identity
   }
 
 }

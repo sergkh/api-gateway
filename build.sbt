@@ -50,7 +50,7 @@ libraryDependencies ++= Seq(
   "com.mohiva"        %% "play-silhouette-password-bcrypt"  % silhouetteVersion,
   "com.mohiva"        %% "play-silhouette-persistence"      % silhouetteVersion,
   "com.mohiva"        %% "play-silhouette-crypto-jca"       % silhouetteVersion,
-  "com.pauldijou"     %% "jwt-core"                         % "4.3.0",
+  "com.pauldijou"     %% "jwt-play"                         % "4.3.0",
   "com.iheart"        %% "ficus"                            % "1.4.7",
   "org.reactivemongo" %% "play2-reactivemongo"              % "0.20.3-play28",
   "org.reactivemongo" %% "reactivemongo-bson-macros"        % "0.20.3",

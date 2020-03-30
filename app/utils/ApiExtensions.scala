@@ -107,13 +107,24 @@ object JwtExtension {
     def withUserInfo(u: User, scope: Option[String] = None, audience: Option[String] = None): JWTAuthenticator = auth.copy(
       customClaims = Some(Json.obj(
         "id" -> u.id,
-        "roles" -> u.roles,
+        "roles" -> Option(u.roles).filterNot(_.isEmpty),
         "name" -> u.fullName,
         "email" -> u.email,
-        "permissions" ->  scope.fold(u.permissions)(_.split(" ").toList),
-        "aud" -> audience
+        "permissions" -> Option(scope.fold(u.permissions)(_.split(" ").toList)).filterNot(_.isEmpty),
+        "aud" -> Option(audience.toList).filterNot(_.isEmpty)
       ).filterNull)
     )
+
+    def asPartialUser: Option[User] = auth.customClaims.flatMap { claims => Try{
+        val json = claims.as[JsObject]
+        User(
+          id = (json \ "id").as[String],
+          email = (json \ "email").asOpt[String],
+          roles = (json \ "roles").asOpt[List[String]].getOrElse(Nil),
+          permissions = (json \ "permissions").asOpt[List[String]].getOrElse(Nil)
+        )
+      }.toOption
+    }
   }
 
 }

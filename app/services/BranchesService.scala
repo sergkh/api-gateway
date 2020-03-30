@@ -7,10 +7,12 @@ import models.{AppException, Branch, ErrorCodes, User}
 import play.api.libs.json._
 import play.api.{Configuration, Logging}
 import play.modules.reactivemongo.ReactiveMongoApi
+import reactivemongo.api.bson.collection.BSONCollection
 import reactivemongo.api.{Cursor, ReadPreference}
+import reactivemongo.bson.BSONDocument
 import reactivemongo.core.errors.DatabaseException
 import reactivemongo.play.json._
-import reactivemongo.play.json.collection.JSONCollection
+import services.formats.MongoFormats._
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -24,12 +26,12 @@ trait BranchesService {
 }
 
 @Singleton
-class MongoBranchesService @Inject()(conf: Configuration, mongoApi: ReactiveMongoApi)(implicit exec: ExecutionContext)
+class MongoBranchesService @Inject()(conf: Configuration,
+                                     userService: UserService,
+                                     mongoApi: ReactiveMongoApi)(implicit exec: ExecutionContext)
   extends BranchesService with Logging {
 
   private val MAX_TRIES = 5
-
-  implicit val format = Branch.mongoFormat
 
   def create(create: CreateBranch, user: User): Future[Branch] = {
     val id = Branch.nextId
@@ -56,7 +58,6 @@ class MongoBranchesService @Inject()(conf: Configuration, mongoApi: ReactiveMong
         case Branch.ROOT => Future.successful(Nil)
         case parentId: String => getOrFail(parentId) map (parent => parent.hierarchy)
       }
-      uCollection <- users
       bCollection <- branches
       updateBranch = Branch(update.name, user.id, update.description, id :: newParentHierarchy, id)
       optionalOldBranch <- bCollection.findAndUpdate(byId(id), updateBranch, false).map(_.result[Branch])
@@ -68,10 +69,9 @@ class MongoBranchesService @Inject()(conf: Configuration, mongoApi: ReactiveMong
             val selector = Json.obj("hierarchy" -> Json.obj("$all" -> oldBranch.hierarchy))
             val push = Json.obj("$push" -> Json.obj("hierarchy" -> Json.obj("$each" -> newParentHierarchy)))
             val pull = Json.obj("$pullAll" -> Json.obj("hierarchy" -> oldParentHierarchy))
-            bCollection.update(selector, push, multi = true)
-            bCollection.update(selector, pull, multi = true)
-            uCollection.update(selector, push, multi = true)
-            uCollection.update(selector, pull, multi = true)
+            bCollection.update.one(selector, push, multi = true)
+            bCollection.update.one(selector, pull, multi = true)
+            userService.updateHierarchy(oldBranch.hierarchy, newParentHierarchy)
           }
           oldBranch -> updateBranch
         case _ => throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Branch $id isn't found")
@@ -97,12 +97,10 @@ class MongoBranchesService @Inject()(conf: Configuration, mongoApi: ReactiveMong
   }
 
   def remove(id: String): Future[Branch] = {
-
     val futureResult = for {
-      uCollection <- users
       bCollection <- branches
-      assignedUsers <- uCollection.count(Some(Json.obj("hierarchy.0" -> id)))
-      childBranches <- bCollection.count(Some(Json.obj("hierarchy.1" -> id)))
+      assignedUsers <- userService.count(Some(id))
+      childBranches <- bCollection.count(Some(BSONDocument("hierarchy.1" -> id)))
     } yield {
       if (childBranches > 0) { throw AppException(ErrorCodes.NON_EMPTY_SET, s"Branch $id containing at least one child branch!") }
       else if (assignedUsers > 0) { throw AppException(ErrorCodes.NON_EMPTY_SET, s"Branch $id containing at least one user!") }
@@ -110,6 +108,7 @@ class MongoBranchesService @Inject()(conf: Configuration, mongoApi: ReactiveMong
         _.getOrElse(throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Branch $id isn't found"))
       ) }
     }
+
     futureResult.flatten
   }
 
@@ -143,9 +142,5 @@ class MongoBranchesService @Inject()(conf: Configuration, mongoApi: ReactiveMong
     }
   }
 
-  private def users = mongoApi.database.map(_.collection[JSONCollection]("users"))
-
-  private def branches = mongoApi.database.map(_.collection[JSONCollection]("branches"))
-
-  private def byId(id: String) = Json.obj("_id" -> id)
+  private def branches = mongoApi.database.map(_.collection[BSONCollection]("branches"))
 }
