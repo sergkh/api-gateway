@@ -33,6 +33,8 @@ import models.AuthCode
 import play.api.Configuration
 
 import scala.concurrent.duration.FiniteDuration
+import events.EventsStream
+import models.AppEvent.Login
 
 
 /**
@@ -50,6 +52,7 @@ class SocialAuthController @Inject()(
                                       tokens: TokensService,
                                       authCodes: AuthCodesService,
                                       authInfoRepository: AuthInfoRepository,
+                                      eventBus: EventsStream,
                                       socialProviderRegistry: SocialProviderRegistry)(implicit ec: ExecutionContext)
   extends BaseController with I18nSupport {
 
@@ -100,8 +103,7 @@ class SocialAuthController @Inject()(
           _             <- conditionalFail(!authReq.redirectUri.forall(uri => app.matchRedirect(uri.toString())), ErrorCodes.ACCESS_DENIED, "Invalid redirect URL")
           profile       <- p.retrieveProfile(authInfo)
           user          <- initUser(request.identity, profile, authInfo)
-          _             <- conditionalFail(
-            user.hasAllPermission(authReq.scopesList :_*), ErrorCodes.ACCESS_DENIED, "Invalid redirect URL")
+          _             <- conditionalFail(!user.hasAllPermission(authReq.scopesList :_*), ErrorCodes.ACCESS_DENIED, "Invalid scopes")
           result        <- authReq.responseType match {
             case ResponseType.Code =>
               respondWithCode(profile, user, authInfo, authReq)
@@ -137,9 +139,8 @@ class SocialAuthController @Inject()(
       authenticator     <- silh.env.authenticatorService.create(profile.loginInfo)
       userAuthenticator  = authenticator.withUserInfo(user, authReq.scope, authReq.audience)
       token             <- silh.env.authenticatorService.init(userAuthenticator)
+      _                 <- eventBus.publish(Login(user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis))
     } yield {
-        silh.env.eventBus.publish(LoginEvent(user, request))
-
         log.info(s"User $user access token created")
 
         val expireIn = ((authenticator.expirationDateTime.toInstant.getMillis / 1000) -
@@ -177,8 +178,6 @@ class SocialAuthController @Inject()(
     )
 
     authCodes.store(code) map { _ =>
-      silh.env.eventBus.publish(LoginEvent(user, request))
-
       log.info(s"User $user auth code created")
 
       authReq.redirectUri.map { uri =>

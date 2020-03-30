@@ -4,6 +4,7 @@ import java.time.{Instant, LocalDateTime, ZoneOffset}
 
 import models._
 import reactivemongo.bson._
+import com.mohiva.play.silhouette.api.util.PasswordInfo
 
 object MongoFormats {
   implicit object LocalDateTimeWriter extends BSONWriter[LocalDateTime, BSONDateTime] {
@@ -14,11 +15,22 @@ object MongoFormats {
     def read(dt:BSONDateTime): LocalDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(dt.value), ZoneOffset.UTC)
   }
 
+  implicit val passwordInfoReader: BSONReader[BSONString, PasswordInfo] = BSONReader[BSONString, PasswordInfo] { str =>
+    str.value.split("$") match {
+      case Array(hasher, pass, salt) => PasswordInfo(hasher, pass, Some(salt))
+      case Array(hasher, pass) => PasswordInfo(hasher, pass, None)
+    }
+  }
+
+  implicit val passwordInfoWriter: BSONWriter[PasswordInfo, BSONString] = BSONWriter[PasswordInfo, BSONString] { info =>
+    BSONString(info.hasher + "$" + info.password + info.salt.map(salt => "$" + salt).getOrElse(""))    
+  }
+
   implicit val userBsonReader: BSONDocumentReader[User] = BSONDocumentReader[User] { doc =>
     User(
       email = doc.getAs[String]("email"),
       phone = doc.getAs[String]("phone"),
-      passHash = doc.getAs[String]("passHash"),
+      password = doc.getAs[PasswordInfo]("password"),
       flags = doc.getAs[List[String]]("flags").getOrElse(Nil),
       roles = doc.getAs[List[String]]("roles").getOrElse(Nil),
       hierarchy = doc.getAs[List[String]]("hierarchy").getOrElse(Nil),

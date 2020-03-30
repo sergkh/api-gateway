@@ -19,9 +19,7 @@ class PasswordInfoDao @Inject()(userService: UserService) extends DelegableAuthI
   override val classTag: ClassTag[PasswordInfo] = scala.reflect.classTag[PasswordInfo]
 
   override def find(loginInfo: LoginInfo): Future[Option[PasswordInfo]] = {
-    userService.retrieve(loginInfo).map(
-      _.flatMap(_.passHash.map(passHash => PasswordInfo(BCryptPasswordHasher.ID, passHash)))
-    )
+    userService.retrieve(loginInfo).map(_.flatMap(_.password))
   }
 
   override def add(loginInfo: LoginInfo, pass: PasswordInfo): Future[PasswordInfo] = {

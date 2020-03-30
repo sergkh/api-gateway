@@ -86,10 +86,10 @@ object OAuthForm {
       } yield AuthorizeUsingProvider(
           clientId, 
           ResponseType.withName(responseType),
-          f.get("sc").filter(_.isEmpty), 
-          f.get("r").filter(_.isEmpty).map(Uri.apply),
-          f.get("st").filter(_.isEmpty),
-          f.get("a").filter(_.isEmpty)
+          f.get("sc").filterNot(_.isEmpty), 
+          f.get("r").filterNot(_.isEmpty).map(Uri.apply),
+          f.get("st").filterNot(_.isEmpty),
+          f.get("a").filterNot(_.isEmpty)
         )
     }
   }

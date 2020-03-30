@@ -11,6 +11,7 @@ import com.mohiva.play.silhouette.api.exceptions.ProviderException
 import com.mohiva.play.silhouette.api.repositories.AuthInfoRepository
 import com.mohiva.play.silhouette.api.services.AuthenticatorService
 import com.mohiva.play.silhouette.api.util.Credentials
+import com.mohiva.play.silhouette.api.util.PasswordHasherRegistry
 import com.mohiva.play.silhouette.api.{LoginInfo, Silhouette}
 import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
 import com.mohiva.play.silhouette.impl.exceptions.{IdentityNotFoundException, InvalidPasswordException}
@@ -36,6 +37,7 @@ import scala.concurrent.ExecutionContext.Implicits._
 import scala.concurrent.Future
 import scala.language.implicitConversions
 
+
 /**
   * The main application controller that handles login/logout, registration etc. requests.
   */
@@ -45,6 +47,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
                                       authInfoRepository: AuthInfoRepository,
                                       credentialsProvider: CredentialsProvider,
                                       confirmationService: ConfirmationCodeService,
+                                      passwordHashers: PasswordHasherRegistry,
                                       config: Configuration,
                                       eventBus: EventsStream,
                                       proxy: ProxyService,
@@ -141,7 +144,9 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
         throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
       }
 
-    case Some(user)  =>
+    case Some(user) if credentials.password.isDefined && 
+                       user.password.exists(p => passwordHashers.find(p).exists(_.matches(p, credentials.password.get))) =>
+
       val userIdLoginInfo = LoginInfo(CredentialsProvider.ID, user.id)
       silh.env.authenticatorService.create(userIdLoginInfo) flatMap { authenticator =>
         silh.env.authenticatorService.init(authenticator).flatMap { token =>
@@ -153,7 +158,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
         }
       }
 
-    case None =>
+    case _ =>
       log.warn(s"User with login: ${credentials.login} is not found")
       throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User with login: ${credentials.login} is not found")
   }
@@ -282,7 +287,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
 
     def codeToUser(c: Option[ConfirmationCode]): Future[Option[User]] = c.map(_.operation match {
       case ConfirmationCode.OP_REGISTER => registration.getUnconfirmedRegistrationData(login).map {
-        _.map(data => User(email = data.optEmail.map(_.toLowerCase), phone = data.optPhone, passHash = data.passHash))
+        _.map(data => User(email = data.optEmail.map(_.toLowerCase), phone = data.optPhone, password = data.password))
       }
       case _ => userService.getByAnyIdOpt(login)
     }).getOrElse(Future.successful(None))

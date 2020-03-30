@@ -1,6 +1,7 @@
 package models
 
 import play.api.libs.json._
+import com.mohiva.play.silhouette.api.util.PasswordInfo
 
 /**
   *
@@ -15,7 +16,7 @@ trait RegistrationData {
 
   def login: String
 
-  def passHash: Option[String]
+  def password: Option[PasswordInfo]
 
   def optEmail: Option[String] = if (login.contains("@")) Some(login) else None
 
@@ -25,13 +26,14 @@ trait RegistrationData {
 
 }
 
-case class OpenRegistrationData(login: String, passHash: Option[String], ttl: Option[Int]) extends RegistrationData {
+case class OpenRegistrationData(login: String, password: Option[PasswordInfo], ttl: Option[Int]) extends RegistrationData {
   override def format: String = "open"
 }
 
 
 object RegistrationData {
 
+  implicit val passInfo: OFormat[PasswordInfo] = Json.format[PasswordInfo]
   implicit val openData: OFormat[OpenRegistrationData] = Json.format[OpenRegistrationData]
 
   implicit val registrationData = new Reads[RegistrationData] {

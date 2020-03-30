@@ -6,11 +6,13 @@ import play.api.libs.functional.syntax._
 import play.api.libs.json._
 import utils.UuidGenerator
 import utils.StringHelpers._
+import utils.RichJson._
 import reactivemongo.bson.Macros.Annotations.{Key, Ignore}
+import com.mohiva.play.silhouette.api.util.PasswordInfo
 
 case class User(email: Option[String] = None,
                 phone: Option[String] = None,
-                passHash: Option[String] = None,
+                password: Option[PasswordInfo] = None,
                 flags: List[String] = Nil,
                 roles: List[String] = Nil,
                 @Ignore permissions: List[String] = Nil,
@@ -61,9 +63,8 @@ object User {
   def fromRegistration(r: RegistrationData) = User(
     email = r.optEmail,
     phone = r.optPhone,
-    passHash = r.passHash
+    password = r.password
   )
-
 
   implicit val oAuth1InfoFmt = Json.format[OAuth1Info]
   implicit val oAuth2InfoFmt = Json.format[OAuth2Info]
@@ -90,20 +91,6 @@ object User {
   // TODO: specify rules
   def checkSocialProviderKey(id: String): Boolean = isNumberString(id)
 
-  implicit val reader: Reads[User] = (      
-      (JsPath \ "email").readNullable[String] and
-      (JsPath \ "phone").readNullable[String] and
-      (JsPath \ "passHash").readNullable[String] and
-      (JsPath \ "flags").read[List[String]].orElse(Reads.pure(Nil)) and
-      (JsPath \ "roles").read[List[String]].orElse(Reads.pure(Nil)) and
-      (JsPath \ "permissions").read[List[String]].orElse(Reads.pure(Nil)) and
-      (JsPath \ "hierarchy").read[List[String]].orElse(Reads.pure(Nil)) and
-      (JsPath \ "firstName").readNullable[String] and
-      (JsPath \ "lastName").readNullable[String] and
-      (JsPath \ "id").read[String] and
-      (JsPath \ "version").read[Int].orElse(Reads.pure(0))
-    ) (User.apply _)
-
   implicit val oWriter = new OWrites[User] {
     def writes(u: User): JsObject = Json.obj(
       "id" -> u.id,
@@ -117,7 +104,7 @@ object User {
       "firstName" -> u.firstName,
       "lastName" -> u.lastName,
       "version" -> u.version
-    ).filterNulls
+    ).filterNull
   }
 
   val shortUserWriter = new OWrites[User] {
@@ -131,14 +118,7 @@ object User {
       "rol" -> Option(u.roles).filterNot(_.isEmpty),
       "prm" -> Option(u.permissions).filterNot(_.isEmpty),
       "hrc" -> Option(u.hierarchy).filterNot(_.isEmpty),
-    ).filterNulls
-  }
-
-  implicit class ExtJson(val js: JsObject) extends AnyVal {
-    def filterNulls: JsObject = JsObject(js.fields.filter {
-      case (_, JsNull) => false
-      case (_, _) => true
-    })
+    ).filterNull
   }
 
 }

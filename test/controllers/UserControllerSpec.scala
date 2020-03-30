@@ -22,7 +22,7 @@ import play.api.mvc.Results
 import play.api.test.Helpers._
 import play.api.test._
 import play.api.{Application, Mode}
-import services.{BranchesService, ExtendedUserService, UserService}
+import services.{BranchesService, UserService}
 
 import scala.concurrent.Future
 
@@ -35,7 +35,6 @@ class UserControllerSpec extends PlaySpec with GuiceOneAppPerSuite
 
   val userServiceMock = mock[UserService]
   val branchesMock = mock[BranchesService]
-  val extInfoService = mock[ExtendedUserService]
 
   val usersMockModule = new ScalaModule {
     override def configure(): Unit = {

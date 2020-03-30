@@ -64,7 +64,7 @@ class OpenRegistrationService @Inject()(config: Configuration,
         throw AppException(ErrorCodes.ALREADY_EXISTS, "User with such login already exists")
 
       case false =>
-        val passwordInfoOpt = data.password.map(passwordHashers.current.hash).map(_.password)
+        val passwordInfoOpt = data.password.map(passwordHashers.current.hash)
 
         val (key, ttl) = if (data.loginFormatted.contains("@")) emailCode -> emailTtl else phoneCode -> phoneTtl
 

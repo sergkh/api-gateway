@@ -63,7 +63,7 @@ class InitializationService @Inject()(config: Configuration,
 
     val admin = User(
       email = Some(config.get[String]("app.defaultAdmin")),
-      passHash = Some(passwordHasher.current.hash(password).password),
+      password = Some(passwordHasher.current.hash(password)),
       roles = List(AdminRole)
     )
 

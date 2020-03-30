@@ -96,15 +96,15 @@ class UserController @Inject()(
 
       val loginInfo = LoginInfo(CredentialsProvider.ID, user.identifier)
 
-      val updPass = passwordHashers.current.hash(data.newPass).password
-      val updUser = user.copy(passHash = Some(updPass))
+      val updPass = passwordHashers.current.hash(data.newPass)
+      val updUser = user.copy(password = Some(updPass))
 
       passDao.find(loginInfo).flatMap {
         case Some(passInfo) if data.pass.isDefined =>
           if (passwordHashers.all.exists(_.matches(passInfo, data.pass.get))) {
 
-            passDao.update(loginInfo, PasswordInfo(passwordHashers.current.id, updPass)).flatMap { _ =>
-              eventBus.publish(PasswordChange(updUser, request, request2lang)) map { _ =>
+            passDao.update(loginInfo, updPass).flatMap { _ =>
+              eventBus.publish(PasswordChange(updUser, request)) map { _ =>
 
                 log.info(s"User $user changed password")
                 NoContent.discardingCookies()
@@ -115,8 +115,8 @@ class UserController @Inject()(
             throw AppException(ErrorCodes.ACCESS_DENIED, s"Old password is wrong")
           }
         case None if data.login.isEmpty =>
-          passDao.update(loginInfo, PasswordInfo(passwordHashers.current.id, updPass)).flatMap { _ =>
-            eventBus.publish(PasswordChange(updUser, request, request2lang)) map { _ =>
+          passDao.update(loginInfo, updPass).flatMap { _ =>
+            eventBus.publish(PasswordChange(updUser, request)) map { _ =>
               log.info(s"User $user set password")
               NoContent.discardingCookies()
             }
@@ -171,11 +171,11 @@ class UserController @Inject()(
                   log.info(s"Code $confirmCode not found for login $reqLogin")
                   throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User ${code.login} not found")
                 } else {
-                  val updPass = passwordHashers.current.hash(data.password).password
-                  val updUser = u.copy(passHash = Some(updPass) )
+                  val updPass = passwordHashers.current.hash(data.password)
+                  val updUser = u.copy(password = Some(updPass) )
 
-                  passDao.update(loginInfo, PasswordInfo(passwordHashers.current.id, updPass)).flatMap { _ =>
-                    eventBus.publish(PasswordChange(updUser, request, request2lang)) map { _ =>
+                  passDao.update(loginInfo, updPass).flatMap { _ =>
+                    eventBus.publish(PasswordChange(updUser, request)) map { _ =>
                       confirmationService.consumeByLogin(reqLogin)
                     }
                   }

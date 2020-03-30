@@ -6,6 +6,7 @@ import java.time.{LocalDateTime, ZoneOffset}
 import java.{util => ju}
 
 import com.mohiva.play.silhouette.api.{LoginInfo, Silhouette}
+import com.mohiva.play.silhouette.api.util.PasswordHasherRegistry
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import events.EventsStream
 import forms.OAuthForm
@@ -15,10 +16,11 @@ import models.ErrorCodes._
 import models.{AppException, JwtEnv}
 import play.api.libs.json.Json
 import security.{KeysManager, WithUser}
-import services.{ClientAppsService, TokensService, UserService}
+import services.{AuthCodesService, ClientAppsService, TokensService, UserService}
 import utils.FutureUtils._
 import utils.RichRequest._
 import utils.RichJson._
+import utils.JwtExtension._
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -26,14 +28,21 @@ import models.RefreshToken
 import play.api.Configuration
 
 import scala.concurrent.duration.FiniteDuration
+import forms.OAuthForm.AccessTokenByRefreshToken
+import models.User
+import forms.OAuthForm.AccessTokenByPassword
+import com.mohiva.play.silhouette.api.util.PasswordInfo
+import forms.OAuthForm.AccessTokenByAuthorizationCode
 
 @Singleton
 class TokenController @Inject()(silh: Silhouette[JwtEnv],
                                 conf: Configuration,
                                 oauth: ClientAppsService,
                                 tokens: TokensService,
+                                authCodes: AuthCodesService,
                                 keyManager: KeysManager,
                                 userService: UserService,
+                                passwordHashers: PasswordHasherRegistry,
                                 eventBus: EventsStream
                               )
                                (implicit exec: ExecutionContext) extends BaseController {
@@ -64,9 +73,22 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
   //   }
   // }
 
+  /**
+   * Requires client authorization, using basic auth.
+   * Calling options:
+   * Access token:
+   *   grant_type=authorization_code&code=SplxlOBeZQQYbYS6WxSbIA&redirect_uri=https%3A%2F%2Fclient%2Eexample%2Ecom%2Fcb    
+   * Refresh token: 
+   *  grant_type=refresh_token&refresh_token=tGzv3JOkF0XG5Qx2TlKWIA&client_id=s6BhdRkqt3&client_secret=7Fjfp0ZBr1KtDRbnfVdmIw
+   * Password:
+   *   grant_type=password&username=johndoe&password=A3ddj3w
+   * 
+   * Since this client authentication method involves a password, the authorization server MUST protect any endpoint utilizing it against
+   * brute force attacks.
+   */
   def getAccessToken = Action.async { implicit request =>
-    val refresh = request.asForm(OAuthForm.getAccessTokenFromRefreshToken) // TODO: implement other forms
-    
+    val grantType = request.asForm(OAuthForm.grantType)
+
     val (clientId, clientSecret) = request.basicAuth.getOrElse {
       throw new AppException(AUTHORIZATION_FAILED, "Client authorization failed")
     }
@@ -76,27 +98,65 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
     for {
       app             <- oauth.getApp(clientId)
       _               <- conditionalFail(app.secret != clientSecret, ACCESS_DENIED, "Wrong client secret")
-      refreshToken    <- tokens.get(refresh.refreshToken).orFail(AppException(AUTHORIZATION_FAILED, "Invalid refresh token"))
-      _               <- if (refreshToken.expired) cleanExpiredTokenAndFail(refreshToken) else Future.unit
-      loginInfo       = LoginInfo(CredentialsProvider.ID, refreshToken.userId)
-      user            <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
-      authenticator   <- silh.env.authenticatorService.create(loginInfo)
+      userAndScope    <- grantType match {
+        case "refresh_token" =>
+          authorizeByRefreshToken(request.asForm(OAuthForm.getAccessTokenFromRefreshToken))
+        case "password" =>
+          authorizeByPassword(request.asForm(OAuthForm.getAccessTokenByPass))
+        case "authorization_code" =>
+          authorizeByAuthorizationCode(request.asForm(OAuthForm.getAccessTokenFromAuthCode))
+      }
+      (user, scope)   = userAndScope
+      authenticator   <- silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, user.id))
+      tokenWithUser   = authenticator.withUserInfo(user, scope)
       token           <- silh.env.authenticatorService.init(authenticator)
       _               <- eventBus.publish(Login(user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis))
     } yield {
-      log.info(s"Succeed user authentication ${loginInfo.providerKey}")
-      
+      log.info(s"Succeed user authentication ${user.id}")
+              
       val expireIn = ((authenticator.expirationDateTime.toInstant.getMillis / 1000) -
                   LocalDateTime.now().toInstant(ZoneOffset.UTC).getEpochSecond())
 
+      // TODO: handle redirect
       Ok(Json.obj(
         "token_type" -> "Bearer",
         "access_token" -> token,
         "expires_in" -> expireIn,
-        "scope" -> refreshToken.scope
+        "scope" -> scope
         // TODO: "id_token": "ID_token"
       ).filterNull)
     }
+  }
+
+  private def authorizeByRefreshToken(req: AccessTokenByRefreshToken): Future[(User, Option[String])] = for {
+    refreshToken    <- tokens.get(req.refreshToken).orFail(AppException(AUTHORIZATION_FAILED, "Invalid refresh token"))
+    _               <- if (refreshToken.expired) cleanExpiredTokenAndFail(refreshToken) else Future.unit
+    loginInfo       = LoginInfo(CredentialsProvider.ID, refreshToken.userId)
+    user            <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
+  } yield {
+    user -> refreshToken.scope
+  }
+
+  private def authorizeByPassword(req: AccessTokenByPassword): Future[(User, Option[String])] = {
+    val loginInfo  = LoginInfo(CredentialsProvider.ID, req.username)
+      
+    userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed")).map { user =>
+      // TODO: rehash old format passwords
+      if (user.flags.contains(User.FLAG_2FACTOR) || // TODO: support OTPs 
+         !user.password.exists(p => passwordHashers.find(p).exists(_.matches(p, req.password)))) {
+        throw new AppException(AUTHORIZATION_FAILED, "User authorization failed")
+      }
+
+      user -> None
+    }
+  }
+
+  private def authorizeByAuthorizationCode(req: AccessTokenByAuthorizationCode): Future[(User, Option[String])] = for {
+    authCode    <- authCodes.getAndRemove(req.authCode).map(_.filter(_.expired)).orFail(AppException(AUTHORIZATION_FAILED, "Invalid authorization code"))
+    loginInfo       = LoginInfo(CredentialsProvider.ID, authCode.userId)
+    user            <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
+  } yield {
+    user -> authCode.scope
   }
 
   def listUserTokens(userId: String) = silh.SecuredAction(WithUser(userId)).async { implicit req =>
