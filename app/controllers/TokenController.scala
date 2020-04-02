@@ -33,6 +33,12 @@ import models.User
 import forms.OAuthForm.AccessTokenByPassword
 import com.mohiva.play.silhouette.api.util.PasswordInfo
 import forms.OAuthForm.AccessTokenByAuthorizationCode
+import com.mohiva.play.silhouette.api.util.Credentials
+import com.mohiva.play.silhouette.impl.exceptions.IdentityNotFoundException
+import models.ErrorCodes
+import com.mohiva.play.silhouette.impl.exceptions.InvalidPasswordException
+import com.mohiva.play.silhouette.api.exceptions.ProviderException
+import TokenController._
 
 @Singleton
 class TokenController @Inject()(silh: Silhouette[JwtEnv],
@@ -42,7 +48,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
                                 authCodes: AuthCodesService,
                                 keyManager: KeysManager,
                                 userService: UserService,
-                                passwordHashers: PasswordHasherRegistry,
+                                credentialsProvider: CredentialsProvider,
                                 eventBus: EventsStream
                               )
                                (implicit exec: ExecutionContext) extends BaseController {
@@ -95,24 +101,23 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
     
     log.info(s"Requesting access token for ${clientId}")
 
-    for {
+    val res = for {
       app             <- oauth.getApp(clientId)
       _               <- conditionalFail(app.secret != clientSecret, ACCESS_DENIED, "Wrong client secret")
-      userAndScope    <- grantType match {
+      auth            <- grantType match {
         case "refresh_token" =>
-          authorizeByRefreshToken(request.asForm(OAuthForm.getAccessTokenFromRefreshToken))
+          authorizeByRefreshToken(clientId, request.asForm(OAuthForm.getAccessTokenFromRefreshToken))
         case "password" =>
-          authorizeByPassword(request.asForm(OAuthForm.getAccessTokenByPass))
+          authorizeByPassword(clientId, request.asForm(OAuthForm.getAccessTokenByPass))
         case "authorization_code" =>
-          authorizeByAuthorizationCode(request.asForm(OAuthForm.getAccessTokenFromAuthCode))
+          authorizeByAuthorizationCode(clientId, request.asForm(OAuthForm.getAccessTokenFromAuthCode))
       }
-      (user, scope)   = userAndScope
-      authenticator   <- silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, user.id))
-      tokenWithUser   = authenticator.withUserInfo(user, scope)
+      authenticator   <- silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, auth.user.id))
+      tokenWithUser   = authenticator.withUserInfo(auth.user, auth.scope)
       token           <- silh.env.authenticatorService.init(authenticator)
-      _               <- eventBus.publish(Login(user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis))
+      _               <- eventBus.publish(Login(auth.user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis))
     } yield {
-      log.info(s"Succeed user authentication ${user.id}")
+      log.info(s"Succeed user authentication ${auth.user.id}")
               
       val expireIn = ((authenticator.expirationDateTime.toInstant.getMillis / 1000) -
                   LocalDateTime.now().toInstant(ZoneOffset.UTC).getEpochSecond())
@@ -122,41 +127,23 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
         "token_type" -> "Bearer",
         "access_token" -> token,
         "expires_in" -> expireIn,
-        "scope" -> scope
+        "scope" -> auth.scope,
+        "refresh_token" -> auth.refreshToken.map(_.id)
         // TODO: "id_token": "ID_token"
       ).filterNull)
     }
-  }
 
-  private def authorizeByRefreshToken(req: AccessTokenByRefreshToken): Future[(User, Option[String])] = for {
-    refreshToken    <- tokens.get(req.refreshToken).orFail(AppException(AUTHORIZATION_FAILED, "Invalid refresh token"))
-    _               <- if (refreshToken.expired) cleanExpiredTokenAndFail(refreshToken) else Future.unit
-    loginInfo       = LoginInfo(CredentialsProvider.ID, refreshToken.userId)
-    user            <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
-  } yield {
-    user -> refreshToken.scope
-  }
-
-  private def authorizeByPassword(req: AccessTokenByPassword): Future[(User, Option[String])] = {
-    val loginInfo  = LoginInfo(CredentialsProvider.ID, req.username)
-      
-    userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed")).map { user =>
-      // TODO: rehash old format passwords
-      if (user.flags.contains(User.FLAG_2FACTOR) || // TODO: support OTPs 
-         !user.password.exists(p => passwordHashers.find(p).exists(_.matches(p, req.password)))) {
-        throw new AppException(AUTHORIZATION_FAILED, "User authorization failed")
-      }
-
-      user -> None
+    res.recoverWith {
+      case e: IdentityNotFoundException =>
+        log.info(s"User is not found " + e.getMessage)
+        Future.failed(AppException(ErrorCodes.AUTHORIZATION_FAILED, "Invalid credentials"))
+      case e: InvalidPasswordException =>
+        log.info(s"Wrong user password " + e.getMessage)
+        Future.failed(AppException(ErrorCodes.AUTHORIZATION_FAILED, "Invalid credentials"))
+      case e: ProviderException =>
+        log.info(s"Invalid credentials " + e.getMessage)
+        throw AppException(ErrorCodes.AUTHORIZATION_FAILED, "Invalid credentials")
     }
-  }
-
-  private def authorizeByAuthorizationCode(req: AccessTokenByAuthorizationCode): Future[(User, Option[String])] = for {
-    authCode    <- authCodes.getAndRemove(req.authCode).map(_.filter(_.expired)).orFail(AppException(AUTHORIZATION_FAILED, "Invalid authorization code"))
-    loginInfo       = LoginInfo(CredentialsProvider.ID, authCode.userId)
-    user            <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
-  } yield {
-    user -> authCode.scope
   }
 
   def listUserTokens(userId: String) = silh.SecuredAction(WithUser(userId)).async { implicit req =>
@@ -177,118 +164,101 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
     }
   }
 
-/*
-  final val IVALID_LOGIN_INFO_PROVIDER = "oauth.application"
+  private def authorizeByRefreshToken(clientId: String, req: AccessTokenByRefreshToken): Future[AuthResult] = for {
+    refreshToken    <- tokens.get(req.refreshToken).orFail(AppException(AUTHORIZATION_FAILED, "Invalid refresh token"))
+    _               <- if (refreshToken.expired) cleanExpiredTokenAndFail(refreshToken) else Future.unit
+    _               <- conditionalFail(refreshToken.clientId != clientId, AUTHORIZATION_FAILED, "Wrong refresh token")
+    loginInfo       = LoginInfo(CredentialsProvider.ID, refreshToken.userId)
+    user            <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
+  } yield {
+    AuthResult(user, refreshToken.scope, None)
+  }
 
-
-  private val ETERNAL_TOKEN_TTL = config.get[FiniteDuration]("oauth.ttl")
-
-  // TODO: remove from here
-  def createToken(code: String, authenticatorService: CustomJWTAuthenticatorService)(implicit req: Request[_]): Future[JsObject] = {
-    authenticatorService.retrieveByValue(code).flatMap {
-      case Some(jwtAuthenticator) => jwtAuthenticator.customClaims match {
-        case Some(json) =>
-          val claims = try { json.as[TokenClaims] } catch {
-            case _: Exception =>
-              authenticatorService.discard(jwtAuthenticator, Results.Forbidden)
-              log.info("Invalid token claims for token: " + json)
-              throw AppException(ErrorCodes.INVALID_TOKEN_CLAIMS, "Invalid external data for token ")
-          }
-
-          val ttl = ETERNAL_TOKEN_TTL
-          val expire = authenticatorService.clock.now + ttl
-          val Array(appId, secret) = new String(Base64.getDecoder.decode(req.headers(Http.HeaderNames.AUTHORIZATION).replaceFirst("Basic ", ""))).split(":")
-
-          getApp(appId).flatMap { app =>
-            app.checkSecret(secret)
-
-            val loginInfo = LoginInfo(CredentialsProvider.ID, app.ownerId)
-
-            authenticatorService.renew(jwtAuthenticator.copy(
-              expirationDateTime = expire,
-              loginInfo = loginInfo
-            )).flatMap { oauthToken =>
-                eventBus.publish(Login(claims.userId.toString, oauthToken, req, jwtAuthenticator.id, jwtAuthenticator.expirationDateTime.getMillis))
-                eventBus.publish(OauthTokenCreated(claims.userId.toString, jwtAuthenticator.id, oauthToken, req))
-
-                log.info("Creating permanent oauth token: '" + oauthToken + "' for user: " + jwtAuthenticator.loginInfo.providerKey +
-                  ", exp date: " + expire + ", permissions: " + claims.permissions.mkString(",") +
-                  ", from: " + code + ", for: " + claims.clientId)
-
-                Json.obj("accessToken" -> oauthToken, "expiresIn" -> ttl.toSeconds)
-            }
-          }
-
-        case None =>
-          log.info("Oauth token doesn't have required claims")
-          throw AppException(ErrorCodes.ENTITY_NOT_FOUND, "Temporary token claims not found")
+  private def authorizeByPassword(clientId: String, req: AccessTokenByPassword): Future[AuthResult] = {
+    for {
+      loginInfo     <- credentialsProvider.authenticate(Credentials(req.username, req.password))
+      user          <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
+      _             <- conditionalFail(user.hasAllPermission(req.scopesList:_*), ACCESS_DENIED, "Wrong scopes")
+      refreshToken  <- optIssueRefreshToken(user, req.scope, clientId)
+    } yield {
+      if (user.flags.contains(User.FLAG_2FACTOR)) { // TODO: support OTPs 
+        throw new AppException(AUTHORIZATION_FAILED, "User authorization failed")
       }
 
-      case None =>
-        log.info(s"Temporary oauth token $code doesn't found")
-        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, "Temporary token not found")
+      AuthResult(user, req.scope)
     }
   }
 
-
-
-  private def oauthAuthenticator(
-                                  authenticatorService: JWTAuthenticatorService,
-                                  loginInfo: LoginInfo,
-                                  tokenClaims: TokenClaims,
-                                  ttl: FiniteDuration)(implicit request: Request[_]) = {
-    authenticatorService.create(loginInfo).map { jwt =>
-      jwt.copy(
-        idleTimeout = None,
-        expirationDateTime = jwt.lastUsedDateTime + ttl,
-        customClaims = Some(Json.toJson(tokenClaims).as[JsObject])
-      )
-    }
+  private def authorizeByAuthorizationCode(clientId: String, req: AccessTokenByAuthorizationCode): Future[AuthResult] = for {
+    authCode     <- authCodes.getAndRemove(req.authCode).map(_.filter(_.expired)).orFail(AppException(AUTHORIZATION_FAILED, "Invalid authorization code"))
+    loginInfo    = LoginInfo(CredentialsProvider.ID, authCode.userId)
+    user         <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
+    refreshToken <- optIssueRefreshToken(user, authCode.scope, clientId)
+  } yield {
+    AuthResult(user, authCode.scope, refreshToken)
   }
 
-    // TODO: remove from here
-  def authorize(authReq: OAuthAuthorizeRequest, user: User, authService: JWTAuthenticatorService)
-               (implicit request: Request[_]): Future[JsObject] = {
-
-    getApp(authReq.clientId).flatMap { app =>
-
-      val tokenType = if (authReq.responseType == OAuthAuthorizeRequest.Type.TOKEN) {
-        TokenClaims.Type.OAUTH_ETERNAL
-      } else {
-        TokenClaims.Type.OAUTH_TEMPORARY
-      }
-
-      val tokenClaims = TokenClaims(user, app.id, authReq.permissions.filter(user.hasPermission))
-
-      val (ttl, loginInfo) = authReq.responseType match {
-        case OAuthAuthorizeRequest.Type.CODE =>
-          (DEFAULT_TEMP_TOKEN_TTL, LoginInfo(CredentialsProvider.ID, IVALID_LOGIN_INFO_PROVIDER))
-
-        case OAuthAuthorizeRequest.Type.TOKEN =>
-          (ETERNAL_TOKEN_TTL, LoginInfo(CredentialsProvider.ID, user.id))
-
-        case unknown: Any =>
-          throw AppException(ErrorCodes.INVALID_REQUEST, "Unknown response type: " + unknown)
-      }
-
-      oauthAuthenticator(authService, loginInfo, tokenClaims, ttl).flatMap { authenticator =>
-
-        authService.init(authenticator).flatMap { oauthToken =>
-          if (tokenType == TokenClaims.Type.OAUTH_ETERNAL) {
-            eventBus.publish(Login(user.id, oauthToken, request, authenticator.id, authenticator.expirationDateTime.getMillis))
-            eventBus.publish(OauthTokenCreated(user.id, authenticator.id, oauthToken, request))
-            Json.obj("accessToken" -> oauthToken, "expiresIn" -> ttl.toSeconds)
-          } else {
-            Json.obj("code" -> oauthToken)
-          }
-        }
-      }
+  private def optIssueRefreshToken(user: User, scope: Option[String], clientId: String): Future[Option[RefreshToken]] = {
+    if (scope.exists(_.split(" ").contains("offline_access"))) {
+      tokens.store(RefreshToken(
+        user.id, 
+        scope, 
+        LocalDateTime.now().plusSeconds(RefreshTokenTTL.toSeconds),
+        clientId
+      )).map(Some(_))
+    } else {
+      Future.successful(None)
     }
   }
-  */
 
   private def cleanExpiredTokenAndFail(t: RefreshToken): Future[Unit] = 
     tokens.delete(t.id).map { _ => throw AppException(AUTHORIZATION_FAILED, "Token expired") }
 
 }
+
+object TokenController {
+  case class AuthResult(user: User, scope: Option[String] = None, refreshToken: Option[RefreshToken] = None)
+}
+
+  // private def processUserLogin(optUser: Option[User], loginInfo: LoginInfo,
+  //                              credentials: LoginCredentials)(implicit request: RequestHeader): Future[Result] = optUser match {
+  //   case Some(user) if user.hasFlag(User.FLAG_BLOCKED) =>
+  //     log.warn(s"User ${credentials.login} is blocked")
+  //     throw AppException(ErrorCodes.BLOCKED_USER, s"User ${credentials.login} is blocked")
+
+  //   case Some(user) if credentials.password.nonEmpty && user.flags.contains(User.FLAG_2FACTOR) => // 2-factor authentication, password always required
+  //     val (secret, code) = ConfirmationCode.generatePair(credentials.login, ConfirmationCode.OP_LOGIN, otpLength, None)
+
+  //     confirmationService.create(code)
+
+  //     eventBus.publish(OtpGeneration(Some(user.id), user.email, user.phone, secret, request)) map { _ =>
+  //       log.info("Generated login code for " + user.id)
+  //       throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
+  //     }
+
+  //   case Some(user) if credentials.password.isEmpty && !user.flags.contains(User.FLAG_2FACTOR) => // passwordless authentication
+  //     val (secret, code) = ConfirmationCode.generatePair(credentials.login, ConfirmationCode.OP_LOGIN, otpLength, None)
+  //     confirmationService.create(code)
+
+  //     eventBus.publish(OtpGeneration(Some(user.id), user.email, user.phone, secret, request)) map { _ =>
+  //       log.info("Generated passwordless login code for " + user.id)
+  //       throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
+  //     }
+
+  //   case Some(user) =>
+  //     val userIdLoginInfo = LoginInfo(CredentialsProvider.ID, user.id)
+  //     silh.env.authenticatorService.create(userIdLoginInfo) flatMap { authenticator =>
+  //       silh.env.authenticatorService.init(authenticator).flatMap { token =>
+  //         log.info(s"Succeed user authentication ${userIdLoginInfo.providerKey}")
+
+  //         eventBus.publish(Login(user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis)).flatMap { _ =>
+  //           silh.env.authenticatorService.embed(token, Ok(JsonHelper.toNonemptyJson("token" -> token)))
+  //         }
+  //       }
+  //     }
+
+  //   case _ =>
+  //     log.warn(s"User with login: ${credentials.login} is not found")
+  //     throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User with login: ${credentials.login} is not found")
+  // }
 

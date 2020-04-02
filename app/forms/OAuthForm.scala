@@ -56,7 +56,9 @@ object OAuthForm {
   case class OAuthToken(token: String)
   case class AccessTokenByRefreshToken(refreshToken: String)
   case class AccessTokenByAuthorizationCode(authCode: String, redirectUri: String, clientId: Option[String])
-  case class AccessTokenByPassword(username: String, password: String, scope: Option[String])
+  case class AccessTokenByPassword(username: String, password: String, scope: Option[String]) {
+    def scopesList: List[String] = scope.map(_.split(" ").toList).getOrElse(Nil)
+  }
 
   case class AuthorizeUsingProvider(clientId: String, 
                            responseType: ResponseType, 

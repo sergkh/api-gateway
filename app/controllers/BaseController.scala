@@ -1,5 +1,6 @@
 package controllers
 
+import zio._
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
 import com.mohiva.play.silhouette.api.actions.SecuredRequest
@@ -12,6 +13,9 @@ import play.api.mvc._
 import services.StreamedProxyRequest
 
 import scala.language.implicitConversions
+import scala.concurrent.Future
+
+import utils.TaskExt._
 
 /**
   * Created by sergeykhruschak on 12/9/15.
@@ -29,6 +33,8 @@ trait BaseController extends InjectedController {
       codec.encode(Json.stringify(JsArray(list)))
     }
   }
+
+  implicit def fromTask(task: Task[Result]): Future[Result] = task.toUnsafeFuture
 
 //  implicit def securedRequestToProxyReq(req: SecuredRequest[JwtEnv, JsValue]): StreamedProxyRequest = {
 //    StreamedProxyRequest(req, Some(req.identity), Option(Source.single(ByteString(Json.stringify(req.body).getBytes))))

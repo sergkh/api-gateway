@@ -19,4 +19,6 @@ object ErrorCodes {
   val INVALID_IDENTIFIER = "invalid_identifier"
   val INVALID_TOKEN_CLAIMS = "invalid_token_claims"
   val SERVICE_UNAVAILABLE = "service_unavailable"
+  val EMAIL_NOT_CONFIRMED = "email_not_confirmed"
+  val PHONE_NOT_CONFIRMED = "phone_not_confirmed"
 }

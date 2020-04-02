@@ -1,5 +1,6 @@
 package utils
 
+import zio._
 import models.FormValidationException
 import play.api.data.Form
 import play.api.libs.json.{JsValue, _}
@@ -11,6 +12,11 @@ import scala.util.Try
 import java.{util => ju}
 import models.User
 import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
+
+import models.AppException
+
+import scala.annotation.implicitNotFound
+import scala.concurrent.{ExecutionContext, Future}
 
 /**
   * Some useful json methods.
@@ -125,6 +131,41 @@ object JwtExtension {
         )
       }.toOption
     }
+  }
+
+}
+
+object FutureUtils {
+  @implicitNotFound("Provide an implicit instance of converter from custom error code into HTTP code")
+  def appFail[T, E](code: String, message: String): Future[T] = Future.failed(AppException(code, message))
+
+  def conditional[A](cond: Boolean, f: => Future[A]): Future[_] = if (cond) f else Future.unit
+
+  def conditionalFail[A](cond: Boolean, code: String, message: String): Future[_] = if (cond) appFail(code, message) else Future.unit
+
+  implicit class RichFuture[A](val f: Future[A]) extends AnyVal {
+    /** Future sequence operator (monad sequence).
+      * Executes both, returns result of the second Future */
+    def >>[B](f2: => Future[B])(implicit ec: ExecutionContext): Future[B] = f.flatMap(_ => f2)
+
+    /** Future sequence operator (monad sequence).
+      * Executes both, returns result of the first Future */
+    def <<[B](f2: => Future[B])(implicit ec: ExecutionContext): Future[A] = for { a <- f; _ <- f2 } yield a
+  }
+
+  implicit class RichOptFuture[A](val f: Future[Option[A]]) extends AnyVal {
+    def orFail(t: Exception)(implicit ec: ExecutionContext): Future[A] = f.map(_.getOrElse(throw t))
+  }
+
+}
+
+object TaskExt {
+
+  /**
+    * Some extensions needed to make transition to ZIO easier
+    */
+  implicit class RichTaks[A](val t: Task[A]) extends AnyVal {
+    implicit def toUnsafeFuture: Future[A] = zio.Runtime.default.unsafeRunToFuture(t)
   }
 
 }

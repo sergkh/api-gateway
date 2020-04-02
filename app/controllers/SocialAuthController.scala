@@ -173,8 +173,7 @@ class SocialAuthController @Inject()(
       user.id,
       authReq.scope,
       expirationTime = LocalDateTime.now().plusNanos(AuthCodeTTL.toNanos),
-      clientId = authReq.clientId,
-      id = RandomStringGenerator.generateSecret(64)
+      clientId = authReq.clientId
     )
 
     authCodes.store(code) map { _ =>

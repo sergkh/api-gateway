@@ -16,7 +16,7 @@ import play.api.cache.SyncCacheApi
 import play.api.libs.json.Json
 import play.api.libs.streams.Accumulator
 import play.api.mvc.BodyParser
-import security.{ConfirmationCodeService, WithPermission}
+import security.WithPermission
 import services.{ProxyService, RoutingService, StreamedProxyRequest}
 import utils.Responses._
 import utils.RichJson._
@@ -40,8 +40,6 @@ class ProxyController @Inject()(silh: Silhouette[JwtEnv],
                                )(implicit exec: ExecutionContext, system: ActorSystem, mat: Materializer) extends BaseController {
 
   implicit val timeout: Timeout = Timeout(1 minute)
-
-  val otpLength = conf.getOptional[Int]("confirmation.otp.length").getOrElse(ConfirmationCodeService.DEFAULT_OTP_LEN)
 
   val meRegex = """(.*)(\/me\b)(\/?.*)""".r
 

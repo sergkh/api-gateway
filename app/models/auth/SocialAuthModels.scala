@@ -5,10 +5,6 @@ import com.mohiva.play.silhouette.impl.providers.{OAuth1Info, OAuth2Info}
 import play.api.libs.functional.syntax._
 import play.api.libs.json._
 
-
-/**
-  * Created by faiaz on 26.04.17.
-  */
 case class SocialOAuth1(loginInfo: LoginInfo, auth: OAuth1Info)
 case class SocialOAuth2(loginInfo: LoginInfo, auth: OAuth2Info)
 

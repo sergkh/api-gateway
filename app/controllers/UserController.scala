@@ -2,6 +2,7 @@ package controllers
 
 //scalastyle:off public.methods.have.type
 
+import zio._
 import akka.actor.ActorSystem
 import akka.http.scaladsl.util.FastFuture
 import akka.util.ByteString
@@ -29,8 +30,10 @@ import utils.Responses._
 import utils.RichRequest._
 import utils.Settings
 import utils.StringHelpers._
+import utils.TaskExt._
 
 import scala.concurrent.{ExecutionContext, Future}
+
 /**
   * Created by yaroslav on 29/11/15.
   */
@@ -50,7 +53,12 @@ class UserController @Inject()(
 
   val otpLength = config.getOptional[Int]("confirmation.otp.length").getOrElse(ConfirmationCodeService.DEFAULT_OTP_LEN)
   val otpEmailLength = config.getOptional[Int]("confirmation.otp.email-length").getOrElse(otpLength)
-  val optEmailTTLSeconds = 3 * 24 * 60 * 60 // 3 days
+  val otpPhoneTTLSeconds = 10 * 60
+  val optEmailTTLSeconds = 3 * 24 * 60 * 60 // 3 days TODO: make a setting
+
+  val requirePass    = config.get[Boolean]("app.requirePassword")
+  val requireFields  = config.get[String]("app.requireFields").split(",").map(_.trim).toList
+
 
   implicit def listUserWrites = new Writes[Seq[User]] {
     override def writes(o: Seq[User]): JsValue = JsArray(for (obj <- o) yield Json.toJson(obj))
@@ -59,6 +67,45 @@ class UserController @Inject()(
   val adminReadPerm = WithPermission("users:read")
   val adminEditPerm = WithPermission("users:edit")
   val blockPerm = WithPermission("users:block")
+
+  def add = silh.SecuredAction(adminReadPerm).async { request =>
+    val data = request.asForm(UserForm.createUser)
+
+    val user = User(
+      email = data.email,
+      phone = data.phone,
+      firstName = data.firstName,
+      lastName = data.lastName,
+      password = data.password.map(passwordHashers.current.hash),
+      flags = data.flags,
+      roles = data.roles
+    )
+
+    val errors = User.validateNewUser(user, requireFields, requirePass)
+
+    if (errors.nonEmpty) {
+      log.warn(s"Registration fields were required but not set: ${errors.mkString("\n")}")
+       throw AppException(ErrorCodes.INVALID_REQUEST, errors.mkString("\n"))
+    }
+
+    for {
+      _               <- validateBranchAccess(user.branch, request.identity)      
+      emailExists     <- data.email.map(userService.exists).getOrElse(FastFuture.successful(false))
+      phoneExists     <- data.phone.map(userService.exists).getOrElse(FastFuture.successful(false))
+      _               <- conditionalFail(emailExists, ErrorCodes.ALREADY_EXISTS, "Email already exists")
+      _               <- conditionalFail(phoneExists, ErrorCodes.ALREADY_EXISTS, "Phone already exists")
+      hierarchy       <- data.branch.map(
+                          b => branches.get(b).orFail(AppException(ErrorCodes.ENTITY_NOT_FOUND, "Branch is not found")).map(_.hierarchy)
+                        ) getOrElse FastFuture.successful(Nil)
+      userWithBranch  <- user.copy(hierarchy = hierarchy)
+      _               <- userService.save(userWithBranch)
+      _               <- eventBus.publish(Signup(userWithBranch, request))
+    } yield {
+      log.info(s"Created a new user $userWithBranch by ${request.identity.id}")
+
+      Ok(Json.toJson(userWithBranch))
+    }
+  }
 
   def get(id: String) = silh.SecuredAction(adminReadPerm || WithUser(id)).async { request =>
     userService.getRequestedUser(id, request.identity).map { user =>
@@ -96,12 +143,12 @@ class UserController @Inject()(
 
       val loginInfo = LoginInfo(CredentialsProvider.ID, user.identifier)
 
-      val updPass = passwordHashers.current.hash(data.newPass)
+      val updPass = passwordHashers.current.hash(data.newPassword)
       val updUser = user.copy(password = Some(updPass))
 
       passDao.find(loginInfo).flatMap {
-        case Some(passInfo) if data.pass.isDefined =>
-          if (passwordHashers.all.exists(_.matches(passInfo, data.pass.get))) {
+        case Some(passInfo) if data.password.isDefined =>
+          if (passwordHashers.all.exists(_.matches(passInfo, data.password.get))) {
 
             passDao.update(loginInfo, updPass).flatMap { _ =>
               eventBus.publish(PasswordChange(updUser, request)) map { _ =>
@@ -133,17 +180,14 @@ class UserController @Inject()(
     val login = request.asForm(ResetPasswordForm.form).login
     val loginInfo = LoginInfo(CredentialsProvider.ID, login)
 
-    silh.env.identityService.retrieve(loginInfo).flatMap {
-      case Some(user) =>
-        val (otp, code) = ConfirmationCode.generatePair(login, ConfirmationCode.OP_PASSWORD_RESET, otpLength, None)
-        confirmationService.create(code)
-
-        eventBus.publish(PasswordReset(user, otp, request, request2lang)) map { _ =>
-          log.info(s"Generate reset password code for user: ${user.id} ($login)")
-          NoContent
-        }
-      case None =>
-        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User $login not found")
+    for {
+      user <- silh.env.identityService.retrieve(loginInfo).orFail(AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User $login not found"))
+      (otp, code) = ConfirmationCode.generatePair(login, ConfirmationCode.OP_PASSWORD_RESET, otpLength, None)
+      _    <- confirmationService.create(code).toUnsafeFuture
+      _    <- eventBus.publish(PasswordReset(user, otp, request))
+    } yield {
+      log.info(s"Generate reset password code for user: ${user.id} ($login)")
+      NoContent
     }
   }
 
@@ -156,7 +200,7 @@ class UserController @Inject()(
       val reqUserId = user.identifier
 
       val confirmCode = data.code
-      confirmationService.retrieveByLogin(reqLogin) flatMap {
+      confirmationService.retrieveByLogin(reqLogin).toUnsafeFuture flatMap {
         case Some(code) =>
           val loginInfo = LoginInfo(CredentialsProvider.ID, user.id)
           for {
@@ -175,8 +219,8 @@ class UserController @Inject()(
                   val updUser = u.copy(password = Some(updPass) )
 
                   passDao.update(loginInfo, updPass).flatMap { _ =>
-                    eventBus.publish(PasswordChange(updUser, request)) map { _ =>
-                      confirmationService.consumeByLogin(reqLogin)
+                    eventBus.publish(PasswordChange(updUser, request)) flatMap { _ =>
+                      confirmationService.consumeByLogin(reqLogin).toUnsafeFuture
                     }
                   }
 
@@ -255,7 +299,7 @@ class UserController @Inject()(
       user <- userService.getRequestedUser(id, request.identity)
       _ <- validateBranchAccess(user.branch, request.identity)
       _ <- userService.delete(user)
-      _ <- eventBus.publish(UserDelete(user, comment, request, request2lang))
+      _ <- eventBus.publish(UserDelete(user, comment, request))
     } yield {
       log.info(s"User $user was deleted by $id ${comment.map(c => "with comment: " + c ).getOrElse("without comment")}")
       NoContent
@@ -313,7 +357,7 @@ class UserController @Inject()(
       editUser <- userService.getRequestedUser(id, request.identity)
       _ <- validateBranchAccess(editUser.branch, request.identity)
       user <- userService.updateFlags(updateUser(blockFlag, editUser))
-      _ <- eventBus.publish(if(blockFlag) UserBlocked(user, request, request2lang) else UserUnblocked(user, request, request2lang))
+      _ <- eventBus.publish(if(blockFlag) UserBlocked(user, request) else UserUnblocked(user, request))
     } yield {
       log.info(s"User $user was ${if(blockFlag) "blocked" else "unblocked" } by ${request.identity.id}")
       NoContent
@@ -349,10 +393,10 @@ class UserController @Inject()(
   }
 
   private def notifyUserUpdate(editUser: User, newUser: User, request: RequestHeader): Future[Unit] = {
-    eventBus.publish(UserUpdate(newUser, request, Lang.defaultLang)) flatMap { _ =>
+    eventBus.publish(UserUpdate(newUser, request)) flatMap { _ =>
       (editUser.hasFlag(User.FLAG_BLOCKED), newUser.hasFlag(User.FLAG_BLOCKED)) match {
-        case (true, false) => eventBus.publish(UserUnblocked(newUser, request, Lang.defaultLang))
-        case (false, true) => eventBus.publish(UserBlocked(newUser, request, Lang.defaultLang))
+        case (true, false) => eventBus.publish(UserUnblocked(newUser, request))
+        case (false, true) => eventBus.publish(UserBlocked(newUser, request))
         case (_, _) => Future.unit
       }
     }
@@ -362,27 +406,28 @@ class UserController @Inject()(
     if (editUser.phone != newUser.phone && newUser.phone.isDefined && !confirmationValidator.verifyConfirmed(request)) {
       val (otp, code) = ConfirmationCode.generatePair(editUser.id, request, otpLength, body.map(json => ByteString(Json.toBytes(json))))
 
-      // store code for both UUID and phone
-      confirmationService.create(code)
-      confirmationService.create(code.copy(login = editUser.phone.get))
-
-      eventBus.publish(OtpGeneration(Some(newUser.id), None, newUser.phone, otp, request)) map { _ =>
+      for {
+        _   <- confirmationService.create(code, ttl = Some(otpPhoneTTLSeconds)).toUnsafeFuture
+        _   <- confirmationService.create(code.copy(login = editUser.phone.get), ttl = Some(otpPhoneTTLSeconds)).toUnsafeFuture // store code for both UUID and phone
+        _   <- eventBus.publish(OtpGeneration(Some(newUser.id), None, newUser.phone, otp))        
+      } yield {
         log.info(s"Sending phone confirmation code to ${newUser.id}")
         throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
       }
+
     } else if (editUser.email != newUser.email && newUser.email.isDefined && !confirmationValidator.verifyConfirmed(request)) {
       val (otp, code) = ConfirmationCode.generatePair(
         editUser.id, request, otpEmailLength, body.map(json => ByteString(Json.toBytes(json)))
       )
 
-      // store code for both UUID and email with increased TTL
-      confirmationService.create(code, ttl = Some(optEmailTTLSeconds))
-      confirmationService.create(code.copy(login = newUser.email.get), ttl = Some(optEmailTTLSeconds))
-
-      eventBus.publish(OtpGeneration(Some(newUser.id), newUser.email, None, otp, request)) map { _ =>
+      for {
+        _   <- confirmationService.create(code, ttl = Some(optEmailTTLSeconds)).toUnsafeFuture
+        _   <- confirmationService.create(code.copy(login = newUser.email.get), ttl = Some(optEmailTTLSeconds)).toUnsafeFuture // store code for both UUID and phone
+        _   <- eventBus.publish(OtpGeneration(Some(newUser.id), newUser.email, None, otp))        
+      } yield {
         log.info(s"Sending email confirmation code to ${newUser.id}")
         throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
-      }
+      }      
     } else {
       Future.unit
     }

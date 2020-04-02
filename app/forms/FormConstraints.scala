@@ -21,6 +21,15 @@ object FormConstraints extends Constraints {
 
   val EMAIL_VALIDATION_PATTERN = Pattern.compile("""^[a-zA-Z0-9\.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$""")
   val PHONE_VALIDATION_PTRN = """^(\+\d{10,15})$""".r
+  private val allNumbers = """\d*""".r
+  private val allLetters = """[A-Za-z]*""".r
+  
+  val passwordConstraint: Constraint[String] = Constraint("constraints.password") {
+    case allNumbers() => Invalid(Seq(ValidationError(ERROR_PASSWORD_FORMAT)))
+    case allLetters() => Invalid(Seq(ValidationError(ERROR_PASSWORD_FORMAT)))
+    case short if short.length < MIN_PASSWORD_LENGTH => Invalid(Seq(ValidationError(ERROR_PASSWORD_FORMAT)))
+    case _ => Valid
+  }
   
   val limit = number(min = 1, max = 100)
   val offset = number(min = 0)
@@ -43,17 +52,7 @@ object FormConstraints extends Constraints {
       }
   }
 
-  private val allNumbers = """\d*""".r
-  private val allLetters = """[A-Za-z]*""".r
-  private def passwordConstraint: Constraint[String] = Constraint("constraints.password") {
-    case allNumbers() => Invalid(Seq(ValidationError(ERROR_PASSWORD_FORMAT)))
-    case allLetters() => Invalid(Seq(ValidationError(ERROR_PASSWORD_FORMAT)))
-    case _ => Valid
-  }
-
-    def genderConstraint: Constraint[Int] = Constraint[Int]("constraint.gender") { gender =>
-    if (gender == 0 || gender == 1 || gender == 2) Valid else Invalid(ValidationError("Invalid gender value"))
-  }
+  
 
   /**
     * Constructs a simple mapping for a text field (mapped as `scala.Enumeration`)

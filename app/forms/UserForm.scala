@@ -9,10 +9,23 @@ object UserForm {
 
   val updatePass = Form(
     mapping(
-      "pass" -> optional(password),
-      "newPass" -> password,
+      "password" -> optional(password),
+      "newPassword" -> password,
       "login" -> optional(nonEmptyText)
     )(UpdatePass.apply)(UpdatePass.unapply)
+  )
+
+  val createUser = Form(
+    mapping(
+      "email" -> optional(nonEmptyText.verifying(_.contains("@")).transform(_.toLowerCase, (a: String) => a)),
+      "phone" -> optional(nonEmptyText.verifying(phoneNumber)),
+      "firstName" -> optional(nonEmptyText),
+      "lastName" -> optional(nonEmptyText),
+      "password" -> optional(password),
+      "flags" -> default(list(nonEmptyText), Nil),
+      "roles" -> default(list(nonEmptyText), Nil),
+      "branch" -> optional(text(Branch.BranchIdSize, Branch.BranchIdSize))
+    )(CreateUser.apply)(CreateUser.unapply)
   )
 
   val updateUser = Form(
@@ -41,7 +54,16 @@ object UserForm {
     )(BlockUser.apply)(BlockUser.unapply)
   )
 
-  case class UpdatePass(pass: Option[String], newPass: String, login: Option[String] = None)
+  case class CreateUser(email: Option[String],
+                        phone: Option[String],
+                        firstName: Option[String],
+                        lastName: Option[String],
+                        password: Option[String],
+                        flags: List[String],
+                        roles: List[String],
+                        branch: Option[String])
+
+  case class UpdatePass(password: Option[String], newPassword: String, login: Option[String] = None)
 
   case class UpdateUser(email: Option[String],
                         phone: Option[String],

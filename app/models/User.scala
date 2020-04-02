@@ -60,22 +60,11 @@ object User {
   /** Internal scopes that are required for tokens, but not stored as user permissions */
   val SelfManagePermissions = List("user:update", "offline_access")
 
-  def fromRegistration(r: RegistrationData) = User(
-    email = r.optEmail,
-    phone = r.optPhone,
-    password = r.password
-  )
-
   implicit val oAuth1InfoFmt = Json.format[OAuth1Info]
   implicit val oAuth2InfoFmt = Json.format[OAuth2Info]
 
-  val usersCacheName = "dynamic-users-cache"
-  val emailsCacheName = "dynamic-emails-cache"
-  val phonesCacheName = "dynamic-phones-cache"
-  val socialCacheName = "dynamic-social-cache"
-
-  val EXTENDED_COLLECTION_NAME = "extended-users"
-
+  val FLAG_EMAIL_NOT_CONFIRMED = "unconfirmed_email"
+  val FLAG_PHONE_NOT_CONFIRMED = "unconfirmed_phone"
   val FLAG_PASSWORD_EXP = "pass_exp"
   val FLAG_BLOCKED = "blocked"
   val FLAG_2FACTOR = "2factor"
@@ -87,6 +76,18 @@ object User {
   def checkPhone(id: String): Boolean = isValidPhone(id)
 
   def checkEmail(id: String): Boolean = isValidEmail(id)
+
+  /**
+    * Returns list of errors if any required field is missing
+    */
+  def validateNewUser(user: User, requiredIdentifiers: List[String], requirePassword: Boolean): List[String] = {
+    requiredIdentifiers.foldLeft(List.empty[String]) {
+      case (errors, "email") if user.email.isEmpty => "Email is required" :: errors
+      case (errors, "phone") if user.phone.isEmpty => "Phone is required" :: errors
+      case (errors, "any") if user.email.isEmpty && user.phone.isEmpty => "Phone or email is required" :: errors
+      case (errors, _) => errors
+    } ++ (if (requirePassword && user.password.isEmpty) List("Password is required") else Nil)
+  }
 
   // TODO: specify rules
   def checkSocialProviderKey(id: String): Boolean = isNumberString(id)

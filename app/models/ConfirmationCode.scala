@@ -25,7 +25,8 @@ case class ConfirmationCode(login: String,
 object ConfirmationCode {
   type StoredRequest = (Seq[(String, String)], Option[ByteString])
 
-  val OP_REGISTER = "register"
+  val OP_EMAIL_CONFIRM = "email-confirm"
+  val OP_PHONE_CONFIRM = "phone-confirm"
   val OP_LOGIN    = "login"
   val OP_PASSWORD_RESET = "password-reset"
 

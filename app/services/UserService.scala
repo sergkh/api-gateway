@@ -31,9 +31,10 @@ class UserService @Inject()(
                             rolesService: UsersRolesService,
                             reactiveMongoApi: ReactiveMongoApi,
                             authService: SocialAuthService,
-                            conf: Configuration)(implicit ec: ExecutionContext) extends IdentityService[User] with UserExistenceService with Logging {
+                            conf: Configuration)(implicit ec: ExecutionContext) extends IdentityService[User] with Logging {
 
-  val cachedTime = conf.get[FiniteDuration]("session.cache")
+  val allowUnconfirmedEmails = conf.get[Boolean]("app.allowUnconfirmedEmails")
+  val allowUnconfirmedPhones = conf.get[Boolean]("app.allowUnconfirmedPhones")
 
   private def db = reactiveMongoApi.database
 
@@ -53,6 +54,10 @@ class UserService @Inject()(
         throw AppException(ErrorCodes.BLOCKED_USER, s"User ${u.identifier} is blocked")
       case Some(u) if u.hasFlag(User.FLAG_PASSWORD_EXP) =>
         throw AppException(ErrorCodes.EXPIRED_PASSWORD, s"User ${u.identifier} has expired password! Please change it.")
+      case Some(u) if u.hasFlag(User.FLAG_EMAIL_NOT_CONFIRMED) && !allowUnconfirmedEmails =>
+        throw AppException(ErrorCodes.EMAIL_NOT_CONFIRMED, s"User email is not confirmed")
+      case Some(u) if u.hasFlag(User.FLAG_PHONE_NOT_CONFIRMED) && !allowUnconfirmedPhones =>
+        throw AppException(ErrorCodes.PHONE_NOT_CONFIRMED, s"User phone is not confirmed")
       case userOpt: Any => userOpt
     }
   }

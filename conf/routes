@@ -7,47 +7,6 @@
 GET           /                                                   @controllers.ApplicationController.index
 
 ###
-# summary: Performs user login, returns authorization token
-# description: In case if SMS confirmation is on and login without password is allowed, then password is not mandatory – instead user will have to confirm itself with OTP sent to `POST /users/confirm`.
-# operationId: login
-# tags:
-#   - Login
-# security: []
-# responses:
-#   200:
-#     description: Token response
-#     schema:
-#       type: object
-#       properties:
-#         token:
-#           type: string
-#           description: Authorization token that has to be placed into `X-Auth-Token` header
-#           example: eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI/docs/templates1NiJ9eyJzdWIiOiIxLU0zWDYrMUeXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9eyJzdWIiOiIxLU0zWDYrMUeXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9eyJzdWIiOiIxLU0zWDYrMU
-#   400:
-#     description: Wrong request format
-#     schema:
-#       $ref: '#/definitions/errorResponse'
-#   403:
-#     description: Authorization data is invalid or user not confirmed
-#     schema:
-#       $ref: '#/definitions/errorResponse'
-#   404:
-#     description: Specified user is not found
-#     schema:
-#       $ref: '#/definitions/errorResponse'
-#   428:
-#     description: Password field is not specified and sms authorization is on. Will send sms code, which has to be provided on `POST /users/confirm` endpoint, which in turn will return the token
-#     schema:
-#       $ref: '#/definitions/errorResponse'
-# parameters:
-#   - name: body
-#     required: true
-#     schema:
-#      $ref: '#/definitions/loginCredentials'
-###
-POST          /login                                              @controllers.ApplicationController.authenticate
-
-###
 # summary: Performs user logout
 # tags:
 #   - Login
@@ -61,43 +20,47 @@ POST          /login                                              @controllers.A
 POST          /logout                                             @controllers.ApplicationController.logout
 
 ###
-# summary: Retrieve information abount current session
+# summary: Register a new user
 # tags:
-#   - Sessions
-# operationId: listUserSessions
-# security:
-#   - login: []
-#   - api_key: []
+#   - Login
+# operationId: register
+# security: []
 # responses:
 #   200:
-#     description: Session information object
+#     description: User successfully registered
+#   409:
+#     description: User already exists
+#   428:
+#     description: Login(email/phone) confirmation required for next step of user registration
+# parameters:
+#   - name: body
+#     required: true
 #     schema:
-#       type: object
-#       properties:
-#         createdAt:
-#           type: integer
-#           format: int64
-#           description: User account status normal – for registered user or unconfirmed for unconfirmed users
-#         expiredAt:
-#           type: integer
-#           format: int64
-#           description: User account status normal – for registered user or unconfirmed for unconfirmed users
-#         onlineTime:
-#           type: integer
-#           format: int64
-#           description: User account status normal – for registered user or unconfirmed for unconfirmed users
-#   403:
-#     description: Authorization token not found
-#   404:
-#     description: Session not found
+#      type: object
+#      properties:
+#        email:
+#          type: string
+#          description: Users email
+#        phone:
+#          type: string
+#          description: Users phone
+#        firstName:
+#          type: string
+#          description: Users first name
+#        lastName:
+#          type: string
+#          description: Users last name
+#        password:
+#          type: string
+#          description: Users password
 ###
-GET           /sessions                                           @controllers.ApplicationController.session()
+POST          /register                                              @controllers.RegistrationController.register
 
 ###
-# summary: Creates user
+# summary: Creates an user by administrator
 # tags:
 #   - Users
-# operationId: createUser
+# operationId: createUserByAdmin
 # security: []
 # responses:
 #   200:
@@ -109,10 +72,8 @@ GET           /sessions                                           @controllers.A
 # parameters:
 #   - name: body
 #     required: true
-#     schema:
-#      $ref: '#/definitions/forms.OpenFormData'
 ###
-POST          /users                                              @controllers.ApplicationController.register
+POST          /users                                              @controllers.UserController.add
 
 ###
 # summary: Confirms a user by code send by email/phone

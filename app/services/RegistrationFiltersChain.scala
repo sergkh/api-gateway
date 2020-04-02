@@ -1,5 +1,6 @@
 package services
 
+import zio._
 import akka.http.scaladsl.util.FastFuture
 import javax.inject.{Inject, Singleton}
 import play.api.Configuration
@@ -25,16 +26,16 @@ class RegistrationFiltersChain @Inject() (filtersSet: JSet[RegistrationFilter], 
   }
 
 
-  def apply(regData: JsValue): Future[JsValue] = {
+  def apply(regData: JsValue): Task[JsValue] = {
     if (filters.isEmpty) {
-      FastFuture.successful(regData)
+      IO.succeed(regData)
     } else {
       runFilters(regData, filters)
     }
   }
 
-  def runFilters(data: JsValue, filters: Seq[RegistrationFilter]): Future[JsValue] = filters match {
-    case Nil => FastFuture.successful(data)
+  def runFilters(data: JsValue, filters: Seq[RegistrationFilter]): Task[JsValue] = filters match {
+    case Nil => IO.succeed(data)
     case filter :: Nil => filter.filter(data)
     case filter :: tail => filter.filter(data).flatMap { d =>
       runFilters(d, tail)

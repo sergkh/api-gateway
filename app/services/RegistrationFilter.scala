@@ -1,9 +1,8 @@
 package services
 
 import play.api.libs.json.JsValue
-
-import scala.concurrent.Future
+import zio.Task
 
 trait RegistrationFilter {
-  def filter(request: JsValue): Future[JsValue]
+  def filter(request: JsValue): Task[JsValue]
 }
