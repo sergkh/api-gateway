@@ -3,20 +3,12 @@ package controllers
 //scalastyle:off magic.number
 //scalastyle:off public.methods.have.type
 
-import zio._
 import akka.actor.ActorSystem
-import akka.http.scaladsl.util.FastFuture
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
-import com.mohiva.play.silhouette.api.exceptions.ProviderException
 import com.mohiva.play.silhouette.api.services.AuthenticatorService
-import com.mohiva.play.silhouette.api.util.Credentials
 import com.mohiva.play.silhouette.api.{LoginInfo, Silhouette}
 import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
-import com.mohiva.play.silhouette.impl.exceptions.{IdentityNotFoundException, InvalidPasswordException}
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import events.EventsStream
-import forms.LoginForm.LoginCredentials
 import forms._
 import javax.inject.{Inject, Singleton}
 import models.AppEvent._
@@ -24,14 +16,12 @@ import models._
 import play.api.Configuration
 import play.api.i18n.I18nSupport
 import play.api.libs.json.Json
-import play.api.mvc.{Headers, Request, RequestHeader, Result}
+import play.api.mvc.{RequestHeader, Result}
 import security.{ConfirmationCodeService, CustomJWTAuthenticatorService, WithPermission}
 import services._
-import services.RegistrationFiltersChain
-import utils.JsonHelper
 import utils.RichRequest._
-import utils.FutureUtils._
 import utils.TaskExt._
+import zio._
 
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.concurrent.Future
@@ -44,8 +34,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
                                       config: Configuration,
                                       eventBus: EventsStream,
                                       proxy: ProxyService,
-                                      confirmations: ConfirmationProvider,
-                                      sessionsService: SessionsService)(implicit system: ActorSystem) extends BaseController with I18nSupport {
+                                      confirmations: ConfirmationProvider)(implicit system: ActorSystem) extends BaseController with I18nSupport {
   
   val requirePass = config.getOptional[Boolean]("app.requirePassword").getOrElse(true)
   val appSecret = config.get[String]("play.http.secret.key")
@@ -86,7 +75,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
       case Some(code) => Task.succeed(Some(code))
       case None => // try by other user logins, option filter to avoid calls if code was already found
         for {
-          userOpt     <- Task.fromFuture(ec => userService.getByAnyIdOpt(login))
+          userOpt     <- userService.getByAnyIdOpt(login)
           codeByUuid  <- userOpt.map(u => confirmationService.retrieveByLogin(u.id)).getOrElse(Task.succeed(None))
           codeByEmail <- userOpt.flatMap(_.email)
                                 .filter(_ => codeByUuid.isEmpty)
@@ -142,9 +131,8 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
   def resendOtp = Action.async(parse.json(512)) { implicit request =>
     val login = request.asForm(ConfirmForm.reConfirm).login
 
-    def codeToUser(c: Option[ConfirmationCode]): Task[Option[User]] = 
-      c.map(_ => Task.fromFuture(ec => userService.getByAnyIdOpt(login)))
-       .getOrElse(Task.succeed(None))
+    def codeToUser(c: Option[ConfirmationCode]): Task[Option[User]] =
+      c.map(_ => userService.getByAnyIdOpt(login)).getOrElse(Task.none)
 
     for {
       codeOpt <- getConfirmCode(login)

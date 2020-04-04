@@ -26,7 +26,7 @@ import com.mohiva.play.silhouette.persistence.daos.DelegableAuthInfoDAO
 import com.mohiva.play.silhouette.persistence.repositories.DelegableAuthInfoRepository
 import com.typesafe.config.Config
 import javax.inject.Singleton
-import models.dao._
+import services.dao._
 import models.{JwtEnv, User}
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ArbitraryTypeReader._
@@ -161,7 +161,6 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
   def provideAuthenticatorService(idGenerator: IDGenerator,
                                   conf: Configuration,
                                   @Named("authenticator-crypter") crypter: Crypter,
-                                  sessionsService: SessionsService,
                                   keyManager: KeysManager,
                                   clock: Clock): AuthenticatorService[JWTAuthenticator] = {
 

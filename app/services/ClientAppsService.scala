@@ -3,57 +3,56 @@ package services
 import akka.actor.ActorSystem
 import javax.inject.{Inject, Singleton}
 import models._
+import org.mongodb.scala.model.Filters._
+import org.mongodb.scala.model.Updates
 import play.api.Configuration
-import play.modules.reactivemongo.ReactiveMongoApi
-import reactivemongo.api.bson._
-import reactivemongo.api.bson.collection.BSONCollection
-import reactivemongo.api.{Cursor, QueryOpts, ReadPreference}
-import services.formats.MongoFormats._
-import utils.{Logging, MongoErrorHandler}
+import services.MongoApi._
+import utils.Logging
+import utils.TaskExt._
+import zio._
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 import scala.language.implicitConversions
 
-/**
-  * @author Yaroslav Derman <yaroslav.derman@gmail.com>.
-  */
 @Singleton
 class ClientAppsService @Inject()(userService: UserService,
-                                  mongo: ReactiveMongoApi,
-                                  config: Configuration,
-                                  sessionsService: SessionsService)(implicit exec: ExecutionContext, system: ActorSystem)
+                                  mongoApi: MongoApi,
+                                  config: Configuration)(implicit exec: ExecutionContext, system: ActorSystem)
   extends Logging {
+  val col = mongoApi.collection[ClientApp](ClientApp.COLLECTION_NAME)
 
-  def createApp(app: ClientApp): Future[ClientApp] =
-    appsCollection.flatMap(_.insert.one(app).map(_ => app).recover(MongoErrorHandler.processError[ClientApp]))
+  def createApp(app: ClientApp): Task[ClientApp] = col.insertOne(app).toUnitTask.map(_ => app)
 
-  def getApp4user(appId: String, userId: String): Future[ClientApp] = {
-    val selector = BSONDocument("_id" -> appId, "ownerId" -> userId)
-
-    appsCollection.flatMap(_.find(selector).one[ClientApp])
-      .map(_.getOrElse(throw AppException(ErrorCodes.APPLICATION_NOT_FOUND, s"Application $appId for user $userId not found")))
+  def getApp4user(appId: String, userId: String): Task[ClientApp] = {
+    col.find(and(equal("_id", appId), equal("ownerId", userId)))
+        .first().toOptionTask.orFail(AppException(ErrorCodes.APPLICATION_NOT_FOUND, s"Application $appId for user $userId not found"))
   }
 
-  def getApp(appId: String): Future[ClientApp] = appsCollection.flatMap(_.find(byId(appId)).one[ClientApp])
-    .map(_.getOrElse(throw AppException(ErrorCodes.APPLICATION_NOT_FOUND, s"Application $appId not found")))
+  def getApp(appId: String): Task[ClientApp] =
+    col.find(equal("_id", appId)).first().toOptionTask
+       .orFail(AppException(ErrorCodes.APPLICATION_NOT_FOUND, s"Application $appId not found"))
 
-  def getApps(userId: String, limit: Int, offset: Int): Future[List[ClientApp]] = {
-    val criteria = BSONDocument("ownerId" -> userId)
-    val opts = QueryOpts(skipN = offset)
+  def getApps(userId: String, limit: Int, offset: Int): Task[Seq[ClientApp]] =
+    col.find(equal("ownerId", userId)).skip(offset).limit(limit).toTask
 
-    appsCollection.flatMap(_.find(criteria).options(opts)
-      .cursor[ClientApp](ReadPreference.secondaryPreferred).collect[List](limit, errorHandler[ClientApp]))
-  }
+  def countApp(userId: Option[String]): Task[Long] = userId.map { id =>
+    col.countDocuments(equal("ownerId", id)).toTask
+  }.getOrElse(col.countDocuments().toTask)
 
-  def countApp(userId: Option[String]): Future[Int] = {
-    appsCollection.flatMap(_.count(userId.map(u => BSONDocument("ownerId" -> u))))
-  }
+  def updateApp(id: String, app: ClientApp): Task[ClientApp] =
+    col.findOneAndUpdate(equal("_id", id), Updates.combine(
+      Updates.set("name", app.name),
+      Updates.set("description", app.description),
+      Updates.set("logo", app.logo),
+      Updates.set("url", app.url),
+      Updates.set("contacts", app.contacts),
+      Updates.set("redirectUrlPatterns", app.redirectUrlPatterns),
+      Updates.set("secret", app.secret)
+    )).toOptionTask
+       .orFail(AppException(ErrorCodes.APPLICATION_NOT_FOUND, s"Application $id not found"))
 
-  def updateApp(id: String, app: ClientApp): Future[ClientApp] = findAndUpdate(byId(id), app, id)
-
-  def removeApp(appId: String, user: User): Future[Unit] = {
-
-    appsCollection.flatMap(_.delete.one(BSONDocument("_id" -> appId, "ownerId" -> user.id))).map(_ => ())
+  def removeApp(appId: String, user: User): Task[Unit] = {
+    col.deleteOne(and(equal("_id", appId), equal("ownerId", user.id))).toUnitTask
 
     // TODO: clean application tokens
     // private def tokensCollection = mongo.database.map(_.collection[BSONCollection]("oauth_tokens"))
@@ -68,15 +67,4 @@ class ClientAppsService @Inject()(userService: UserService,
     //   }
     // }
   }
-
-  private def findAndUpdate[T: BSONDocumentWriter](selector: BSONDocument, update: T, id: String): Future[ClientApp] = {
-    appsCollection.flatMap(_.findAndUpdate(selector, update, true).map(
-      _.result[ClientApp].getOrElse(throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Thirdparty application $id not found"))
-    ))
-  }
-
-  private def appsCollection = mongo.database.map(_.collection[BSONCollection](ClientApp.COLLECTION_NAME))
-
-  private def errorHandler[T] = Cursor.FailOnError[List[T]]()
-
 }

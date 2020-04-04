@@ -5,40 +5,31 @@ package controllers
 import java.time.{LocalDateTime, ZoneOffset}
 import java.{util => ju}
 
+import com.mohiva.play.silhouette.api.exceptions.ProviderException
+import com.mohiva.play.silhouette.api.util.Credentials
 import com.mohiva.play.silhouette.api.{LoginInfo, Silhouette}
-import com.mohiva.play.silhouette.api.util.PasswordHasherRegistry
+import com.mohiva.play.silhouette.impl.exceptions.{IdentityNotFoundException, InvalidPasswordException}
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
+import controllers.TokenController._
 import events.EventsStream
 import forms.OAuthForm
+import forms.OAuthForm.{AccessTokenByAuthorizationCode, AccessTokenByPassword, AccessTokenByRefreshToken}
 import javax.inject.{Inject, Singleton}
 import models.AppEvent.Login
 import models.ErrorCodes._
-import models.{AppException, JwtEnv}
+import models._
+import play.api.Configuration
 import play.api.libs.json.Json
 import security.{KeysManager, WithUser}
 import services.{AuthCodesService, ClientAppsService, TokensService, UserService}
-import utils.FutureUtils._
-import utils.RichRequest._
-import utils.RichJson._
 import utils.JwtExtension._
+import utils.RichJson._
+import utils.RichRequest._
+import utils.TaskExt._
+import zio._
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.Future
-import models.RefreshToken
-import play.api.Configuration
-
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.FiniteDuration
-import forms.OAuthForm.AccessTokenByRefreshToken
-import models.User
-import forms.OAuthForm.AccessTokenByPassword
-import com.mohiva.play.silhouette.api.util.PasswordInfo
-import forms.OAuthForm.AccessTokenByAuthorizationCode
-import com.mohiva.play.silhouette.api.util.Credentials
-import com.mohiva.play.silhouette.impl.exceptions.IdentityNotFoundException
-import models.ErrorCodes
-import com.mohiva.play.silhouette.impl.exceptions.InvalidPasswordException
-import com.mohiva.play.silhouette.api.exceptions.ProviderException
-import TokenController._
 
 @Singleton
 class TokenController @Inject()(silh: Silhouette[JwtEnv],
@@ -70,15 +61,6 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
     ))
   }
 
-  // OLD create token
-  //   def createToken = oauth.Secured.async(parse.json) { implicit request =>
-  //   val code = request.asForm(ClientAppForm.code)
-
-  //   oauthService.createToken(code, silh.env.authenticatorService).map { tokenResp =>
-  //     Ok(tokenResp)
-  //   }
-  // }
-
   /**
    * Requires client authorization, using basic auth.
    * Calling options:
@@ -103,7 +85,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
 
     val res = for {
       app             <- oauth.getApp(clientId)
-      _               <- conditionalFail(app.secret != clientSecret, ACCESS_DENIED, "Wrong client secret")
+      _               <- failIf(app.secret != clientSecret, ACCESS_DENIED, "Wrong client secret")
       auth            <- grantType match {
         case "refresh_token" =>
           authorizeByRefreshToken(clientId, request.asForm(OAuthForm.getAccessTokenFromRefreshToken))
@@ -112,10 +94,10 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
         case "authorization_code" =>
           authorizeByAuthorizationCode(clientId, request.asForm(OAuthForm.getAccessTokenFromAuthCode))
       }
-      authenticator   <- silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, auth.user.id))
+      authenticator   <- Task.fromFuture(ec => silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, auth.user.id)))
       tokenWithUser   = authenticator.withUserInfo(auth.user, auth.scope)
-      token           <- silh.env.authenticatorService.init(authenticator)
-      _               <- eventBus.publish(Login(auth.user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis))
+      token           <- Task.fromFuture(ec => silh.env.authenticatorService.init(authenticator))
+      _               <- Task.fromFuture(ec => eventBus.publish(Login(auth.user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis)))
     } yield {
       log.info(s"Succeed user authentication ${auth.user.id}")
               
@@ -164,41 +146,36 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
     }
   }
 
-  private def authorizeByRefreshToken(clientId: String, req: AccessTokenByRefreshToken): Future[AuthResult] = for {
+  private def authorizeByRefreshToken(clientId: String, req: AccessTokenByRefreshToken): Task[AuthResult] = for {
     refreshToken    <- tokens.get(req.refreshToken).orFail(AppException(AUTHORIZATION_FAILED, "Invalid refresh token"))
-    _               <- if (refreshToken.expired) cleanExpiredTokenAndFail(refreshToken) else Future.unit
-    _               <- conditionalFail(refreshToken.clientId != clientId, AUTHORIZATION_FAILED, "Wrong refresh token")
+    _               <- if (refreshToken.expired) cleanExpiredTokenAndFail(refreshToken) else Task.unit
+    _               <- failIf(refreshToken.clientId != clientId, AUTHORIZATION_FAILED, "Wrong refresh token")
     loginInfo       = LoginInfo(CredentialsProvider.ID, refreshToken.userId)
-    user            <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
+    user            <- Task.fromFuture(ec => userService.retrieve(loginInfo)).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
   } yield {
     AuthResult(user, refreshToken.scope, None)
   }
 
-  private def authorizeByPassword(clientId: String, req: AccessTokenByPassword): Future[AuthResult] = {
+  private def authorizeByPassword(clientId: String, req: AccessTokenByPassword): Task[AuthResult] = {
     for {
-      loginInfo     <- credentialsProvider.authenticate(Credentials(req.username, req.password))
-      user          <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
-      _             <- conditionalFail(user.hasAllPermission(req.scopesList:_*), ACCESS_DENIED, "Wrong scopes")
+      loginInfo     <- Task.fromFuture(ec => credentialsProvider.authenticate(Credentials(req.username, req.password)))
+      user          <- Task.fromFuture(ec => userService.retrieve(loginInfo)).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
+      _             <- failIf(user.hasAllPermission(req.scopesList:_*), ACCESS_DENIED, "Wrong scopes")
       refreshToken  <- optIssueRefreshToken(user, req.scope, clientId)
-    } yield {
-      if (user.flags.contains(User.FLAG_2FACTOR)) { // TODO: support OTPs 
-        throw new AppException(AUTHORIZATION_FAILED, "User authorization failed")
-      }
-
-      AuthResult(user, req.scope)
-    }
+      _             <- failIf(user.flags.contains(User.FLAG_2FACTOR), AUTHORIZATION_FAILED, "User authorization failed") // TODO: support OTPs 
+    } yield AuthResult(user, req.scope)
   }
 
-  private def authorizeByAuthorizationCode(clientId: String, req: AccessTokenByAuthorizationCode): Future[AuthResult] = for {
+  private def authorizeByAuthorizationCode(clientId: String, req: AccessTokenByAuthorizationCode): Task[AuthResult] = for {
     authCode     <- authCodes.getAndRemove(req.authCode).map(_.filter(_.expired)).orFail(AppException(AUTHORIZATION_FAILED, "Invalid authorization code"))
     loginInfo    = LoginInfo(CredentialsProvider.ID, authCode.userId)
-    user         <- userService.retrieve(loginInfo).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
+    user         <- Task.fromFuture(ec => userService.retrieve(loginInfo)).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
     refreshToken <- optIssueRefreshToken(user, authCode.scope, clientId)
   } yield {
     AuthResult(user, authCode.scope, refreshToken)
   }
 
-  private def optIssueRefreshToken(user: User, scope: Option[String], clientId: String): Future[Option[RefreshToken]] = {
+  private def optIssueRefreshToken(user: User, scope: Option[String], clientId: String): Task[Option[RefreshToken]] = {
     if (scope.exists(_.split(" ").contains("offline_access"))) {
       tokens.store(RefreshToken(
         user.id, 
@@ -207,12 +184,12 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
         clientId
       )).map(Some(_))
     } else {
-      Future.successful(None)
+      Task.succeed(None)
     }
   }
 
-  private def cleanExpiredTokenAndFail(t: RefreshToken): Future[Unit] = 
-    tokens.delete(t.id).map { _ => throw AppException(AUTHORIZATION_FAILED, "Token expired") }
+  private def cleanExpiredTokenAndFail(t: RefreshToken): Task[Unit] = 
+    tokens.delete(t.id).flatMap(_ => Task.fail(AppException(AUTHORIZATION_FAILED, "Token expired")))
 
 }
 

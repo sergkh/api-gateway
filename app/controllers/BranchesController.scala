@@ -2,6 +2,7 @@ package controllers
 
 //scalastyle:off public.methods.have.type
 
+import zio._
 import akka.actor.ActorSystem
 import com.mohiva.play.silhouette.api.Silhouette
 import events.EventsStream
@@ -34,14 +35,16 @@ class BranchesController @Inject()(
 
     branches.isAuthorized(create.parentOrRoot, user) flatMap {
       case true =>
-        branches.create(create, user) map { createdBranch =>
+        branches.create(create, user) flatMap { createdBranch =>
           log.info(s"Branch created: $createdBranch")
-          eventBus.publish(BranchCreated(request.identity.id, createdBranch, request))
-          Ok(Json.toJson(createdBranch))
+
+          Task.fromFuture(ec => eventBus.publish(BranchCreated(request.identity.id, createdBranch))) map { _ =>
+            Ok(Json.toJson(createdBranch))
+          }
         }
       case false =>
         log.info(s"User $user not allowed to access parent branch $create")
-        throw AppException(ErrorCodes.ACCESS_DENIED, s"User cannot access parent branch")
+        Task.fail(AppException(ErrorCodes.ACCESS_DENIED, s"User cannot access parent branch"))
     }
   }
 
@@ -53,7 +56,7 @@ class BranchesController @Inject()(
       case true =>
         for {
           result <- branches.update(branchId, update, user)
-          _ <- eventBus.publish(BranchUpdated(request.identity.id, result._1, result._2, request))
+          _      <- Task.fromFuture(ec => eventBus.publish(BranchUpdated(request.identity.id, result._1, result._2)))
         } yield {
           log.info(s"Branch $branchId updated")
           Ok(Json.toJson(result))
@@ -89,7 +92,7 @@ class BranchesController @Inject()(
   def remove(branchId: String) = silh.SecuredAction(editPerm).async { request =>
     for {
       deletedBranch <- branches.remove(branchId)
-      _ <- eventBus.publish(BranchRemoved(request.identity.id, deletedBranch.id, request))
+      _             <- Task.fromFuture(ec => eventBus.publish(BranchRemoved(request.identity.id, deletedBranch.id)))
     } yield {
       log.info(s"Branch ${deletedBranch.id} was removed by ${request.identity}")
       NoContent

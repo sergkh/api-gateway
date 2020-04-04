@@ -2,33 +2,23 @@ package services
 
 import javax.inject.{Inject, Singleton}
 import models.RefreshToken
-import play.modules.reactivemongo.ReactiveMongoApi
-import reactivemongo.api.collections.bson.BSONCollection
-import services.formats.MongoFormats._
+import org.mongodb.scala.model.Filters._
+import services.MongoApi._
 import utils.Logging
+import zio._
 
-import scala.concurrent.{ExecutionContext, Future}
-import reactivemongo.api.ReadPreference
-import reactivemongo.bson.BSONDocument
-import reactivemongo.api.Cursor
+import scala.concurrent.ExecutionContext
 
 @Singleton
-class TokensService @Inject() (mongoApi: ReactiveMongoApi)(implicit exec: ExecutionContext) extends Logging {
+class TokensService @Inject() (mongoApi: MongoApi)(implicit exec: ExecutionContext) extends Logging {
 
-  def store(token: RefreshToken): Future[RefreshToken] = tokens.flatMap(_.insert.one(token)).map(_ => token)
+  val col = mongoApi.collection[RefreshToken]("refresh_tokens")
 
-  def get(id: String): Future[Option[RefreshToken]] = tokens.flatMap(_.find(byId(id)).one[RefreshToken])
+  def store(token: RefreshToken): Task[RefreshToken] = col.insertOne(token).toUnitTask.map(_ => token)
 
-  def delete(id: String): Future[Unit] = tokens.flatMap(_.delete(true).one(byId(id))).map(_ => ())
+  def get(id: String): Task[Option[RefreshToken]] = col.find(equal("_id", id)).first.toOptionTask
 
-  def list(userId: String): Future[List[RefreshToken]] = {
-    val query = BSONDocument("userId" -> userId)
-
-    tokens.flatMap(_.find(query, Option.empty[BSONDocument])
-      .cursor[RefreshToken](ReadPreference.secondaryPreferred)
-      .collect[List](-1, Cursor.ContOnError[List[RefreshToken]]()))
-
-  }
-
-  private def tokens = mongoApi.database.map(_.collection[BSONCollection]("refresh_tokens"))
+  def delete(id: String): Task[Unit] = col.deleteOne(equal("_id", id)).toUnitTask
+  
+  def list(userId: String): Task[Seq[RefreshToken]] = col.find(equal("userId", userId)).toTask
 }

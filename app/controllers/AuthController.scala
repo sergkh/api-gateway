@@ -2,39 +2,32 @@ package controllers
 
 //scalastyle:off public.methods.have.type
 
+import java.time.{LocalDateTime, ZoneOffset}
+
 import services.{AuthCodesService, ClientAppsService, TokensService, UserService}
 import com.mohiva.play.silhouette.api._
 import com.mohiva.play.silhouette.api.actions.UserAwareRequest
 import com.mohiva.play.silhouette.api.exceptions.ProviderException
 import com.mohiva.play.silhouette.api.repositories.AuthInfoRepository
 import com.mohiva.play.silhouette.impl.providers._
+import events.EventsStream
 import forms.OAuthForm
+import forms.OAuthForm.{AuthorizeUsingProvider, ResponseType}
 import javax.inject.Inject
-import models.{AppException, ErrorCodes, JwtEnv, User}
+import models.AppEvent.Login
+import models._
+import play.api.Configuration
 import play.api.i18n.I18nSupport
 import play.api.libs.json.Json
-import play.api.mvc.AnyContent
-import utils.RichRequest._
-import utils.RichJson._
+import play.api.mvc.{AnyContent, RequestHeader, Result}
 import utils.JwtExtension._
-import utils.FutureUtils._
-
-import scala.concurrent.{ExecutionContext, Future}
-import forms.OAuthForm.AuthorizeUsingProvider
-import play.api.mvc.RequestHeader
-import forms.OAuthForm.ResponseType
-import play.api.mvc.Result
-import java.net.URLEncoder
-import java.time.LocalDateTime
-import java.time.ZoneOffset
-
-import utils.RandomStringGenerator
-import models.AuthCode
-import play.api.Configuration
+import utils.RichJson._
+import utils.RichRequest._
+import utils.TaskExt._
+import zio._
 
 import scala.concurrent.duration.FiniteDuration
-import events.EventsStream
-import models.AppEvent.Login
+import scala.concurrent.{ExecutionContext, Future}
 
 
 /**
@@ -44,7 +37,7 @@ import models.AppEvent.Login
   * @param authInfoRepository The auth info service implementation.
   * @param socialProviderRegistry The social provider registry.
   */
-class SocialAuthController @Inject()(
+class AuthController @Inject()(
                                       silh: Silhouette[JwtEnv],
                                       conf: Configuration,
                                       userService: UserService,
@@ -93,17 +86,17 @@ class SocialAuthController @Inject()(
   private def socialAuth(providerName: String,
                          authReq: AuthorizeUsingProvider,
                          p: SocialProvider with CommonSocialProfileBuilder)(implicit request: UserAwareRequest[JwtEnv, AnyContent]) = {
-    p.authenticate() flatMap {
+    Task.fromFuture(_ => p.authenticate()) flatMap {
       case Left(result) =>
         log.info(s"Social auth redirect: $result")
-        Future.successful(result.flashing(authReq.flash))
+        Task.succeed(result.flashing(authReq.flash))
       case Right(authInfo) =>
         for {
           app           <- oauth.getApp(authReq.clientId)
-          _             <- conditionalFail(!authReq.redirectUri.forall(uri => app.matchRedirect(uri.toString())), ErrorCodes.ACCESS_DENIED, "Invalid redirect URL")
-          profile       <- p.retrieveProfile(authInfo)
+          _             <- failIf(!authReq.redirectUri.forall(uri => app.matchRedirect(uri.toString())), ErrorCodes.ACCESS_DENIED, "Invalid redirect URL")
+          profile       <- Task.fromFuture(_ => p.retrieveProfile(authInfo))
           user          <- initUser(request.identity, profile, authInfo)
-          _             <- conditionalFail(!user.hasAllPermission(authReq.scopesList :_*), ErrorCodes.ACCESS_DENIED, "Invalid scopes")
+          _             <- failIf(!user.hasAllPermission(authReq.scopesList :_*), ErrorCodes.ACCESS_DENIED, "Invalid scopes")
           result        <- authReq.responseType match {
             case ResponseType.Code =>
               respondWithCode(profile, user, authInfo, authReq)
@@ -118,7 +111,7 @@ class SocialAuthController @Inject()(
     }
   }
 
-  private def initUser(userOpt: Option[User], profile: CommonSocialProfile, authInfo: AuthInfo): Future[User] = {
+  private def initUser(userOpt: Option[User], profile: CommonSocialProfile, authInfo: AuthInfo): Task[User] = {
     userOpt match {
       case Some(user) =>
         // User is logged in and adding a social profile, update his info
@@ -130,16 +123,14 @@ class SocialAuthController @Inject()(
   }
 
   private def respondWithAccessToken(profile: CommonSocialProfile, user: User, authInfo: AuthInfo, authReq: AuthorizeUsingProvider)
-                                    (implicit request: RequestHeader): Future[Result] = {
-
-    import URLEncoder._
+                                    (implicit request: RequestHeader): Task[Result] = {
 
     for {
-      _                 <- authInfoRepository.save(profile.loginInfo, authInfo)
-      authenticator     <- silh.env.authenticatorService.create(profile.loginInfo)
+      _                 <- Task.fromFuture(_ => authInfoRepository.save(profile.loginInfo, authInfo))
+      authenticator     <- Task.fromFuture(_ => silh.env.authenticatorService.create(profile.loginInfo))
       userAuthenticator  = authenticator.withUserInfo(user, authReq.scope, authReq.audience)
-      token             <- silh.env.authenticatorService.init(userAuthenticator)
-      _                 <- eventBus.publish(Login(user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis))
+      token             <- Task.fromFuture(_ => silh.env.authenticatorService.init(userAuthenticator))
+      _                 <- Task.fromFuture(_ => eventBus.publish(Login(user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis)))
     } yield {
         log.info(s"User $user access token created")
 
@@ -168,7 +159,7 @@ class SocialAuthController @Inject()(
   }
 
   private def respondWithCode(profile: CommonSocialProfile, user: User, authInfo: AuthInfo, authReq: AuthorizeUsingProvider)
-                                    (implicit request: RequestHeader): Future[Result] = {
+                                    (implicit request: RequestHeader): Task[Result] = {
     val code = AuthCode(
       user.id,
       authReq.scope,

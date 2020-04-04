@@ -1,14 +1,14 @@
 package models
 
+import org.mongodb.scala.bson.annotations.BsonProperty
 import play.api.libs.json._
-import reactivemongo.bson.Macros.Annotations.Key
 import utils.RandomStringGenerator
 
 case class Branch(name: String,
                   createdBy: String,
                   description: Option[String] = None,
                   hierarchy: List[String] = Nil,
-                  @Key("_id") id: String = Branch.nextId) {
+                  @BsonProperty("_id") id: String = Branch.nextId) {
 
   def belongs(otherId: String): Boolean = otherId == id || hierarchy.contains(otherId)
 }

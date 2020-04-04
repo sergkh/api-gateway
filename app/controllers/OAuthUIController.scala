@@ -17,8 +17,7 @@ import scala.concurrent.Future
 import scala.language.implicitConversions
 
 @Singleton
-class OAuthUIController @Inject()(oauth: Oauth,
-                                  oauthService: ClientAppsService,
+class OAuthUIController @Inject()(oauthService: ClientAppsService,
                                   silh: Silhouette[JwtEnv],
                                   playEnv: play.api.Environment,
                                   assets: Assets,
@@ -39,7 +38,7 @@ class OAuthUIController @Inject()(oauth: Oauth,
           Ok(views.html.authorization(basePath, app, permissions))
         }
       case Some(user) =>
-        val diff = permissions.toSet.diff(user.permissions.toSet)
+        val diff = permissions.toSet.diff(user.permissions.getOrElse(Nil).toSet)
         log.warn(s"User $user does not have required permissions: [${diff.mkString(",")}]")
         Future.successful(Forbidden(views.html.login(basePath)))
       case _ =>

@@ -1,8 +1,9 @@
 package models
 
 import java.time.LocalDateTime
-import reactivemongo.bson.Macros.Annotations.Key
 import java.time.ZoneOffset
+
+import org.mongodb.scala.bson.annotations.BsonProperty
 import utils.RandomStringGenerator
 
 case class DBLoginInfo(id: Option[Long], providerId: String, providerKey: String)
@@ -20,9 +21,9 @@ case class AuthCode(userId: String,
                         scope: Option[String],
                         expirationTime: LocalDateTime,
                         clientId: String,
-                        @Key("_id") id: String = RandomStringGenerator.generateSecret(64),
+                        id: String = RandomStringGenerator.generateSecret(64),
                         requestedTime: LocalDateTime = LocalDateTime.now()) {
-  def expireIn: Int = ((expirationTime.toInstant(ZoneOffset.UTC).toEpochMilli / 1000) - LocalDateTime.now().toInstant(ZoneOffset.UTC).getEpochSecond()).toInt
+  def expireIn: Int = ((expirationTime.toInstant(ZoneOffset.UTC).toEpochMilli / 1000) - LocalDateTime.now().toInstant(ZoneOffset.UTC).getEpochSecond).toInt
   def expired: Boolean = expirationTime.isBefore(LocalDateTime.now())
 }
 
@@ -34,7 +35,7 @@ case class RefreshToken(userId: String,
                         scope: Option[String],
                         expirationTime: LocalDateTime,
                         clientId: String,
-                        @Key("_id") id: String = RandomStringGenerator.generateSecret(64),
+                        @BsonProperty("_id") id: String = RandomStringGenerator.generateSecret(64),
                         requestedTime: LocalDateTime = LocalDateTime.now()) {
   def expired: Boolean = expirationTime.isBefore(LocalDateTime.now())
 }

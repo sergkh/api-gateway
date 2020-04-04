@@ -50,8 +50,8 @@ object AppEvent {
   case class OauthTokenRemoved(userId: String, oauthId: String, token: String, request: RequestHeader)
     extends BaseAppEvent("oauth_token_removed", userId)
 
-  case class BranchCreated(userId: String, branch: Branch, request: RequestHeader) extends BaseAppEvent("branch_created", userId)
-  case class BranchUpdated(userId: String, oldBranch: Branch, branch: Branch, request: RequestHeader) extends BaseAppEvent("branch_updated", userId)
-  case class BranchRemoved(userId: String, branchId: String, request: RequestHeader) extends BaseAppEvent("branch_removed", userId)
+  case class BranchCreated(userId: String, branch: Branch) extends BaseAppEvent("branch_created", userId)
+  case class BranchUpdated(userId: String, oldBranch: Branch, branch: Branch) extends BaseAppEvent("branch_updated", userId)
+  case class BranchRemoved(userId: String, branchId: String) extends BaseAppEvent("branch_removed", userId)
 
 }

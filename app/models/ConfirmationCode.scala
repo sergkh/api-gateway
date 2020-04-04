@@ -3,11 +3,9 @@ package models
 import akka.util.ByteString
 import models.ConfirmationCode._
 import org.mindrot.jbcrypt.BCrypt
-import play.api.libs.json.JsValue
+import play.api.libs.json.{JsValue, Json}
 import play.api.mvc.{Request, RequestHeader}
 import services.CodeGenerator
-
-
 
 case class ConfirmationCode(login: String,
                             operation: String,
@@ -23,7 +21,7 @@ case class ConfirmationCode(login: String,
 }
 
 object ConfirmationCode {
-  type StoredRequest = (Seq[(String, String)], Option[ByteString])
+  case class StoredRequest(headers: Seq[(String, String)], req: Option[ByteString])
 
   val OP_EMAIL_CONFIRM = "email-confirm"
   val OP_PHONE_CONFIRM = "phone-confirm"
@@ -41,7 +39,7 @@ object ConfirmationCode {
 
   def generatePair(login: String, request: RequestHeader, otpLength: Int, body: Option[ByteString]): (String, ConfirmationCode) = {
     generatePair(login, request.method + " " + request.path + request.rawQueryString, otpLength,
-      Some((request.headers.headers, body))
+      Some(StoredRequest(request.headers.headers, body))
     )
   }
 

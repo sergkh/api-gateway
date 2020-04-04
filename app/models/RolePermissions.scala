@@ -1,9 +1,9 @@
 package models
 
 import play.api.libs.json.Json
-import reactivemongo.bson.Macros.Annotations.Key
+import org.mongodb.scala.bson.annotations.BsonProperty
 
-case class RolePermissions(@Key("_id") role: String, permissions: List[String]) {
+case class RolePermissions(@BsonProperty("_id") role: String, permissions: List[String]) {
   val roleStr = role.toString
   val permissionsArr = permissions.map(_.toUpperCase).toArray
 }

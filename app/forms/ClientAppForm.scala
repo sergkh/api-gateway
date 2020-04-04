@@ -20,7 +20,6 @@ object ClientAppForm {
 
   val update = Form[UpdateApps](
     mapping(
-      "enabled" -> optional(boolean),
       "name" -> optional(nonEmptyText),
       "description" -> optional(nonEmptyText),
       "logo" -> optional(nonEmptyText),
@@ -39,8 +38,7 @@ object ClientAppForm {
                         contacts: List[String],
                         redirectUrlPattern: List[String])
 
-  case class UpdateApps(enabled: Option[Boolean],
-                        name: Option[String],
+  case class UpdateApps(name: Option[String],
                         description: Option[String],
                         logo: Option[String],
                         url: Option[String],

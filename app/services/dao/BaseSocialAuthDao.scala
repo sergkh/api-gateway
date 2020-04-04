@@ -1,10 +1,9 @@
-package models.dao
+package services.dao
 
 import com.mohiva.play.silhouette.api.{AuthInfo, LoginInfo}
 import com.mohiva.play.silhouette.persistence.daos.DelegableAuthInfoDAO
 import models.{AppException, ErrorCodes}
-import services.UserService
-import services.auth.SocialAuthService
+import services.{SocialAuthService, UserService}
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future

@@ -2,24 +2,23 @@ package models
 
 import com.mohiva.play.silhouette.api.Identity
 import com.mohiva.play.silhouette.impl.providers.{OAuth1Info, OAuth2Info}
-import play.api.libs.functional.syntax._
 import play.api.libs.json._
 import utils.UuidGenerator
 import utils.StringHelpers._
 import utils.RichJson._
-import reactivemongo.bson.Macros.Annotations.{Key, Ignore}
 import com.mohiva.play.silhouette.api.util.PasswordInfo
+import org.mongodb.scala.bson.annotations.BsonProperty
 
 case class User(email: Option[String] = None,
                 phone: Option[String] = None,
                 password: Option[PasswordInfo] = None,
                 flags: List[String] = Nil,
                 roles: List[String] = Nil,
-                @Ignore permissions: List[String] = Nil,
                 hierarchy: List[String] = Nil,
                 firstName: Option[String] = None,
                 lastName: Option[String] = None,
-                @Key("_id") id: String = UuidGenerator.generateId,
+                permissions: Option[List[String]] = None,
+                @BsonProperty("_id") id: String = UuidGenerator.generateId,
                 version: Int = 0) extends Identity {
 
   def fullName: Option[String] = {
@@ -37,7 +36,7 @@ case class User(email: Option[String] = None,
 
   def hasAnyRole(r: String*): Boolean = roles.exists(hasRole)
 
-  def hasPermission(p: String): Boolean = permissions.contains(p) || User.SelfManagePermissions.contains(p)
+  def hasPermission(p: String): Boolean = permissions.exists(_.contains(p)) || User.SelfManagePermissions.contains(p)
 
   def hasAllPermission(p: String*): Boolean = p.forall(hasPermission)
 
@@ -50,6 +49,8 @@ case class User(email: Option[String] = None,
   def hasFlag(flag: String): Boolean = flags.contains(flag)
 
   def branch: Option[String] = hierarchy.headOption
+
+  def info: String = s"id:$id${email.map(e => ",email=" + e).getOrElse("")}"
 
   override def toString =
     s"u:$id;e:${email.getOrElse("")};p:${phone.getOrElse("")};n:$fullName;fl:${flags.mkString(",")};br:${hierarchy.mkString(",")}"

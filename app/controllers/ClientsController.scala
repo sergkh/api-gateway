@@ -7,14 +7,15 @@ import com.mohiva.play.silhouette.api.Silhouette
 import events.EventsStream
 import forms.{ClientAppForm, CommonForm}
 import javax.inject.{Inject, Singleton}
-import utils.RichJson._
-import utils.RichRequest._
 import models.AppEvent._
 import models._
 import play.api.Configuration
 import play.api.libs.json.{JsObject, Json}
 import security._
 import services.{ClientAppsService, UserService}
+import utils.RichJson._
+import utils.RichRequest._
+import zio._
 
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.language.implicitConversions
@@ -28,7 +29,6 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
                                 userService: UserService,
                                 oauthService: ClientAppsService,
                                 eventBus: EventsStream,
-                                oauth: Oauth,
                                 conf: Configuration)(implicit system: ActorSystem) extends BaseController {
 
   val readPerm = WithPermission("users:read")
@@ -42,7 +42,7 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
 
     for {
       thirdApp <- oauthService.createApp(app)
-      _        <- eventBus.publish(ApplicationCreated(req.identity.id, thirdApp, req))
+      _        <- Task.fromFuture(_ => eventBus.publish(ApplicationCreated(req.identity.id, thirdApp, req)))
     } yield {
       log.info(s"Create third party application $thirdApp")
       Ok(Json.obj("clientSecret" -> thirdApp.secret, "clientId" -> thirdApp.id))
@@ -53,10 +53,10 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
     val data = req.asForm(ClientAppForm.update)
     for {
       user <- userService.getRequestedUser(userId, req.identity)
-      app <- oauthService.getApp4user(id, user.id)
-      newApp = app.update(data.enabled, data.name, data.description, data.logo, data.url, data.contacts, data.redirectUrlPattern)
+      app  <- oauthService.getApp4user(id, user.id)
+      newApp = app.update(data.name, data.description, data.logo, data.url, data.contacts, data.redirectUrlPattern)
       _ <- oauthService.updateApp(id, newApp)
-      _ <- eventBus.publish(ApplicationUpdated(req.identity.id, app, req))
+      _ <- Task.fromFuture(ec => eventBus.publish(ApplicationUpdated(req.identity.id, app, req)))
     } yield {
       log.info("Updating client application " + id + ", for user: " + user.id)
       Ok(Json.toJson(app))
@@ -83,12 +83,9 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
     userService.getRequestedUser(userId, req.identity).flatMap { user =>
       val page = req.asForm(CommonForm.paginated)
 
-      val fApps = oauthService.getApps(user.id, page.limit, page.offset)
-      val fCount = oauthService.countApp(Some(user.id))
-
       for {
-        apps <- fApps
-        count <- fCount
+        apps  <- oauthService.getApps(user.id, page.limit, page.offset)
+        count <- oauthService.countApp(Some(user.id))
       } yield {
         log.info("Getting client application list for user: " + user.id + ", count: " + count)
         Ok(Json.obj("items" -> apps, "count" -> count))
@@ -100,7 +97,7 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
     for {
       user <- userService.getRequestedUser(userId, req.identity)
       _    <- oauthService.removeApp(id, user)
-      _    <- eventBus.publish(ApplicationRemoved(user.id, id, req))
+      _    <- Task.fromFuture(ec => eventBus.publish(ApplicationRemoved(user.id, id, req)))
     } yield {
       log.info("Removed client application " + id + ", for user: " + user.id)
       NoContent

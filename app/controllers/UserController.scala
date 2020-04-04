@@ -2,9 +2,7 @@ package controllers
 
 //scalastyle:off public.methods.have.type
 
-import zio._
 import akka.actor.ActorSystem
-import akka.http.scaladsl.util.FastFuture
 import akka.util.ByteString
 import com.mohiva.play.silhouette.api.actions.SecuredRequest
 import com.mohiva.play.silhouette.api.util.{PasswordHasherRegistry, PasswordInfo}
@@ -18,21 +16,17 @@ import models.AppEvent.{UserBlocked, _}
 import models.User._
 import models._
 import play.api.Configuration
-import play.api.i18n.Lang
 import play.api.libs.json.Json._
 import play.api.libs.json._
 import play.api.mvc.{RequestHeader, Result}
-import reactivemongo.play.json._
 import security.{ConfirmationCodeService, WithPermission, WithUser, WithUserAndPerm}
 import services.{BranchesService, ConfirmationProvider, UserService}
-import utils.FutureUtils._
-import utils.Responses._
+import utils.JwtExtension._
 import utils.RichRequest._
-import utils.Settings
-import utils.StringHelpers._
 import utils.TaskExt._
+import zio._
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 /**
   * Created by yaroslav on 29/11/15.
@@ -77,8 +71,8 @@ class UserController @Inject()(
       firstName = data.firstName,
       lastName = data.lastName,
       password = data.password.map(passwordHashers.current.hash),
-      flags = data.flags,
-      roles = data.roles
+      flags = data.flags.getOrElse(Nil),
+      roles = data.roles.getOrElse(Nil)
     )
 
     val errors = User.validateNewUser(user, requireFields, requirePass)
@@ -90,16 +84,16 @@ class UserController @Inject()(
 
     for {
       _               <- validateBranchAccess(user.branch, request.identity)      
-      emailExists     <- data.email.map(userService.exists).getOrElse(FastFuture.successful(false))
-      phoneExists     <- data.phone.map(userService.exists).getOrElse(FastFuture.successful(false))
-      _               <- conditionalFail(emailExists, ErrorCodes.ALREADY_EXISTS, "Email already exists")
-      _               <- conditionalFail(phoneExists, ErrorCodes.ALREADY_EXISTS, "Phone already exists")
+      emailExists     <- data.email.map(userService.exists).getOrElse(Task.succeed(false))
+      phoneExists     <- data.phone.map(userService.exists).getOrElse(Task.succeed(false))
+      _               <- failIf(emailExists, ErrorCodes.ALREADY_EXISTS, "Email already exists")
+      _               <- failIf(phoneExists, ErrorCodes.ALREADY_EXISTS, "Phone already exists")
       hierarchy       <- data.branch.map(
                           b => branches.get(b).orFail(AppException(ErrorCodes.ENTITY_NOT_FOUND, "Branch is not found")).map(_.hierarchy)
-                        ) getOrElse FastFuture.successful(Nil)
-      userWithBranch  <- user.copy(hierarchy = hierarchy)
+                        ).getOrElse(Task.succeed(Nil))
+      userWithBranch  = user.copy(hierarchy = hierarchy)
       _               <- userService.save(userWithBranch)
-      _               <- eventBus.publish(Signup(userWithBranch, request))
+      _               <- Task.fromFuture(ec => eventBus.publish(Signup(userWithBranch, request)))
     } yield {
       log.info(s"Created a new user $userWithBranch by ${request.identity.id}")
 
@@ -116,9 +110,8 @@ class UserController @Inject()(
 
   def list() = silh.SecuredAction(adminReadPerm).async { implicit request =>
     val page = request.asForm(CommonForm.paginated)
-    val branchCritOpt = request.identity.branch map { b => Json.obj("hierarchy" -> b) }
 
-    userService.list(branchCritOpt, page.offset, page.limit).flatMap { users =>
+    userService.list(request.identity.branch, page.offset, page.limit).map { users =>
 
       log.info(s"Obtained users list for ${request.identity}, offset: ${page.offset}")
 
@@ -132,10 +125,10 @@ class UserController @Inject()(
     val data = request.asForm(UserForm.updatePass)
 
     val futureUser = request.identity match {
-      case Some(user) => Future.successful(user)
+      case Some(user) => Task.succeed(user)
       case None => data.login match {
         case Some(login) => userService.getByAnyId(login)
-        case None => throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User not found")
+        case None        => Task.fail(AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User not found"))
       }
     }
 
@@ -146,12 +139,12 @@ class UserController @Inject()(
       val updPass = passwordHashers.current.hash(data.newPassword)
       val updUser = user.copy(password = Some(updPass))
 
-      passDao.find(loginInfo).flatMap {
+      Task.fromFuture(ec => passDao.find(loginInfo)).flatMap {
         case Some(passInfo) if data.password.isDefined =>
           if (passwordHashers.all.exists(_.matches(passInfo, data.password.get))) {
 
-            passDao.update(loginInfo, updPass).flatMap { _ =>
-              eventBus.publish(PasswordChange(updUser, request)) map { _ =>
+            Task.fromFuture(ec => passDao.update(loginInfo, updPass)).flatMap { _ =>
+              Task.fromFuture(ec => eventBus.publish(PasswordChange(updUser, request))) map { _ =>
 
                 log.info(s"User $user changed password")
                 NoContent.discardingCookies()
@@ -159,11 +152,11 @@ class UserController @Inject()(
             }
           } else {
             log.info(s"User $user try to change password but passwords don't match")
-            throw AppException(ErrorCodes.ACCESS_DENIED, s"Old password is wrong")
+            Task.fail(AppException(ErrorCodes.ACCESS_DENIED, s"Old password is wrong"))
           }
         case None if data.login.isEmpty =>
-          passDao.update(loginInfo, updPass).flatMap { _ =>
-            eventBus.publish(PasswordChange(updUser, request)) map { _ =>
+          Task.fromFuture(ec => passDao.update(loginInfo, updPass)).flatMap { _ =>
+            Task.fromFuture(ec => eventBus.publish(PasswordChange(updUser, request))) map { _ =>
               log.info(s"User $user set password")
               NoContent.discardingCookies()
             }
@@ -181,10 +174,10 @@ class UserController @Inject()(
     val loginInfo = LoginInfo(CredentialsProvider.ID, login)
 
     for {
-      user <- silh.env.identityService.retrieve(loginInfo).orFail(AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User $login not found"))
+      user        <- Task.fromFuture(ec => silh.env.identityService.retrieve(loginInfo)).orFail(AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User $login not found"))
       (otp, code) = ConfirmationCode.generatePair(login, ConfirmationCode.OP_PASSWORD_RESET, otpLength, None)
-      _    <- confirmationService.create(code).toUnsafeFuture
-      _    <- eventBus.publish(PasswordReset(user, otp, request))
+      _           <- confirmationService.create(code)
+      _           <- Task.fromFuture(ec => eventBus.publish(PasswordReset(user, otp, request)))
     } yield {
       log.info(s"Generate reset password code for user: ${user.id} ($login)")
       NoContent
@@ -195,47 +188,24 @@ class UserController @Inject()(
     val data = request.asForm(ResetPasswordForm.confirm)
 
     val reqLogin = data.login
-
-    userService.getByAnyId(reqLogin).flatMap { user =>
-      val reqUserId = user.identifier
-
-      val confirmCode = data.code
-      confirmationService.retrieveByLogin(reqLogin).toUnsafeFuture flatMap {
-        case Some(code) =>
-          val loginInfo = LoginInfo(CredentialsProvider.ID, user.id)
-          for {
-            user <- silh.env.identityService.retrieve(loginInfo)
-            authenticator <- silh.env.authenticatorService.create(loginInfo)
-            value <- silh.env.authenticatorService.init(authenticator)
-            result <- silh.env.authenticatorService.embed(value, NoContent)
-          } yield {
-            user match {
-              case Some(u) =>
-                if (!u.identifier.equals(reqUserId)) {
-                  log.info(s"Code $confirmCode not found for login $reqLogin")
-                  throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User ${code.login} not found")
-                } else {
-                  val updPass = passwordHashers.current.hash(data.password)
-                  val updUser = u.copy(password = Some(updPass) )
-
-                  passDao.update(loginInfo, updPass).flatMap { _ =>
-                    eventBus.publish(PasswordChange(updUser, request)) flatMap { _ =>
-                      confirmationService.consumeByLogin(reqLogin).toUnsafeFuture
-                    }
-                  }
-
-                  log.info(s"User $reqLogin change password with reset")
-                  result.discardingCookies()
-                }
-              case _ =>
-                log.info(s"User ${code.login} doesn't found")
-                throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User ${code.login} not found")
-            }
-          }
-        case _ =>
-          log.info(s"Code $confirmCode not found")
-          throw AppException(ErrorCodes.CONFIRM_CODE_NOT_FOUND, s"Code $confirmCode not found")
-      }
+    val confirmCode = data.code
+    val loginInfo = LoginInfo(CredentialsProvider.ID, data.login)
+    for {
+      code          <- confirmationService.retrieveByLogin(reqLogin).orFail(AppException(ErrorCodes.CONFIRM_CODE_NOT_FOUND, s"Code $confirmCode not found"))
+      user          <- Task.fromFuture(ec => userService.retrieve(loginInfo)).orFail(AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User ${data.login} not found"))  
+      _             <- failIf(!user.checkId(code.login), ErrorCodes.ENTITY_NOT_FOUND, s"User ${code.login} not found")
+      authenticator <- Task.fromFuture(ec => silh.env.authenticatorService.create(loginInfo))
+      tokenWithUser  = authenticator.withUserInfo(user, None)
+      value         <- Task.fromFuture(ec => silh.env.authenticatorService.init(tokenWithUser))
+      result        <- Task.fromFuture(ec => silh.env.authenticatorService.embed(value, NoContent))
+      updatedPass    = passwordHashers.current.hash(data.password)
+      updUser        = user.copy(password = Some(updatedPass))
+      _             <- Task.fromFuture(ec => passDao.update(loginInfo, updatedPass))
+      _             <- Task.fromFuture(ec => eventBus.publish(PasswordChange(updUser, request)))
+      _             <- confirmationService.consumeByLogin(reqLogin)
+    } yield {
+      log.info(s"User $reqLogin reset password")
+      result.discardingCookies()
     }
   }
 
@@ -252,7 +222,7 @@ class UserController @Inject()(
   }
 
   // TODO: needs to be fixed first
-  def patch(id: String)= TODO
+  def patch(id: String) = TODO
   /* silh.SecuredAction(editPerm || WithUser(id)).async(parse.json) { implicit request =>
     log.info(s"Updating user: ${request.body}")
 
@@ -267,29 +237,33 @@ class UserController @Inject()(
 
   } */
 
-  private def updateUserInternal(request: SecuredRequest[JwtEnv, JsValue], oldUser: User, update: User, editor: User): Future[Result] = {
+  private def updateUserInternal(request: SecuredRequest[JwtEnv, JsValue], oldUser: User, update: User, editor: User): Task[Result] = {
     val updatedUserFuture = for {
-      _ <- validateUpdate(update, oldUser, editor)
-      _ <- validateBranchAccess(oldUser.branch, editor)
-      userWithRoles <- userService.withPermissions(update)
+      _                <- validateUpdate(update, oldUser, editor)
+      _                <- validateBranchAccess(oldUser.branch, editor)
+      userWithRoles    <- userService.withPermissions(update)
       userWithBranches <- updateBranches(oldUser, userWithRoles, editor)
     } yield userWithBranches
 
+
     updatedUserFuture.flatMap { user =>
+      
+      val errors = User.validateNewUser(user, requireFields, requirePass)
 
-      if (user.email.isEmpty && user.phone.isEmpty) {
-        log.info("Nor phone or email specified for user " + user.id)
-        throw AppException(ErrorCodes.IDENTIFIER_REQUIRED, "Nor phone nor email specified")
-      }
+      if (errors.nonEmpty) {
+        log.warn(s"Registration fields were required but not set: ${errors.mkString("\n")}")
+        Task.fail(AppException(ErrorCodes.INVALID_REQUEST, errors.mkString("\n")))
+      } else {
 
-      for {
-        // allow admin to set any email/phone
-        _ <- verifyConfirmationRequired(oldUser, user, request, Some(request.body))
-        storedUser <- userService.update(user, true)
-        _ <- notifyUserUpdate(oldUser, storedUser, request)
-      } yield {
-        log.info(s"User $user was updated by ${request.identity.id}")
-        Ok(Json.toJson(storedUser))
+        for {
+          // allow admin to set any email/phone
+          _  <- verifyConfirmationRequired(oldUser, user, request, Some(request.body))
+          _  <- userService.update(user)
+          _  <- notifyUserUpdate(oldUser, user, request)
+        } yield {
+          log.info(s"User $user was updated by ${request.identity.id}")
+          Ok(Json.toJson(user))
+        }
       }
     }
   }
@@ -297,9 +271,9 @@ class UserController @Inject()(
   def delete(id: String, comment: Option[String]) = silh.SecuredAction(adminEditPerm || WithUserAndPerm(id, "user:update")).async { implicit request =>
     for {
       user <- userService.getRequestedUser(id, request.identity)
-      _ <- validateBranchAccess(user.branch, request.identity)
-      _ <- userService.delete(user)
-      _ <- eventBus.publish(UserDelete(user, comment, request))
+      _    <- validateBranchAccess(user.branch, request.identity)
+      _    <- userService.delete(user)
+      _    <- Task.fromFuture(ec => eventBus.publish(UserDelete(user, comment, request))) 
     } yield {
       log.info(s"User $user was deleted by $id ${comment.map(c => "with comment: " + c ).getOrElse("without comment")}")
       NoContent
@@ -312,26 +286,6 @@ class UserController @Inject()(
         s"Get count of users requested by ${req.identity.identifier}, branch: ${req.identity.branch.getOrElse("none")}, count: $count"
       )
       Ok(Json.obj("count" -> count))
-    }
-  }
-
-  def search = silh.SecuredAction(adminReadPerm).async { request =>
-    val data = request.asForm(UserForm.searchUser)
-    val user = request.identity
-
-    val criteria = data.q.replaceAll(" ", "") match {
-      case uuid: String if isNumberString(uuid) => Json.obj("_id" -> Json.obj("$regex" -> (uuid + ".*")))
-      case phone: String if User.checkPhone(phone) => Json.obj("phone" -> Json.obj("$regex" -> ("\\" + phone + ".*")))
-      case email: String => Json.obj("email" -> Json.obj("$regex" -> (".*" + email + ".*")))
-    }
-
-    val branchCrit = user.branch map { b => Json.obj("hierarchy" -> b) } getOrElse Json.obj()
-
-    userService.search(criteria ++ branchCrit, offset = 0, limit = data.limit.getOrElse(Settings.DEFAULT_LIMIT)).map { users =>
-      log.info(
-        s"Find users with query:${data.q}, cnt:${users.length} requested by ${user.identifier} branch: ${user.branch.getOrElse("none")}"
-      )
-      Ok(Json.toJson(users))
     }
   }
 
@@ -355,65 +309,59 @@ class UserController @Inject()(
 
     for {
       editUser <- userService.getRequestedUser(id, request.identity)
-      _ <- validateBranchAccess(editUser.branch, request.identity)
-      user <- userService.updateFlags(updateUser(blockFlag, editUser))
-      _ <- eventBus.publish(if(blockFlag) UserBlocked(user, request) else UserUnblocked(user, request))
+      _        <- validateBranchAccess(editUser.branch, request.identity)
+      user     <- userService.updateFlags(updateUser(blockFlag, editUser))
+      _        <- Task.fromFuture(ec => eventBus.publish(if(blockFlag) UserBlocked(user, request) else UserUnblocked(user, request)))
     } yield {
       log.info(s"User $user was ${if(blockFlag) "blocked" else "unblocked" } by ${request.identity.id}")
       NoContent
     }
   }
 
-  private def validateUpdate(update: User, oldUser: User, editor: User): Future[Unit] = {
+  private def validateUpdate(update: User, oldUser: User, editor: User): Task[Unit] = {
     for {
-      _ <- conditionalFail(oldUser.version != update.version,
+      _ <- failIf(oldUser.version != update.version,
                   ErrorCodes.CONCURRENT_MODIFICATION,
                   s"Concurrent modification: current user version is ${oldUser.version} while provided one is ${oldUser.version}"
       )
-      _ <- conditional(update.email.isDefined && update.email != oldUser.email,
-        userService.getByAnyIdOpt(update.email.get).map { oldOpt =>
-          conditionalFail(oldOpt.exists(_.id != oldUser.id), ErrorCodes.ALREADY_EXISTS, "Email already used by another user")
-        })
+      _ <- if (update.email.isDefined && update.email != oldUser.email) {
+          userService.getByAnyIdOpt(update.email.get).flatMap { oldOpt =>
+            failIf(oldOpt.exists(_.id != oldUser.id), ErrorCodes.ALREADY_EXISTS, "Email already used by another user")
+          }
+        } else Task.unit
 
-      _ <- conditional(update.phone.isDefined && update.phone != oldUser.phone,
-        userService.getByAnyIdOpt(update.phone.get).map { oldOpt =>
-          conditionalFail(oldOpt.exists(_.id != oldUser.id), ErrorCodes.ALREADY_EXISTS, "Phone already used by another user")
-        })
-    } yield {
-      val flagsChanged = update.flags.toSet != oldUser.flags.toSet
-
-      if (flagsChanged && !editor.hasPermission("users:edit")) {
-        throw AppException(ErrorCodes.ACCESS_DENIED, "User cannot change admin flags")
-      }
-
-      if ((update.roles.sorted != oldUser.roles) && !editor.hasPermission("users:edit")) {
-        throw AppException(ErrorCodes.ACCESS_DENIED, "User cannot change roles")
-      }
-    }
+      _ <- if(update.phone.isDefined && update.phone != oldUser.phone) {
+          userService.getByAnyIdOpt(update.phone.get).flatMap { oldOpt =>
+            failIf(oldOpt.exists(_.id != oldUser.id), ErrorCodes.ALREADY_EXISTS, "Phone already used by another user")
+          }
+        } else Task.unit
+      flagsChanged = update.flags.toSet != oldUser.flags.toSet  
+      _ <- failIf(flagsChanged && !editor.hasPermission("users:edit"), ErrorCodes.ACCESS_DENIED, "User cannot change admin flags")
+      _ <- failIf((update.roles.sorted != oldUser.roles) && !editor.hasPermission("users:edit"), ErrorCodes.ACCESS_DENIED, "User cannot change roles")
+    } yield ()
   }
 
-  private def notifyUserUpdate(editUser: User, newUser: User, request: RequestHeader): Future[Unit] = {
-    eventBus.publish(UserUpdate(newUser, request)) flatMap { _ =>
+  private def notifyUserUpdate(editUser: User, newUser: User, request: RequestHeader): Task[Unit] = {
+    Task.fromFuture(ec => eventBus.publish(UserUpdate(newUser, request))) flatMap { _ =>
       (editUser.hasFlag(User.FLAG_BLOCKED), newUser.hasFlag(User.FLAG_BLOCKED)) match {
-        case (true, false) => eventBus.publish(UserUnblocked(newUser, request))
-        case (false, true) => eventBus.publish(UserBlocked(newUser, request))
-        case (_, _) => Future.unit
+        case (true, false) => Task.fromFuture(ec => eventBus.publish(UserUnblocked(newUser, request)))
+        case (false, true) => Task.fromFuture(ec => eventBus.publish(UserBlocked(newUser, request)))
+        case (_, _) => Task.unit
       }
     }
   }
 
-  private def verifyConfirmationRequired(editUser: User, newUser: User, request: SecuredRequest[JwtEnv, JsValue], body: Option[JsValue] = None) = {
+  private def verifyConfirmationRequired(editUser: User, newUser: User, request: SecuredRequest[JwtEnv, JsValue], body: Option[JsValue] = None): Task[Unit] = {
     if (editUser.phone != newUser.phone && newUser.phone.isDefined && !confirmationValidator.verifyConfirmed(request)) {
       val (otp, code) = ConfirmationCode.generatePair(editUser.id, request, otpLength, body.map(json => ByteString(Json.toBytes(json))))
 
       for {
-        _   <- confirmationService.create(code, ttl = Some(otpPhoneTTLSeconds)).toUnsafeFuture
-        _   <- confirmationService.create(code.copy(login = editUser.phone.get), ttl = Some(otpPhoneTTLSeconds)).toUnsafeFuture // store code for both UUID and phone
-        _   <- eventBus.publish(OtpGeneration(Some(newUser.id), None, newUser.phone, otp))        
-      } yield {
-        log.info(s"Sending phone confirmation code to ${newUser.id}")
-        throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
-      }
+        _   <- confirmationService.create(code, ttl = Some(otpPhoneTTLSeconds))
+        _   <- confirmationService.create(code.copy(login = editUser.phone.get), ttl = Some(otpPhoneTTLSeconds)) // store code for both UUID and phone
+        _   <- Task.fromFuture(ec => eventBus.publish(OtpGeneration(Some(newUser.id), None, newUser.phone, otp)))
+        _   <- Task(log.info(s"Sending phone confirmation code to ${newUser.id}"))
+        _   <- Task.fail(AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm"))
+      } yield ()
 
     } else if (editUser.email != newUser.email && newUser.email.isDefined && !confirmationValidator.verifyConfirmed(request)) {
       val (otp, code) = ConfirmationCode.generatePair(
@@ -421,19 +369,18 @@ class UserController @Inject()(
       )
 
       for {
-        _   <- confirmationService.create(code, ttl = Some(optEmailTTLSeconds)).toUnsafeFuture
-        _   <- confirmationService.create(code.copy(login = newUser.email.get), ttl = Some(optEmailTTLSeconds)).toUnsafeFuture // store code for both UUID and phone
-        _   <- eventBus.publish(OtpGeneration(Some(newUser.id), newUser.email, None, otp))        
-      } yield {
-        log.info(s"Sending email confirmation code to ${newUser.id}")
-        throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
-      }      
+        _   <- confirmationService.create(code, ttl = Some(optEmailTTLSeconds))
+        _   <- confirmationService.create(code.copy(login = newUser.email.get), ttl = Some(optEmailTTLSeconds)) // store code for both UUID and phone
+        _   <- Task.fromFuture(ec => eventBus.publish(OtpGeneration(Some(newUser.id), newUser.email, None, otp)))     
+        _   <- Task(log.info(s"Sending email confirmation code to ${newUser.id}"))
+        _   <- Task.fail(AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm"))
+      } yield ()     
     } else {
-      Future.unit
+      Task.unit
     }
   }
 
-  private def updateBranches(oldUser: User, newUser: User, editor: User): Future[User] = {
+  private def updateBranches(oldUser: User, newUser: User, editor: User): Task[User] = {
     val branchId = newUser.branch orElse oldUser.branch getOrElse Branch.ROOT
 
     branches.isAuthorized(branchId, editor).flatMap {
@@ -445,13 +392,13 @@ class UserController @Inject()(
             throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Branch $branchId is not found")
         }
       case true =>
-        FastFuture.successful(newUser)
+        Task.succeed(newUser)
       case false =>
-        throw AppException(ErrorCodes.ACCESS_DENIED, s"Denied access to branch: $branchId")
+        Task.fail(AppException(ErrorCodes.ACCESS_DENIED, s"Denied access to branch: $branchId"))
     }
   }
 
-  private def validateBranchAccess(branchId: Option[String], user: User): Future[Unit] = {
+  private def validateBranchAccess(branchId: Option[String], user: User): Task[Unit] = {
     branches.isAuthorized(branchId.getOrElse(Branch.ROOT), user) map {
       case false => throw AppException(ErrorCodes.ACCESS_DENIED, s"Denied access to branch: $branchId")
       case true => ()

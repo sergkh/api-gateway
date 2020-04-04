@@ -6,6 +6,7 @@ import models.User
 import play.api.mvc.Request
 import services.BranchesService
 import utils.JwtExtension._
+import utils.TaskExt._
 
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.concurrent.Future
@@ -19,7 +20,7 @@ case class WithPermission(permission: String) extends Authorization[User, JWTAut
 case class WithBranchPermission(permission: String)(implicit branches: BranchesService) {
   def apply(branchProvider: => String): Authorization[User, JWTAuthenticator] = new Authorization[User, JWTAuthenticator] {
     override def isAuthorized[B](identity: User, authenticator: JWTAuthenticator)(implicit request: Request[B]): Future[Boolean] = {
-      branches.isAuthorized(branchProvider, identity) map { result =>
+      branches.isAuthorized(branchProvider, identity).toUnsafeFuture map { result =>
         result && authenticator.asPartialUser.exists(_.hasPermission(permission)) && identity.hasPermission(permission)
       }
     }

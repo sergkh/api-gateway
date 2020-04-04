@@ -22,8 +22,8 @@ object UserForm {
       "firstName" -> optional(nonEmptyText),
       "lastName" -> optional(nonEmptyText),
       "password" -> optional(password),
-      "flags" -> default(list(nonEmptyText), Nil),
-      "roles" -> default(list(nonEmptyText), Nil),
+      "flags" -> optional(list(nonEmptyText)),
+      "roles" -> optional(list(nonEmptyText)),
       "branch" -> optional(text(Branch.BranchIdSize, Branch.BranchIdSize))
     )(CreateUser.apply)(CreateUser.unapply)
   )
@@ -41,13 +41,6 @@ object UserForm {
     )(UpdateUser.apply)(UpdateUser.unapply)
   )
 
-  val searchUser = Form(
-    mapping(
-      "q" -> nonEmptyText(3),
-      "limit" -> optional(limit)
-    )(SearchUser.apply)(SearchUser.unapply)
-  )
-
   val blockUser = Form(
     mapping(
       "block" -> boolean
@@ -59,8 +52,8 @@ object UserForm {
                         firstName: Option[String],
                         lastName: Option[String],
                         password: Option[String],
-                        flags: List[String],
-                        roles: List[String],
+                        flags: Option[List[String]],
+                        roles: Option[List[String]],
                         branch: Option[String])
 
   case class UpdatePass(password: Option[String], newPassword: String, login: Option[String] = None)

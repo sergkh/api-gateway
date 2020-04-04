@@ -116,7 +116,7 @@ object JwtExtension {
         "roles" -> Option(u.roles).filterNot(_.isEmpty),
         "name" -> u.fullName,
         "email" -> u.email,
-        "permissions" -> Option(scope.fold(u.permissions)(_.split(" ").toList)).filterNot(_.isEmpty),
+        "permissions" -> Option(scope.fold(u.permissions.getOrElse(Nil))(_.split(" ").toList)).filterNot(_.isEmpty),
         "aud" -> Option(audience.toList).filterNot(_.isEmpty)
       ).filterNull)
     )
@@ -127,7 +127,7 @@ object JwtExtension {
           id = (json \ "id").as[String],
           email = (json \ "email").asOpt[String],
           roles = (json \ "roles").asOpt[List[String]].getOrElse(Nil),
-          permissions = (json \ "permissions").asOpt[List[String]].getOrElse(Nil)
+          permissions = (json \ "permissions").asOpt[List[String]]
         )
       }.toOption
     }
@@ -161,11 +161,18 @@ object FutureUtils {
 
 object TaskExt {
 
+  def failIf[A](cond: Boolean, code: String, message: String): Task[_] = if (cond) Task.fail(AppException(code, message)) else Task.unit
+
   /**
     * Some extensions needed to make transition to ZIO easier
     */
   implicit class RichTaks[A](val t: Task[A]) extends AnyVal {
     implicit def toUnsafeFuture: Future[A] = zio.Runtime.default.unsafeRunToFuture(t)
   }
+
+  implicit class RichOptTask[A](val t: Task[Option[A]]) extends AnyVal {
+    def orFail(ex: Exception): Task[A] = t.flatMap(_.map(a => Task.succeed(a)).getOrElse(Task.fail(ex)))
+  }
+
 
 }

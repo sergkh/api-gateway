@@ -41,10 +41,10 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
   val otpEmailTTLSeconds = 3 * 24 * 60 * 60 // 3 days, TODO: make a setting
   val otpPhoneTTLSeconds = 10 * 60
 
-  val requirePass    = config.get[Boolean]("app.requirePassword")
-  val requireFields  = config.get[String]("app.requireFields").split(",").map(_.trim).toList
+  val requirePass    = config.get[Boolean]("registration.requirePassword")
+  val requireFields  = config.get[String]("registration.requiredFields").split(",").map(_.trim).toList
 
-  log.info(s"Required user identifiers: $requireFields. Password required: $requirePass")
+  log.info(s"Required user identifiers: ${requireFields.mkString(",")}. Password required: $requirePass")
 
   implicit val createUserFormat = Json.reads[UserForm.CreateUser].map { c =>
     import forms.FormConstraints._
@@ -84,10 +84,10 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
     } else {
 
       for {
-        emailExists     <- data.email.map(email => Task.fromFuture(ex => userService.exists(email)) ).getOrElse(Task.succeed(false))
-        phoneExists     <- data.phone.map(phone => Task.fromFuture(ex => userService.exists(phone))).getOrElse(Task.succeed(false))
+        emailExists     <- data.email.map(email => userService.exists(email)).getOrElse(Task.succeed(false))
+        phoneExists     <- data.phone.map(phone => userService.exists(phone)).getOrElse(Task.succeed(false))
         _               <- if (emailExists || phoneExists) Task.fail(AppException(ErrorCodes.ALREADY_EXISTS, "Email or phone already exists")) else Task.unit
-        _               <- Task.fromFuture(ex => userService.save(user))
+        _               <- userService.save(user)
         _               <- publishEmailConfirmationCode(user)
         _               <- publishPhoneConfirmationCode(user)
       } yield {

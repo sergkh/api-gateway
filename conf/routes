@@ -216,35 +216,6 @@ POST          /users/recovery/confirm                             @controllers.U
 GET           /users/:userId/exists                               @controllers.UserController.checkExistence(userId: String)
 
 ###
-# summary: Finds user with specified identifier
-# tags:
-#   - Users
-# operationId: findUser
-# security:
-#   - oauth: ['read:users']
-#   - api_key: []
-# responses:
-#   200:
-#     description: Users list
-#     schema:
-#       type: array
-#       items:
-#           - "$ref": "#/definitions/models.User"
-# parameters:
-#   - name: q
-#     in: query
-#     type: string
-#     required: true
-#     description: User identifier
-#   - name: limit
-#     in: query
-#     type: integer
-#     format: int32
-#     description: Results count limit (default 100)
-###
-GET           /users/search                                       @controllers.UserController.search
-
-###
 # summary: Returns count of users registered in system
 # tags:
 #   - Users
@@ -393,7 +364,7 @@ DELETE         /users/:userId                                     @controllers.U
 #     required: true
 #     description: provider identifier
 ###
-GET           /auth/:provider                                     @controllers.SocialAuthController.authenticate(provider)
+GET           /auth/:provider                                     @controllers.AuthController.authenticate(provider)
 
 ###
 # summary: Returns user information

@@ -12,7 +12,7 @@ import play.api.{Configuration, Environment, Logger, OptionalSourceMapper}
 
 import scala.compat.Platform
 import scala.concurrent.Future
-
+import utils.RichJson._
 /**
   * Created by sergeykhruschak on 4/18/16.
   */
@@ -83,11 +83,11 @@ class ErrorHandler @Inject()(env: Environment,
 
   @inline
   private def generateClientResp[T](code: T, timestamp: Long, message: Option[String] = None): JsObject = {
-    JsonHelper.toNonemptyJson(
+    Json.obj(
       "error" -> code.toString,
       "message" -> message,
       "timestamp" -> timestamp
-    )
+    ).filterNull
   }
 
   @inline

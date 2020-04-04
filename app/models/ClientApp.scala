@@ -1,7 +1,7 @@
 package models
 
+import org.mongodb.scala.bson.annotations.BsonProperty
 import play.api.libs.json._
-import reactivemongo.bson.Macros.Annotations.Key
 import services.CodeGenerator
 import utils.UuidGenerator
 
@@ -13,12 +13,10 @@ case class ClientApp(
   url: String,
   contacts: List[String] = Nil,
   redirectUrlPatterns: List[String] = Nil,
-  enabled: Boolean = true,
-  @Key("_id") id: String = UuidGenerator.generateId,
+  @BsonProperty("_id") id: String = UuidGenerator.generateId,
   secret: String = CodeGenerator.generateSecret(ClientApp.SECRET_LENGTH)) {
 
-  def update(appEnabled: Option[Boolean],
-             appName: Option[String],
+  def update(appName: Option[String],
              appDescription: Option[String],
              appLogo: Option[String],
              appUrl: Option[String],
@@ -30,8 +28,7 @@ case class ClientApp(
       logo = appLogo.getOrElse(logo),
       url = appUrl.getOrElse(url),
       contacts = appContacts.getOrElse(contacts),
-      redirectUrlPatterns = appRedirectUrlPatterns.getOrElse(redirectUrlPatterns),
-      enabled = appEnabled.getOrElse(enabled)
+      redirectUrlPatterns = appRedirectUrlPatterns.getOrElse(redirectUrlPatterns)
     )
   }
 
