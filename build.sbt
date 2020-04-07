@@ -54,7 +54,6 @@ libraryDependencies ++= Seq(
   "com.iheart"        %% "ficus"                            % "1.4.7",
   "org.mongodb.scala" %% "mongo-scala-driver"               % "2.7.0",
   "com.iheart"        %% "play-swagger"                     % "0.9.1-PLAY2.8",
-  "com.twitter"       %% "chill"                            % "0.9.5",
   "org.gnieh"         %% "diffson-play-json"                % "4.0.2",
   "com.impactua"      %% "redis-scala"                      % redisVersion,
   "dev.zio"           %% "zio"                              % "1.0.0-RC18-2",

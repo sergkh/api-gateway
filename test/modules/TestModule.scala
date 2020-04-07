@@ -17,7 +17,6 @@ import helpers.Context
 import models.JwtEnv
 import net.codingwell.scalaguice.ScalaModule
 import org.mockito.MockitoSugar
-import play.modules.reactivemongo.ReactiveMongoApi
 import security.{CustomJWTAuthenticatorService, KeysManager}
 import service.fakes.{TestEventsStream, TestProxy, TestSessionsService}
 import utils.CustomEventBus
@@ -38,7 +37,6 @@ object TestModule extends ScalaModule with Context with MockitoSugar {
 
   val actorSystem = ActorSystem.create()
   val eventBus = new CustomEventBus(actorSystem)
-  private val db = mock[ReactiveMongoApi]
 
   /**
     * A Silhouette fake environment.
@@ -58,7 +56,6 @@ object TestModule extends ScalaModule with Context with MockitoSugar {
     bind[Environment[JwtEnv]].toInstance(env)
     bind[ProxyService].to[TestProxy]
     bind[SessionsService].to[TestSessionsService]
-    bind[ReactiveMongoApi].toInstance(db)
     bind[EventsStream].to[TestEventsStream]
   }
 

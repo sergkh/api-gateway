@@ -4,8 +4,8 @@ import com.fotolog.redis.{BinaryConverter, RedisClient}
 import javax.inject.{Inject, Singleton}
 import models.AuthCode
 import play.api.Configuration
-import utils.KryoSerializer
 import zio._
+import play.api.libs.json.Json
 
 /**
   * Service manages short term Authentication codes in redis.
@@ -14,9 +14,11 @@ import zio._
 class AuthCodesService @Inject() (conf: Configuration) {
   private[this] final val redis = RedisClient(conf.get[String]("redis.host"))
 
+  private[this] implicit val format = Json.format[AuthCode]
+
   private[this] implicit object BinaryResultConverter extends BinaryConverter[AuthCode] {
-    override def read(data: Array[Byte]): AuthCode = KryoSerializer.fromBytes[AuthCode](data)
-    override def write(v: AuthCode): Array[Byte] = KryoSerializer.toBytes[AuthCode](v)
+    override def read(data: Array[Byte]): AuthCode = Json.parse(data).as[AuthCode]
+    override def write(v: AuthCode): Array[Byte] = Json.toBytes(Json.toJson(v))
   }
 
   private[this] val prefix = "auth-code:"
