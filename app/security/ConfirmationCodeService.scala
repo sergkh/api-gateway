@@ -19,14 +19,22 @@ class ConfirmationCodeService @Inject()(conf: Configuration, lifecycle: Applicat
   final val SALT_ITERATIONS = 10
 
   private val redis = RedisClient(conf.get[String]("redis.host"))
+
   private val DefaultTTL = 12 * 60 * 60
   private val prefix = "ccds:"
+
   private val signer = new DefaultCookieSigner(SecretConfiguration(
     conf.getOptional[String]("confirmation.otp.sign-key").getOrElse {
       log.info("No OTP signature key set, using random")
       RandomStringGenerator.generateSecret(64)
     }
   ))
+
+  private val logOtp = conf.getOptional[Boolean]("confirmation.otp.log").getOrElse(false)
+
+  if (logOtp) {
+    log.warn("!WARNING : OTP codes logging is on")
+  }
 
   def create(userId: String, searchIdentifiers: List[String], operation: String, otp: String,  ttl: Int = DefaultTTL): Task[Unit] = {
 
@@ -41,6 +49,10 @@ class ConfirmationCodeService @Inject()(conf: Configuration, lifecycle: Applicat
       ttl = ttl,
       expiresAt = expiresAt
     )
+
+    if (logOtp) {
+      log.info(s"OTP code for $userId: $otp")
+    }
 
     val signedCode = code.withSignature(signCode(code))
 
