@@ -41,11 +41,7 @@ object UserForm {
     )(UpdateUser.apply)(UpdateUser.unapply)
   )
 
-  val blockUser = Form(
-    mapping(
-      "block" -> boolean
-    )(BlockUser.apply)(BlockUser.unapply)
-  )
+  val blockUser = Form(single("block" -> boolean))
 
   case class CreateUser(email: Option[String],
                         phone: Option[String],
@@ -82,7 +78,6 @@ object UserForm {
   }
 
   case class SearchUser(q: String, limit: Option[Int])
-  case class BlockUser(block: Boolean)
   case class PasswordTTL(passTTL: Option[Long], expireOnce: Option[Boolean])
 
 }

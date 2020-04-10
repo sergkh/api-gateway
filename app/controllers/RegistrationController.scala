@@ -26,11 +26,12 @@ import forms.UserForm
 import play.api.libs.json.JsValue
 import akka.http.scaladsl.util.FastFuture
 import play.api.data.validation.Valid
+import services.CodeGenerator
 
 @Singleton
 class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
                                       userService: UserService,
-                                      confirmationService: ConfirmationCodeService,
+                                      confirmations: ConfirmationCodeService,
                                       config: Configuration,
                                       eventBus: EventsStream,
                                       passwordHashers: PasswordHasherRegistry,
@@ -60,7 +61,7 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
     for {
       registerBody  <- registrationFilters(request.body)
       user          <- userRegistrationRequest(registerBody)
-      _             <- Task.fromFuture(ec => eventBus.publish(Signup(user, request)))
+      _             <- eventBus.publish(Signup(user, request))
     } yield Ok(Json.toJson(user))
   }
 
@@ -99,24 +100,27 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
 
   private def publishEmailConfirmationCode(user: User): Task[Unit] = {
     user.email.map { email =>
+
+      val otp = CodeGenerator.generateNumericPassword(otpEmailLength, otpEmailLength)
+
       for {
-        otpCode <- Task(ConfirmationCode.generatePair(user.id, ConfirmationCode.OP_EMAIL_CONFIRM, otpEmailLength, None))
-        (otp, code) = otpCode
-        _ <- confirmationService.create(code, ttl = Some(otpEmailTTLSeconds))
-        _ <- confirmationService.create(code.copy(login = email), ttl = Some(otpEmailTTLSeconds))
-        _ <- Task.fromFuture(ec => eventBus.publish(OtpGeneration(Some(user.id), email = Some(email), code = otp))) 
+        _ <- confirmations.create(
+          user.id, List(user.id, email), ConfirmationCode.OP_EMAIL_CONFIRM, otp, ttl = otpEmailTTLSeconds
+        )
+        _ <- eventBus.publish(OtpGeneration(Some(user.id), email = Some(email), code = otp))
       } yield ()
     } getOrElse Task.unit
   }
 
   private def publishPhoneConfirmationCode(user: User): Task[Unit] = {
     user.phone.map { phone =>
+      val otp = CodeGenerator.generateNumericPassword(otpEmailLength, otpEmailLength)
+
       for {
-        otpCode <- Task(ConfirmationCode.generatePair(user.id, ConfirmationCode.OP_PHONE_CONFIRM, otpLength, None))
-        (otp, code) = otpCode
-        _ <- confirmationService.create(code, ttl = Some(otpPhoneTTLSeconds))
-        _ <- confirmationService.create(code.copy(login = phone), ttl = Some(otpPhoneTTLSeconds))
-        _ <- Task.fromFuture(ec => eventBus.publish(OtpGeneration(Some(user.id), phone = Some(phone), code = otp))) 
+        _ <- confirmations.create(
+          user.id, List(user.id, phone), ConfirmationCode.OP_PHONE_CONFIRM, otp, ttl = otpEmailTTLSeconds
+        )
+        _ <- eventBus.publish(OtpGeneration(Some(user.id), phone = Some(phone), code = otp))
       } yield ()
     } getOrElse Task.unit
   }

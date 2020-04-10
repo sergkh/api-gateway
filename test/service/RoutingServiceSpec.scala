@@ -7,7 +7,6 @@ import mockws.{MockWS, MockWSHelpers}
 import events.ServiceDiscovered
 import models.Service
 import org.mockito.MockitoSugar
-import org.scalatest.{Matchers, WordSpecLike}
 import org.scalatest.concurrent.Eventually
 import play.api.{Configuration, Environment}
 import play.api.libs.json.{JsObject, JsValue, Json}
@@ -15,9 +14,11 @@ import play.api.mvc.Results._
 import services.RoutingService
 import org.scalatest.time.{Seconds, Span}
 import service.fakes.TestEventsStream
+import org.scalatest.wordspec.AnyWordSpecLike
+import org.scalatest.matchers.should.Matchers
 
 class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
-  with WordSpecLike
+  with AnyWordSpecLike
   with Matchers
   with MockWSHelpers
   with Eventually

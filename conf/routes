@@ -951,7 +951,7 @@ GET           /assets/*file                                       controllers.As
 #   - Documentation
 # operationId: getDocsJson
 ###
-GET           /docs/api.json                                    @controllers.swagger.ApiSpecs.specs
+GET           /docs/api.json                                    @controllers.ApiSpecs.specs
 
 
 ###
@@ -961,7 +961,7 @@ GET           /docs/api.json                                    @controllers.swa
 #   - Documentation
 # operationId: getDocsHtml
 ###
-GET           /docs/api.html                                    @controllers.swagger.ApiSpecs.docsIndex
+GET           /docs/api.html                                    @controllers.ApiSpecs.docsIndex
 
 ###
 # summary: Display form to grant access (implicit Flow)
@@ -1040,7 +1040,7 @@ GET     /authorization                                @controllers.OAuthUIContro
 GET    /oauth2-redirect.html                                      @controllers.OAuthUIController.oauthRedirect
 
 ### NoDocs ###
-GET           /docs/*file                                         @controllers.swagger.ApiSpecs.docsResources(file)
+GET           /docs/*file                                         @controllers.ApiSpecs.docsResources(file)
 
 
 #########

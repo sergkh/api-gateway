@@ -52,7 +52,7 @@ libraryDependencies ++= Seq(
   "com.mohiva"        %% "play-silhouette-crypto-jca"       % silhouetteVersion,
   "com.pauldijou"     %% "jwt-play"                         % "4.3.0",
   "com.iheart"        %% "ficus"                            % "1.4.7",
-  "org.mongodb.scala" %% "mongo-scala-driver"               % "2.7.0",
+  "org.mongodb.scala" %% "mongo-scala-driver"               % "2.9.0",
   "com.iheart"        %% "play-swagger"                     % "0.9.1-PLAY2.8",
   "org.gnieh"         %% "diffson-play-json"                % "4.0.2",
   "com.impactua"      %% "redis-scala"                      % redisVersion,
@@ -62,12 +62,13 @@ libraryDependencies ++= Seq(
   "org.scala-lang"    %  "scala-reflect"                    % "2.12.11",
 //  "io.kamon"          %% "kamon-bundle"                     % "2.0.6",
   "com.mohiva"        %% "play-silhouette-testkit"          % silhouetteVersion  % Test,
-  "org.scalatest"     %% "scalatest"                        % "3.0.8"  % Test,
-  "org.mockito"       %  "mockito-core"                     % "3.3.3" % Test,
-  "org.mockito"        %% "mockito-scala"                   % "1.13.5" % Test,
-  "com.typesafe.akka" %% "akka-testkit"                     % "2.6.3" % Test,
-  "org.scalatestplus.play"    %% "scalatestplus-play"       % "5.0.0"  % Test,
-  "de.leanovate.play-mockws"  %% "play-mockws"              % "2.8.0"  % Test
+  "org.scalatest"     %% "scalatest"                        % "3.1.1"  % Test,
+  "org.mockito"       %  "mockito-core"                     % "3.3.3"  % Test,
+  "org.mockito"        %% "mockito-scala"                   % "1.13.9" % Test,
+  "com.typesafe.akka" %% "akka-testkit"                     % "2.6.3"  % Test,
+  "org.scalatestplus.play"   %% "scalatestplus-play"        % "5.0.0"  % Test,
+  "de.leanovate.play-mockws" %% "play-mockws"               % "2.8.0"  % Test,
+  "de.flapdoodle.embed"       % "de.flapdoodle.embed.mongo" % "2.2.0" % Test
 )
 
 routesGenerator := InjectedRoutesGenerator

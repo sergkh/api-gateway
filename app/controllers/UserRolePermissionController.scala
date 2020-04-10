@@ -37,7 +37,7 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoles
       case None =>
         for {
           _       <- usersPermissionsService.save(role)
-          _       <- Task.fromFuture(ec => eventBus.publish(RoleCreated(role))) 
+          _       <- eventBus.publish(RoleCreated(role))
         } yield {
           log.info(s"Added new role '$role' by ${request.identity.info}")
           Ok(Json.toJson(role))
@@ -62,7 +62,7 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoles
 
     for {
       _ <- usersPermissionsService.update(rolePerms)
-      _ <- Task.fromFuture(ec => eventBus.publish(RoleUpdated(rolePerms)))
+      _ <- eventBus.publish(RoleUpdated(rolePerms))
     } yield {
       log.info(s"Permission for $role was updated by ${request.identity.id}")
       NoContent.withHeaders("Content-Type" -> "application/json")
@@ -74,7 +74,7 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoles
 
     usersPermissionsService.remove(role).flatMap {
       case Some(r) =>
-        Task.fromFuture(ec => eventBus.publish(RoleDeleted(r))) map { _ =>
+        eventBus.publish(RoleDeleted(r)) map { _ =>
           NoContent.withHeaders("Content-Type" -> "application/json")
         }
       case None =>

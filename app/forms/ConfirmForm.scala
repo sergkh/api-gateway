@@ -16,12 +16,7 @@ object ConfirmForm {
     )(ConfirmData.apply)(ConfirmData.unapply)
   )
 
-  val reConfirm = Form(
-    mapping(
-      "login" -> nonEmptyText
-    )(ReConfirm.apply)(ReConfirm.unapply)
-  )
+  val regenerateCode = Form(single("login" -> nonEmptyText))
 
   case class ConfirmData(login: String, code: String)
-  case class ReConfirm(login: String)
 }

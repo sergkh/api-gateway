@@ -38,7 +38,7 @@ class BranchesController @Inject()(
         branches.create(create, user) flatMap { createdBranch =>
           log.info(s"Branch created: $createdBranch")
 
-          Task.fromFuture(ec => eventBus.publish(BranchCreated(request.identity.id, createdBranch))) map { _ =>
+          eventBus.publish(BranchCreated(request.identity.id, createdBranch)) map { _ =>
             Ok(Json.toJson(createdBranch))
           }
         }
@@ -56,7 +56,7 @@ class BranchesController @Inject()(
       case true =>
         for {
           result <- branches.update(branchId, update, user)
-          _      <- Task.fromFuture(ec => eventBus.publish(BranchUpdated(request.identity.id, result._1, result._2)))
+          _      <- eventBus.publish(BranchUpdated(request.identity.id, result._1, result._2))
         } yield {
           log.info(s"Branch $branchId updated")
           Ok(Json.toJson(result))
@@ -92,7 +92,7 @@ class BranchesController @Inject()(
   def remove(branchId: String) = silh.SecuredAction(editPerm).async { request =>
     for {
       deletedBranch <- branches.remove(branchId)
-      _             <- Task.fromFuture(ec => eventBus.publish(BranchRemoved(request.identity.id, deletedBranch.id)))
+      _             <- eventBus.publish(BranchRemoved(request.identity.id, deletedBranch.id))
     } yield {
       log.info(s"Branch ${deletedBranch.id} was removed by ${request.identity}")
       NoContent

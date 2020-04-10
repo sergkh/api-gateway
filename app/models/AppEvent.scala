@@ -16,8 +16,7 @@ object AppEvent {
   case class Logout(user: User, token: String, request: RequestHeader, sessionId: String) extends BaseAppEvent("logout", user.id)
   case class OtpGeneration(userId: Option[String], email: Option[String] = None, phone: Option[String] = None, code: String) extends BaseAppEvent("otp", userId.getOrElse("none"))
   case class LoginConfirmation(user: User, request: RequestHeader, lang: Lang) extends UserModificationEvent("login_confirmation", user.id)
-  case class PasswordChange(user: User, request: RequestHeader) extends UserModificationEvent("pass_changing", user.id)
-  case class PasswordTTLChange(user: User, request: RequestHeader, lang: Lang) extends UserModificationEvent("pass_ttl_changing", user.id)
+  case class PasswordChanged(user: User, request: RequestHeader) extends UserModificationEvent("pass_changed", user.id)  
   case class UserBlocked(user: User, request: RequestHeader) extends UserModificationEvent("user_blocked", user.id)
   case class UserUnblocked(user: User, request: RequestHeader) extends UserModificationEvent("user_unblocked", user.id)
   case class UserUpdate(user: User, request: RequestHeader) extends UserModificationEvent("user_update", user.id)
@@ -29,7 +28,7 @@ object AppEvent {
 
   case class PasswordReset(user: User, code: String, request: RequestHeader) extends UserModificationEvent("pass_reset", user.id)
 
-  case class WithoutPassConfirmation(user: User, request: RequestHeader, lang: Lang)
+  case class WithoutPassConfirmation(user: User, request: RequestHeader)
     extends UserModificationEvent("without_pass_confirmation", user.id)
 
   case class ApplicationCreated(userId: String, app: ClientApp, request: RequestHeader)

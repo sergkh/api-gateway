@@ -6,12 +6,13 @@ import javax.inject.{Inject, Singleton}
 
 import scala.concurrent.Future
 import scala.reflect.ClassTag
+import zio.Task
 
 @Singleton
 class AkkaEventPublisher @Inject() (implicit as: ActorSystem) extends EventsStream {
-  override def publish(evt: AppEvent): Future[Unit] = {
+
+  override def publish(evt: AppEvent): Task[Unit] = Task {
     as.eventStream.publish(evt)
-    Future.unit
   }
 
   override def subscribe[T](subscriber: T => Unit)(implicit classEv: ClassTag[T]): Unit = {

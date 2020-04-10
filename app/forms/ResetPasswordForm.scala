@@ -9,11 +9,7 @@ import play.api.data.Forms._
  */
 object ResetPasswordForm {
 
-  val form = Form(
-    mapping(
-      "login" -> nonEmptyText
-    )(ResetPassword.apply)(ResetPassword.unapply)
-  )
+  val initReset = Form(single("login" -> nonEmptyText))
 
   val confirm = Form(
     mapping(
@@ -22,9 +18,7 @@ object ResetPasswordForm {
       "password" -> password
     )(SetNewPassword.apply)(SetNewPassword.unapply)
   )
-
-  case class ResetPassword(login: String)
+  
   case class SetNewPassword(login: String, code: String, password: String)
-
 }
 

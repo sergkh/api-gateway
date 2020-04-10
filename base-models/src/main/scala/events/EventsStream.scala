@@ -1,9 +1,9 @@
 package events
 
-import scala.concurrent.Future
+import zio.Task
 import scala.reflect.ClassTag
 
 trait EventsStream {
-  def publish(evt: AppEvent): Future[Unit]
+  def publish(evt: AppEvent): Task[Unit]
   def subscribe[T](subscriber: T => Unit)(implicit classEv: ClassTag[T])
 }

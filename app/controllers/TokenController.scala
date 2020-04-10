@@ -97,7 +97,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
       authenticator   <- Task.fromFuture(ec => silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, auth.user.id)))
       tokenWithUser   = authenticator.withUserInfo(auth.user, auth.scope)
       token           <- Task.fromFuture(ec => silh.env.authenticatorService.init(authenticator))
-      _               <- Task.fromFuture(ec => eventBus.publish(Login(auth.user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis)))
+      _               <- eventBus.publish(Login(auth.user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis))
     } yield {
       log.info(s"Succeed user authentication ${auth.user.id}")
               
@@ -150,8 +150,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
     refreshToken    <- tokens.get(req.refreshToken).orFail(AppException(AUTHORIZATION_FAILED, "Invalid refresh token"))
     _               <- if (refreshToken.expired) cleanExpiredTokenAndFail(refreshToken) else Task.unit
     _               <- failIf(refreshToken.clientId != clientId, AUTHORIZATION_FAILED, "Wrong refresh token")
-    loginInfo       = LoginInfo(CredentialsProvider.ID, refreshToken.userId)
-    user            <- Task.fromFuture(ec => userService.retrieve(loginInfo)).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
+    user            <- userService.getActiveUser(refreshToken.userId).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
   } yield {
     AuthResult(user, refreshToken.scope, None)
   }
@@ -168,8 +167,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
 
   private def authorizeByAuthorizationCode(clientId: String, req: AccessTokenByAuthorizationCode): Task[AuthResult] = for {
     authCode     <- authCodes.getAndRemove(req.authCode).map(_.filter(_.expired)).orFail(AppException(AUTHORIZATION_FAILED, "Invalid authorization code"))
-    loginInfo    = LoginInfo(CredentialsProvider.ID, authCode.userId)
-    user         <- Task.fromFuture(ec => userService.retrieve(loginInfo)).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
+    user         <- userService.getActiveUser(authCode.userId).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
     refreshToken <- optIssueRefreshToken(user, authCode.scope, clientId)
   } yield {
     AuthResult(user, authCode.scope, refreshToken)
@@ -196,46 +194,3 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
 object TokenController {
   case class AuthResult(user: User, scope: Option[String] = None, refreshToken: Option[RefreshToken] = None)
 }
-
-  // private def processUserLogin(optUser: Option[User], loginInfo: LoginInfo,
-  //                              credentials: LoginCredentials)(implicit request: RequestHeader): Future[Result] = optUser match {
-  //   case Some(user) if user.hasFlag(User.FLAG_BLOCKED) =>
-  //     log.warn(s"User ${credentials.login} is blocked")
-  //     throw AppException(ErrorCodes.BLOCKED_USER, s"User ${credentials.login} is blocked")
-
-  //   case Some(user) if credentials.password.nonEmpty && user.flags.contains(User.FLAG_2FACTOR) => // 2-factor authentication, password always required
-  //     val (secret, code) = ConfirmationCode.generatePair(credentials.login, ConfirmationCode.OP_LOGIN, otpLength, None)
-
-  //     confirmationService.create(code)
-
-  //     eventBus.publish(OtpGeneration(Some(user.id), user.email, user.phone, secret, request)) map { _ =>
-  //       log.info("Generated login code for " + user.id)
-  //       throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
-  //     }
-
-  //   case Some(user) if credentials.password.isEmpty && !user.flags.contains(User.FLAG_2FACTOR) => // passwordless authentication
-  //     val (secret, code) = ConfirmationCode.generatePair(credentials.login, ConfirmationCode.OP_LOGIN, otpLength, None)
-  //     confirmationService.create(code)
-
-  //     eventBus.publish(OtpGeneration(Some(user.id), user.email, user.phone, secret, request)) map { _ =>
-  //       log.info("Generated passwordless login code for " + user.id)
-  //       throw AppException(ErrorCodes.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
-  //     }
-
-  //   case Some(user) =>
-  //     val userIdLoginInfo = LoginInfo(CredentialsProvider.ID, user.id)
-  //     silh.env.authenticatorService.create(userIdLoginInfo) flatMap { authenticator =>
-  //       silh.env.authenticatorService.init(authenticator).flatMap { token =>
-  //         log.info(s"Succeed user authentication ${userIdLoginInfo.providerKey}")
-
-  //         eventBus.publish(Login(user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis)).flatMap { _ =>
-  //           silh.env.authenticatorService.embed(token, Ok(JsonHelper.toNonemptyJson("token" -> token)))
-  //         }
-  //       }
-  //     }
-
-  //   case _ =>
-  //     log.warn(s"User with login: ${credentials.login} is not found")
-  //     throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User with login: ${credentials.login} is not found")
-  // }
-

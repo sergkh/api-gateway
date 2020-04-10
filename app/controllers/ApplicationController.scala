@@ -33,119 +33,53 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
                                       confirmationService: ConfirmationCodeService,
                                       config: Configuration,
                                       eventBus: EventsStream,
-                                      proxy: ProxyService,
                                       confirmations: ConfirmationProvider)(implicit system: ActorSystem) extends BaseController with I18nSupport {
-  
-  val requirePass = config.getOptional[Boolean]("app.requirePassword").getOrElse(true)
-  val appSecret = config.get[String]("play.http.secret.key")
-  val otpLength = config.getOptional[Int]("confirmation.otp.length").getOrElse(ConfirmationCodeService.DEFAULT_OTP_LEN)
 
   val baseUrl = config.get[String]("app.basePath").stripSuffix("/")
-  val internalWebPermission = "internal_web"
 
-  implicit def toService(authService: AuthenticatorService[JWTAuthenticator]): CustomJWTAuthenticatorService =
-    authService.asInstanceOf[CustomJWTAuthenticatorService]
-
-  def index = Action { _ =>
-    Redirect(baseUrl + "/docs/api.html")
-  }
-
-  def version = silh.SecuredAction(WithPermission(internalWebPermission)) { _ =>
-    Ok(utils.BuildInfo.toJson)
-  }
+  def index = Action { _ => Redirect(baseUrl + "/docs/api.html") }
+  def version = Action { _ => Ok(utils.BuildInfo.toJson) }
 
   def confirm = Action.async { implicit request =>
     val confirmation = request.asForm(ConfirmForm.confirm)
 
-    log.info(s"Confirmation of code for login ${confirmation.login}")
+    log.info(s"Confirmation code for login ${confirmation.login}")
 
-    getConfirmCode(confirmation.login)
-      .map(_.filter(_.verify(confirmation.code)))
+    confirmationService.consume(confirmation.login, confirmation.code)
       .flatMap {
-        case Some(code) if ConfirmationCode.OP_LOGIN == code.operation => Task.fromFuture(ec => confirmUserAuthorization(code))
+        case Some(emailConfirm) if emailConfirm.operation == ConfirmationCode.OP_EMAIL_CONFIRM =>
+          userService.updateFlags(emailConfirm.userId, removeFlags = List(User.FLAG_EMAIL_NOT_CONFIRMED)).map { _ =>
+            log.info(s"Users ${emailConfirm.userId} email confirmed")
+          }
+        case Some(phoneConfirm) if phoneConfirm.operation == ConfirmationCode.OP_PHONE_CONFIRM =>
+          userService.updateFlags(phoneConfirm.userId, removeFlags = List(User.FLAG_PHONE_NOT_CONFIRMED)).map { _ =>
+            log.info(s"Users ${phoneConfirm.userId} email confirmed")
+          }
         case code =>
-          log.info(s"Code $confirmation not found $code")
+          log.info(s"Code requested by $confirmation is not found or not supported. Got: $code")
           Task.fail(AppException(ErrorCodes.CONFIRM_CODE_NOT_FOUND, s"Code for login ${confirmation.login} is not found"))
+      }.map { _ =>
+        NoContent
       }
   }
 
-  /** Gets code by specified login, but if it's not found – retrieves user and tries all his possible logins */
-  private def getConfirmCode(login: String): Task[Option[ConfirmationCode]] = {
-    confirmationService.retrieveByLogin(login) flatMap {
-      case Some(code) => Task.succeed(Some(code))
-      case None => // try by other user logins, option filter to avoid calls if code was already found
-        for {
-          userOpt     <- userService.getByAnyIdOpt(login)
-          codeByUuid  <- userOpt.map(u => confirmationService.retrieveByLogin(u.id)).getOrElse(Task.succeed(None))
-          codeByEmail <- userOpt.flatMap(_.email)
-                                .filter(_ => codeByUuid.isEmpty)
-                                .map(email => confirmationService.retrieveByLogin(email))
-                                .getOrElse(Task.succeed(None))
-          codeByPhone <- userOpt.flatMap(_.phone)
-                                .filter(_ => codeByEmail.isEmpty && codeByUuid.isEmpty)
-                                .map(phone => confirmationService.retrieveByLogin(phone))
-                                .getOrElse(Task.succeed(None))
-        } yield codeByUuid orElse codeByEmail orElse codeByPhone
-    }
-  }
-
-  private def confirmUserAuthorization(confirmationCode: ConfirmationCode)(implicit request: RequestHeader) = {
-    confirmAction(confirmationCode, action = loginInfo =>
-      userService.retrieve(loginInfo).map(_.getOrElse {
-          log.info(s"User ${loginInfo.providerKey} not found")
-          throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User ${loginInfo.providerKey} not found")
-        }
-      )
-    )
-  }
-
-  private def confirmAction(confirmationCode: ConfirmationCode, action: LoginInfo => Future[User])(implicit request: RequestHeader): Future[Result] = {
-    val loginInfo = LoginInfo(CredentialsProvider.ID, confirmationCode.login)
-
-    action(loginInfo).flatMap { user =>
-
-      val loginConfirmation = confirmationCode.operation == ConfirmationCode.OP_LOGIN
-      
-      for {
-        _             <- confirmationService.consumeByLogin(confirmationCode.login).toUnsafeFuture
-        authenticator <- silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, user.id))
-        value         <- silh.env.authenticatorService.init(authenticator)
-        result        <- silh.env.authenticatorService.embed(value, Ok(Json.obj("token" -> value)))
-        _ <- if (loginConfirmation) {
-          eventBus.publish(WithoutPassConfirmation(user, request, request2lang))
-        } else {
-          eventBus.publish(LoginConfirmation(user, request, request2lang))
-        }
-      } yield {
-        if (loginConfirmation) {
-          log.info(s"User ${confirmationCode.login} confirm auth/registration without password")
-        } else {
-          log.info(s"User ${confirmationCode.login} confirm registration")
-        }
-
-        result
-      }
-    }
-  }
-
-  def resendOtp = Action.async(parse.json(512)) { implicit request =>
-    val login = request.asForm(ConfirmForm.reConfirm).login
-
-    def codeToUser(c: Option[ConfirmationCode]): Task[Option[User]] =
-      c.map(_ => userService.getByAnyIdOpt(login)).getOrElse(Task.none)
+  def resendOtp = Action.async { implicit request =>
+    val login = request.asForm(ConfirmForm.regenerateCode)
 
     for {
-      codeOpt <- getConfirmCode(login)
-      userOpt <- codeToUser(codeOpt)
-      _       <- if(codeOpt.isEmpty || userOpt.isEmpty) {
-                    log.info(s"OTP for user: $login doesn't exist")
-                    Task.fail(AppException(ErrorCodes.CONFIRM_CODE_NOT_FOUND, s"OTP for user: $login doesn't exist"))
-                 } else { Task.unit }
-      (otp, newCode) = codeOpt.get.regenerate()
-      _ <- Task.fromFuture(ec => eventBus.publish(OtpGeneration(Some(userOpt.get.id), userOpt.get.email, userOpt.get.phone, otp)))
-      _ <- confirmationService.create(newCode)
+      code <- confirmationService.get(login)
+                                 .orFail(AppException(ErrorCodes.CONFIRM_CODE_NOT_FOUND, s"Confirmation code is not found"))
+      otp = CodeGenerator.generateNumericPassword(code.otpLen, code.otpLen)      
+      _ <- confirmationService.create(
+        code.userId,
+        code.ids,
+        code.operation,
+        otp,
+        code.ttl
+      )
+      _ <- eventBus.publish(OtpGeneration(Some(code.userId), code.email, code.phone, otp))
     } yield {      
-      log.info(s"Regenerated otp code for user: ${userOpt.get.id} by login $login")
+      log.info(s"Regenerated otp code for user: ${code.userId} by login $login")
       NoContent
     }
   }
@@ -159,8 +93,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
     val result = Redirect(routes.ApplicationController.index()).withNewSession
 
     eventBus.publish(Logout(request.identity, request.authenticator.id, request, request.authenticator.id)) flatMap { _ =>
-      silh.env.authenticatorService.discard(request.authenticator, result)
+      Task.fromFuture(ec => silh.env.authenticatorService.discard(request.authenticator, result))
     }
   }
-
 }

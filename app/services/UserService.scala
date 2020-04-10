@@ -17,6 +17,8 @@ import utils.TaskExt._
 import zio._
 
 import scala.concurrent.{ExecutionContext, Future}
+import com.mongodb.client.model.FindOneAndUpdateOptions
+import org.mongodb.scala.model.ReturnDocument
 
 @Singleton
 class UserService @Inject()(
@@ -31,16 +33,18 @@ class UserService @Inject()(
 
   val col = mongoApi.collection[User]("users")
 
-  /**
+    /**
     * Retrieves a user that matches the specified login info.
     *
     * @param login The login info to retrieve a user.
     * @return The retrieved user or None if no user could be retrieved for the given login info.
     */
-  def retrieve(login: LoginInfo): Future[Option[User]] = {
+  def retrieve(login: LoginInfo): Future[Option[User]] = getActiveUser(login.providerKey).toUnsafeFuture
+
+  def getActiveUser(login: String): Task[Option[User]] = {
     log.debug("Getting user by from DB: " + login)
 
-    getByAnyIdOpt(login.providerKey).flatMap {
+    getByAnyIdOpt(login).flatMap {
       case Some(u) if u.hasFlag(User.FLAG_BLOCKED) =>
         Task.fail(AppException(ErrorCodes.BLOCKED_USER, s"User ${u.identifier} is blocked"))
       case Some(u) if u.hasFlag(User.FLAG_PASSWORD_EXP) =>
@@ -50,18 +54,24 @@ class UserService @Inject()(
       case Some(u) if u.hasFlag(User.FLAG_PHONE_NOT_CONFIRMED) && !allowUnconfirmedPhones =>
         Task.fail(AppException(ErrorCodes.PHONE_NOT_CONFIRMED, s"User phone is not confirmed"))
       case userOpt: Any => Task.succeed(userOpt)
-    }.toUnsafeFuture
+    }
   }
 
   def exists(login: String): Task[Boolean] = getByAnyIdOpt(login).map(_.nonEmpty)
 
   def save(user: User): Task[User] = col.insertOne(user).toUnitTask.map(_ => user)
 
-  def updateFlags(user: User): Task[User] = {
+  def updateFlags(userId: String, addFlags: List[String] = Nil, removeFlags: List[String] = Nil): Task[Option[User]] = {
     import Updates._
-    col.updateOne(equal("_id", user.id),
-      combine(set("flags", user.flags), inc("version", 1))
-    ).toUnitTask.map(_ => user)
+    val update = combine(
+      pullAll("flags", removeFlags), addToSet("flags", addFlags), inc("version", 1)
+    )
+
+    col.findOneAndUpdate(
+      equal("_id", userId), 
+      update,
+      new FindOneAndUpdateOptions().returnDocument(ReturnDocument.AFTER)
+      ).toOptionTask
   }
 
   /**

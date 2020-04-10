@@ -42,7 +42,7 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
 
     for {
       thirdApp <- oauthService.createApp(app)
-      _        <- Task.fromFuture(_ => eventBus.publish(ApplicationCreated(req.identity.id, thirdApp, req)))
+      _        <- eventBus.publish(ApplicationCreated(req.identity.id, thirdApp, req))
     } yield {
       log.info(s"Create third party application $thirdApp")
       Ok(Json.obj("clientSecret" -> thirdApp.secret, "clientId" -> thirdApp.id))
@@ -56,7 +56,7 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
       app  <- oauthService.getApp4user(id, user.id)
       newApp = app.update(data.name, data.description, data.logo, data.url, data.contacts, data.redirectUrlPattern)
       _ <- oauthService.updateApp(id, newApp)
-      _ <- Task.fromFuture(ec => eventBus.publish(ApplicationUpdated(req.identity.id, app, req)))
+      _ <- eventBus.publish(ApplicationUpdated(req.identity.id, app, req))
     } yield {
       log.info("Updating client application " + id + ", for user: " + user.id)
       Ok(Json.toJson(app))
@@ -97,7 +97,7 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
     for {
       user <- userService.getRequestedUser(userId, req.identity)
       _    <- oauthService.removeApp(id, user)
-      _    <- Task.fromFuture(ec => eventBus.publish(ApplicationRemoved(user.id, id, req)))
+      _    <- eventBus.publish(ApplicationRemoved(user.id, id, req))
     } yield {
       log.info("Removed client application " + id + ", for user: " + user.id)
       NoContent

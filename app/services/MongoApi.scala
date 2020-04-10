@@ -10,7 +10,7 @@ import scala.reflect.ClassTag
 
 trait MongoApi {
   def db: MongoDatabase
-  def collection[T: ClassTag](name: String): MongoCollection[T] 
+  def collection[T: ClassTag](name: String): MongoCollection[T] = db.getCollection[T](name)
 }
 
 object MongoApi {
@@ -31,5 +31,4 @@ class MongoApiImpl @Inject() (conf: Configuration) extends MongoApi {
   val client = MongoClient(uri.toString)
 
   val db: MongoDatabase = client.getDatabase(uri.path.toString.stripPrefix("/")).withCodecRegistry(MongoFormats.registry)
-  def collection[T: ClassTag](name: String): MongoCollection[T] = db.getCollection[T](name)
 }

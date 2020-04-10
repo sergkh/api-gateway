@@ -4,13 +4,12 @@ import akka.actor.{Actor, ActorSystem, Props}
 import events.{AppEvent, EventsStream}
 import javax.inject.Inject
 
-import scala.concurrent.Future
+import scala.concurrent.{Future, Promise}
 import scala.reflect.ClassTag
 
 class TestEventsStream @Inject ()(implicit as: ActorSystem) extends EventsStream {
-  override def publish(evt: AppEvent): Future[Unit] = {
+  override def publish(evt: AppEvent): Task[Unit] = Task {
     as.eventStream.publish(evt)
-    Future.unit
   }
 
   override def subscribe[T](subscriber: T => Unit)(implicit classEv: ClassTag[T]): Unit = {
@@ -22,5 +21,25 @@ class TestEventsStream @Inject ()(implicit as: ActorSystem) extends EventsStream
     override def receive = {
       case t: T => processor(t)
     }
+  }
+}
+
+
+object EventBusHelpers {
+
+  def catchEvent[T](implicit system: ActorSystem, tag: ClassTag[T]): Future[T] = {
+
+    val promise = Promise[T]()
+
+    val subscriber = system.actorOf(Props { new Actor() {
+        override def receive = {
+          case t: T => promise.trySuccess(t)
+        }
+      }
+    })
+
+    system.eventStream.subscribe(subscriber, tag.runtimeClass)
+
+    promise.future
   }
 }
