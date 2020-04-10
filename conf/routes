@@ -21,10 +21,31 @@ POST          /logout                                             @controllers.A
 
 ###
 # summary: Register a new user
-# tags:
-#   - Login
+# tags: [Login]
 # operationId: register
 # security: []
+# requestBody:
+#   required: true
+#   content:
+#     application/json:
+#       schema:
+#         type: object
+#         properties:
+#           email:
+#             type: string
+#             description: Users email
+#           phone:
+#             type: string
+#             description: Users phone
+#           firstName:
+#             type: string
+#             description: Users first name
+#           lastName:
+#             type: string
+#             description: Users last name
+#           password:
+#             type: string
+#             description: Users password
 # responses:
 #   200:
 #     description: User successfully registered
@@ -32,27 +53,6 @@ POST          /logout                                             @controllers.A
 #     description: User already exists
 #   428:
 #     description: Login(email/phone) confirmation required for next step of user registration
-# parameters:
-#   - name: body
-#     required: true
-#     schema:
-#      type: object
-#      properties:
-#        email:
-#          type: string
-#          description: Users email
-#        phone:
-#          type: string
-#          description: Users phone
-#        firstName:
-#          type: string
-#          description: Users first name
-#        lastName:
-#          type: string
-#          description: Users last name
-#        password:
-#          type: string
-#          description: Users password
 ###
 POST          /register                                              @controllers.RegistrationController.register
 
@@ -69,9 +69,6 @@ POST          /register                                              @controller
 #     description: User already exists
 #   428:
 #     description: Login(email/phone) confirmation required for next step of user registration
-# parameters:
-#   - name: body
-#     required: true
 ###
 POST          /users                                              @controllers.UserController.add
 
@@ -84,12 +81,12 @@ POST          /users                                              @controllers.U
 # parameters:
 #   - name: body
 #     schema:
-#      $ref: '#/definitions/forms.ConfirmForm.ConfirmData'
+#      $ref: '#/components/schemas/forms.ConfirmForm.ConfirmData'
 # responses:
 #   200:
 #     description: Token response
 #     schema:
-#      $ref: '#/definitions/tokenResponse'
+#      $ref: '#/components/schemas/tokenResponse'
 #   404:
 #     description: Confirmation code not found
 ###
@@ -116,7 +113,7 @@ POST          /users/confirm                                      @controllers.A
 #   200:
 #     description: Token response
 #     schema:
-#      $ref: '#/definitions/tokenResponse'
+#      $ref: '#/components/schemas/tokenResponse'
 #   404:
 #     description: Confirmation code not found
 ###
@@ -133,10 +130,16 @@ GET          /users/confirm                                      @controllers.Ap
 #   412:
 #     description: User account already confirmed
 # security: []
-# parameters:
-#   - name: body
-#     schema:
-#      $ref: '#/definitions/forms.ConfirmForm.ReConfirm'
+# requestBody:
+#   required: true
+#   content:
+#     application/json:
+#       schema:
+#         type: object
+#         properties:
+#           login:
+#             type: string
+#             description: Login of user to resend confirmation for
 ###
 POST          /users/resend-otp                                   @controllers.ApplicationController.resendOtp
 
@@ -156,7 +159,7 @@ POST          /users/resend-otp                                   @controllers.A
 # parameters:
 #   - name: body
 #     schema:
-#      $ref: '#/definitions/forms.UserForm.UpdatePass'
+#      $ref: '#/components/schemas/forms.UserForm.UpdatePass'
 ###
 POST          /users/change-pass                                  @controllers.UserController.changePassword
 
@@ -165,15 +168,21 @@ POST          /users/change-pass                                  @controllers.U
 # tags:
 #   - Users
 # operationId: recoverPassword
+# requestBody:
+#   required: true
+#   content:
+#     application/json:
+#       schema:
+#         type: object
+#         properties:
+#           login:
+#             type: string
+#             description: Login of user to reset password for
 # responses:
 #   204:
 #     description: Otp successfully generated. Use '/users/recovery/confirm' to complete password recovery.
 #   404:
 #     description: User not found
-# parameters:
-#   - name: body
-#     schema:
-#      $ref: '#/definitions/forms.ResetPasswordForm.ResetPassword'
 ###
 POST          /users/recovery                                     @controllers.UserController.resetPassword
 
@@ -190,7 +199,7 @@ POST          /users/recovery                                     @controllers.U
 # parameters:
 #   - name: body
 #     schema:
-#      $ref: '#/definitions/forms.ResetPasswordForm.SetNewPassword'
+#      $ref: '#/components/schemas/forms.ResetPasswordForm.SetNewPassword'
 ###
 POST          /users/recovery/confirm                             @controllers.UserController.resetPasswordConfirm
 
@@ -248,24 +257,24 @@ GET           /users/count                                        @controllers.U
 #     description: User identifier (email/phone/uuid) or 'me' to identify self
 #   - name: body
 #     schema:
-#      $ref: '#/definitions/forms.UserForm.UpdateUser'
+#      $ref: '#/components/schemas/forms.UserForm.UpdateUser'
 # responses:
 #   200:
 #     description: User successfully updated, returns updated user
 #     schema:
-#       "$ref": "#/definitions/models.User"
+#       "$ref": "#/components/schemas/models.User"
 #   400:
 #     description: Error in request
 #     schema:
-#       $ref: '#/definitions/errorResponse'
+#       $ref: '#/components/schemas/ErrorResponse'
 #   404:
 #     description: Specified user is not found
 #     schema:
-#       $ref: '#/definitions/errorResponse'
+#       $ref: '#/components/schemas/ErrorResponse'
 #   428:
 #     description: Will send sms code, which has to be provided on `POST /users/confirm` endpoint to complete request. Sent when email or phone is changed
 #     schema:
-#       $ref: '#/definitions/errorResponse'
+#       $ref: '#/components/schemas/ErrorResponse'
 ###
 PUT         /users/:userId                                        @controllers.UserController.put(userId: String)
 
@@ -289,19 +298,19 @@ PUT         /users/:userId                                        @controllers.U
 #   200:
 #     description: User successfully updated, returns updated user
 #     schema:
-#       "$ref": "#/definitions/models.User"
+#       "$ref": "#/components/schemas/models.User"
 #   400:
 #     description: Error in request
 #     schema:
-#       $ref: '#/definitions/errorResponse'
+#       $ref: '#/components/schemas/ErrorResponse'
 #   404:
 #     description: Specified user is not found
 #     schema:
-#       $ref: '#/definitions/errorResponse'
+#       $ref: '#/components/schemas/ErrorResponse'
 #   428:
 #     description: Will send sms code, which has to be provided on `POST /users/confirm` endpoint to complete request. Sent when email or phone is changed
 #     schema:
-#       $ref: '#/definitions/errorResponse'
+#       $ref: '#/components/schemas/ErrorResponse'
 ###
 PATCH         /users/:userId                                        @controllers.UserController.patch(userId: String)
 
@@ -313,12 +322,20 @@ PATCH         /users/:userId                                        @controllers
 # parameters:
 #   - name: userId
 #     in: path
-#     type: string
+#     schema:
+#       type: string
 #     required: true
 #     description: User identifier (email/phone/uuid)
-#   - name: body
-#     schema:
-#      $ref: '#/definitions/forms.UserForm.BlockUser'
+# requestBody:
+#   required: true
+#   content:
+#     application/json:
+#       schema:
+#         type: object
+#         properties:
+#           block:
+#             type: boolean
+#             description: True to block user and false to unblock
 # responses:
 #   204:
 #     description: User successfully blocked/unblocked
@@ -360,7 +377,8 @@ DELETE         /users/:userId                                     @controllers.U
 # parameters:
 #   - name: provider
 #     in: path
-#     type: string
+#     schema:
+#       type: string
 #     required: true
 #     description: provider identifier
 ###
@@ -384,7 +402,7 @@ GET           /auth/:provider                                     @controllers.A
 #   200:
 #     description: User object
 #     schema:
-#       $ref: '#/definitions/user'
+#       $ref: '#/components/schemas/User'
 ###
 GET           /users/:userId                                      @controllers.UserController.get(userId: String)
 
@@ -419,7 +437,7 @@ GET           /users/:userId                                      @controllers.U
 #           description: users array
 #           required: true
 #           items:
-#             $ref: '#/definitions/user'
+#             $ref: '#/components/schemas/User'
 ###
 GET           /users                                              @controllers.UserController.list()
 
@@ -511,7 +529,7 @@ POST          /oauth/token                                        @controllers.T
 # parameters:
 #   - name: body
 #     schema:
-#      $ref: '#/definitions/forms.ClientAppForm.CreateApps'
+#      $ref: '#/components/schemas/forms.ClientAppForm.CreateApps'
 # responses:
 #   200:
 #     description: Application information for OAuth token authorization
@@ -565,7 +583,7 @@ GET           /users/:userId/tokens                                       @contr
 #   200:
 #     description: Single application information
 #     schema:
-#       $ref: '#/definitions/models.ClientApp'
+#       $ref: '#/components/schemas/models.ClientApp'
 ###
 GET           /users/:userId/oauth-apps/:id                             @controllers.ClientsController.getAppByOwner(userId: String, id: String)
 
@@ -585,7 +603,7 @@ GET           /users/:userId/oauth-apps/:id                             @control
 #   200:
 #     description: Single application information
 #     schema:
-#       $ref: '#/definitions/models.ClientApp'
+#       $ref: '#/components/schemas/models.ClientApp'
 ###
 GET           /oauth-apps/:id                                     @controllers.ClientsController.getPublicAppInformation(id: String)
 
@@ -608,12 +626,12 @@ GET           /oauth-apps/:id                                     @controllers.C
 #     description: Thirdparty application id
 #   - name: body
 #     schema:
-#      $ref: '#/definitions/forms.ClientAppForm.UpdateApps'
+#      $ref: '#/components/schemas/forms.ClientAppForm.UpdateApps'
 # responses:
 #   200:
 #     description: Updated application information
 #     schema:
-#       $ref: '#/definitions/models.ClientApp'
+#       $ref: '#/components/schemas/models.ClientApp'
 ###
 PUT           /users/:userId/oauth-apps/:id                             @controllers.ClientsController.updateApp(userId: String, id: String)
 
@@ -659,7 +677,7 @@ DELETE        /users/:userId/oauth-apps/:id                             @control
 #         items:
 #           type: array
 #           items:
-#               $ref: '#/definitions/models.ClientApp'
+#               $ref: '#/components/schemas/models.ClientApp'
 #         count:
 #           type: integer
 #           format: int64
@@ -707,7 +725,7 @@ GET             /roles                                            @controllers.U
 #     required: true
 #     description: role permission
 #     schema:
-#       $ref: '#/definitions/roleCreate'
+#       $ref: '#/components/schemas/RoleCreate'
 # responses:
 #   200:
 #       description: successfully created user permission
@@ -732,7 +750,7 @@ POST            /roles                                            @controllers.U
 #   200:
 #       description: successfully returted user permission
 #       schema:
-#           $ref: '#/definitions/rolePermissions'
+#           $ref: '#/components/schemas/RolePermissions'
 #   404:
 #       description: No user was found
 ###
@@ -757,7 +775,7 @@ GET             /roles/:role                                      @controllers.U
 #     required: true
 #     description: role permissions
 #     schema:
-#       $ref: '#/definitions/rolePermissions'
+#       $ref: '#/components/schemas/RolePermissions'
 # responses:
 #   204:
 #       description: Successfully updated user permission
@@ -796,7 +814,7 @@ DELETE           /roles/:role                                     @controllers.U
 # parameters:
 #   - name: body
 #     schema:
-#      $ref: '#/definitions/createBranch'
+#      $ref: '#/components/schemas/CreateBranch'
 # responses:
 #   200:
 #       description: successfully created a branch
@@ -819,7 +837,7 @@ POST        /branches                                                    @contro
 #     description: Parent branch identifier or `root` to list branches from root
 #   - name: body
 #     schema:
-#      $ref: '#/definitions/createBranch'
+#      $ref: '#/components/schemas/CreateBranch'
 # responses:
 #   200:
 #       description: successfully updated a branch
@@ -909,30 +927,32 @@ GET           /version                                            @controllers.A
 # responses:
 #   200:
 #     description: Services list
-#     schema:
-#       type: object
-#       properties:
-#         items:
-#           type: array
-#           items:
-#             type: object
-#             properties:
-#               name:
-#                 type: string
-#                 description: Service Name
-#               pattern:
-#                 type: string
-#                 description: Service routing pattern
-#               basePath:
-#                 type: string
-#                 description: Service Base Path
-#               swaggerUrl:
-#                 type: string
-#                 description: Service Swagger URL
-#         count:
-#           type: integer
-#           format: int64
-#           description: Count
+#     content:
+#       application/json:
+#         schema:
+#           type: object
+#           properties:
+#             items:
+#               type: array
+#               items:
+#                 type: object
+#                 properties:
+#                   name:
+#                     type: string
+#                     description: Service Name
+#                   pattern:
+#                     type: string
+#                     description: Service routing pattern
+#                   basePath:
+#                     type: string
+#                     description: Service Base Path
+#                   swaggerUrl:
+#                     type: string
+#                     description: Service Swagger URL
+#             count:
+#               type: integer
+#               format: int64
+#               description: Count
 ###
 GET           /discovery/services                                 @controllers.ProxyController.listServices
 
@@ -944,23 +964,11 @@ GET           /api/assets/*file                                   controllers.As
 ### NoDocs ###
 GET           /assets/*file                                       controllers.Assets.at(path="/public", file)
 
-###
-# summary: compiled swagger definition
-# description: for swagger UI to consume
-# tags:
-#   - Documentation
-# operationId: getDocsJson
-###
+### NoDocs ###
 GET           /docs/api.json                                    @controllers.ApiSpecs.specs
 
 
-###
-# summary: compiled swagger HTML documentation
-# description: swagger UI
-# tags:
-#   - Documentation
-# operationId: getDocsHtml
-###
+### NoDocs ###
 GET           /docs/api.html                                    @controllers.ApiSpecs.docsIndex
 
 ###

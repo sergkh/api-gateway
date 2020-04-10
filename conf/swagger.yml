@@ -1,26 +1,45 @@
----
-  swagger: "2.0"
-  info:
-    description: >
-                  Most of the requests require authorization token to be sent in `X-Auth-Token`.
-                  To start working with API use `POST /users` to create an account and `POST /login` to retrieve an authorization token.
-  consumes:
-    - application/json
-  produces:
-    - application/json
-  tags:
-    - name: OAuth
-      description: OAuth tokens and applications
-    - name: Users
-      description: Users management
-    - name: Documentation
-      description: Self documentation URLs
-    - name: Login
-      description: Login/logout requests
-    - name: Sessions
-      description: User sessions request
-  definitions:
-    errorResponse:
+openapi: "3.0.0"
+info:
+  title: API overview
+  description: >
+              Most of the requests require authorization token to be sent in `X-Auth-Token`.
+              To start working with API use `POST /users` to create an account and `POST /login` to retrieve an authorization token.
+servers:
+  - url: http://localhost:9000
+    description: Local dev server
+tags:
+  - name: OAuth
+    description: OAuth tokens and applications
+  - name: Users
+    description: Users management
+  - name: Login
+    description: Login/logout requests
+  - name: Sessions
+    description: User sessions request    
+components:
+  securitySchemes:
+    api_key:
+      type: apiKey
+      description: Authorization Token
+      name: X-Auth-Token
+      in: header
+    oauth2:
+      type: oauth2
+      flows:
+        implicit:
+          authorizationUrl: '/authorization'
+          tokenUrl: '/token'
+          scopes:
+            "users:read": "Read any user information"
+            "users:edit": "Edit any user information"
+            "users:block": "Block/Unblock users"
+            "users:create": "Allows create users"
+            "permissions:read": "Read global permissions configuration"
+            "permissions:edit": "Edit global permissions configuration"
+            "internal_web": "Internal web user"
+  schemas:
+    ErrorResponse:
+      type: object
       properties:
         error:
           type: string
@@ -30,79 +49,13 @@
             - USER_NOT_FOUND
             - INVALID_REQUEST
             - APPLICATION_NOT_FOUND
-            - TEMPORARY_TOKEN_NOT_FOUND
-            - TOKEN_CLAIMS_NOT_FOUND
-            - INVALID_TOKEN_CLAIMS
-            - INVALID_APPLICATION_SECRET
-            - INVALID_TOKEN
-            - TOKEN_NOT_FOUND
-            - IDENTIFIER_REQUIRED
-            - BLOCKED_USER
-            - USER_NOT_CONFIRMED
-            - INVALID_USER_CREDENTIALS
-            - USER_ALREADY_EXISTS
-            - CONFIRM_CODE_NOT_FOUND
-            - ACCESS_DENIED
-            - INVALID_IDENTIFIER
-            - USER_IDENTIFIER_EXISTS
-            - INVALID_PASSWORD
-            - EXTERNAL_SERVICE_UNAVAILABLE
-            - CONFIRMATION_REQUIRED
-            - ENTITY_NOT_FOUND
         message:
           type: string
           description: Error message description
         timestamp:
           type: integer
           description: Request timestamp
-      required:
-        - login
-    loginCredentials:
-      properties:
-        login:
-          type: string
-          description: Users phone number in international format or email
-        password:
-          type: string
-          description: Password, can be ommited if only OTP authorization is used
-      required:
-        - login
-    tokenResponse:
-      properties:
-        token:
-          type: string
-          description: Authentication token, that has to be put into 'X-Auth-Token' HTTP header
-      required:
-        - token
-    oauthAuthorize:
-      type: object
-      required:
-        - clientId
-        - accountId
-        - user
-        - scope
-        - url
-        - responseType
-      properties:
-        clientId:
-          type: integer
-          description: Client identifier
-        accountId:
-          type: integer
-          description: Account identifier
-        user:
-          type: string
-          description: User identifier
-        scope:
-          type: string
-          description: Scope
-        url:
-          type: string
-          description: URL
-        responseType:
-          type: string
-          description: Response type code or token
-    roleCreate:
+    RoleCreate:
        type: object
        properties:
           role:
@@ -113,7 +66,7 @@
             description: user permission array
             items:
               type: string
-    rolePermissions:
+    RolePermissions:
        type: object
        properties:
           permissions:
@@ -121,7 +74,7 @@
             description: user permission status
             items:
               type: string
-    user:
+    User:
       type: object
       properties:
         uuid:
@@ -146,7 +99,7 @@
         created:
           type: number
           description: User creation timestamp
-    createBranch:
+    CreateBranch:
       type: object
       required:
        - name
@@ -159,37 +112,3 @@
         parent:
           type: string
           description: Parent branch Id
-    restriction:
-      type: object
-      required:
-              - name
-              - pattern
-      properties:
-        name:
-          type: string
-          description: Restriction name
-        description:
-          type: string
-        pattern:
-            type: string
-            description: Restriction pattern
-  securityDefinitions:
-    api_key:
-      type: apiKey
-      description: Authorization Token
-      name: X-Auth-Token
-      in: header
-    oauth:
-      type: oauth2
-      flow: implicit
-      authorizationUrl: '/authorization'
-      scopes:
-          "users:read" : "Read any user information"
-          "users:edit" : "Edit any user information"
-          "users:block" : "Block/Unblock users"
-          "users:create" : "Allows create users"
-          "permissions:read" : "Read global permissions configuration"
-          "permissions:edit" : "Edit global permissions configuration"
-          "internal_web" : "Internal web user"
-  security:
-    - api_key: []

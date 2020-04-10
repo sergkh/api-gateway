@@ -37,7 +37,7 @@ class RoutingService @Inject()(ws: WSClient,
   private val cfg = config.get[Configuration]("swagger")
 
   private val serviceDescriptors = new ConcurrentHashMap[Service, ServiceDescriptor]()
-  private val baseSwagger = SwaggerSpecGenerator(cfg.get[Boolean]("swaggerV3"), "forms", "models").generate().get                 
+  private val baseSwagger = SwaggerSpecGenerator(true, "forms", "models").generate().get                 
   private val localDescriptor: ServiceDescriptor = ServiceDescriptor.fromSwagger(Service("api"), baseSwagger)
 
   private val info = (baseSwagger \ "info").as[JsObject] ++ Json.obj(
@@ -49,8 +49,6 @@ class RoutingService @Inject()(ws: WSClient,
   private val schema = cfg.get[Seq[String]]("schema")
   private val other = baseSwagger.without("paths", "definitions", "tags", "basePath", "schemes", "host", "info")
   private val isProd = playEnv.mode == Mode.Prod
-  private val authorizationUrl = (baseSwagger \ "securityDefinitions" \ "oauth" \ "authorizationUrl").as[String]
-  private val prodAuthorizationUrl = if (isProd) "/api" + authorizationUrl else authorizationUrl
 
   private val emptySeq = Seq[(String, JsValue)]()
   private val emptyJsArray: JsArray = JsArray()
@@ -78,7 +76,7 @@ class RoutingService @Inject()(ws: WSClient,
       "schemes" -> schema,
       "paths" -> paths,
       "definitions" -> definitions
-    ) ++ other.deepMerge(Json.obj("securityDefinitions" -> Json.obj("oauth" -> Json.obj("scopes" -> roles, "authorizationUrl" -> prodAuthorizationUrl))))
+    ) ++ other.deepMerge(Json.obj("securityDefinitions" -> Json.obj("oauth" -> Json.obj("scopes" -> roles))))
   }
 
   def matchService(path: String): Option[Service] = {

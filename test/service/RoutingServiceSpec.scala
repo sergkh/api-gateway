@@ -59,7 +59,6 @@ class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
       schema = ["http"]
       path = "/"
       update = 1 minute
-      swaggerV3 = false
     }
   """)
   )
