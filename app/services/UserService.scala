@@ -63,15 +63,24 @@ class UserService @Inject()(
 
   def updateFlags(userId: String, addFlags: List[String] = Nil, removeFlags: List[String] = Nil): Task[Option[User]] = {
     import Updates._
-    val update = combine(
-      pullAll("flags", removeFlags), addToSet("flags", addFlags), inc("version", 1)
-    )
 
-    col.findOneAndUpdate(
-      equal("_id", userId), 
-      update,
-      new FindOneAndUpdateOptions().returnDocument(ReturnDocument.AFTER)
-      ).toOptionTask
+    val returnUpdated = new FindOneAndUpdateOptions().returnDocument(ReturnDocument.AFTER)
+    // we can't run both pull and add in a same update, but in most cases it's only one of them executed
+    val addFlagsUpdate = combine(pushEach("flags", addFlags:_*), inc("version", 1))
+    val removeFlagsUpdate = combine(pullAll("flags", removeFlags:_*), inc("version", 1))
+
+    for {
+      userOptFirst  <- if (addFlags.isEmpty) Task.none else {
+        log.info(s"$userId adding flags: ${removeFlags} : ${addFlagsUpdate}")
+        col.findOneAndUpdate(equal("_id", userId), addFlagsUpdate, returnUpdated).toOptionTask
+      }
+      userOptSecond <- if (removeFlags.isEmpty) Task.none else { 
+        log.info(s"$userId removing flags: ${removeFlags} : ${removeFlagsUpdate}")
+        col.findOneAndUpdate(equal("_id", userId), removeFlagsUpdate, returnUpdated).toOptionTask 
+      }
+    } yield {
+      userOptSecond orElse userOptFirst
+    }
   }
 
   /**
@@ -187,8 +196,8 @@ class UserService @Inject()(
   def updateHierarchy(hierarchy: List[String], newHierarchy: List[String]): Task[Unit] = {
     val selector = all("hierarchy", hierarchy)
     for {
-      _ <- col.updateMany(selector, Updates.pushEach("hierarchy", hierarchy.drop(1))).toUnitTask
-      _ <- col.updateMany(selector, Updates.pullAll("hierarchy", newHierarchy)).toUnitTask
+      _ <- col.updateMany(selector, Updates.pushEach("hierarchy", hierarchy.drop(1):_*)).toUnitTask
+      _ <- col.updateMany(selector, Updates.pullAll("hierarchy", newHierarchy:_*)).toUnitTask
     } yield ()
   }
 

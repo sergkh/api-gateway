@@ -32,8 +32,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
                                       userService: UserService,
                                       confirmationService: ConfirmationCodeService,
                                       config: Configuration,
-                                      eventBus: EventsStream,
-                                      confirmations: ConfirmationProvider)(implicit system: ActorSystem) extends BaseController with I18nSupport {
+                                      eventBus: EventsStream)(implicit system: ActorSystem) extends BaseController with I18nSupport {
 
   val baseUrl = config.get[String]("app.basePath").stripSuffix("/")
 
@@ -53,7 +52,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
           }
         case Some(phoneConfirm) if phoneConfirm.operation == ConfirmationCode.OP_PHONE_CONFIRM =>
           userService.updateFlags(phoneConfirm.userId, removeFlags = List(User.FLAG_PHONE_NOT_CONFIRMED)).map { _ =>
-            log.info(s"Users ${phoneConfirm.userId} email confirmed")
+            log.info(s"Users ${phoneConfirm.userId} phone confirmed")
           }
         case code =>
           log.info(s"Code requested by $confirmation is not found or not supported. Got: $code")

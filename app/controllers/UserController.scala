@@ -20,7 +20,7 @@ import play.api.libs.json.Json._
 import play.api.libs.json._
 import play.api.mvc.{RequestHeader, Result}
 import security.{ConfirmationCodeService, WithPermission, WithUser, WithUserAndPerm}
-import services.{BranchesService, ConfirmationProvider, UserService}
+import services.{BranchesService, UserService}
 import utils.JwtExtension._
 import utils.RichRequest._
 import utils.TaskExt._
@@ -41,7 +41,6 @@ class UserController @Inject()(
                                 passDao: DelegableAuthInfoDAO[PasswordInfo],
                                 passwordHashers: PasswordHasherRegistry,
                                 confirmationService: ConfirmationCodeService,
-                                confirmationValidator: ConfirmationProvider,
                                 branches: BranchesService
                               )(implicit exec: ExecutionContext, system: ActorSystem)
   extends BaseController {
@@ -51,9 +50,8 @@ class UserController @Inject()(
   val otpPhoneTTLSeconds = 10 * 60
   val optEmailTTLSeconds = 3 * 24 * 60 * 60 // 3 days TODO: make a setting
 
-  val requirePass    = config.get[Boolean]("app.requirePassword")
-  val requireFields  = config.get[String]("app.requireFields").split(",").map(_.trim).toList
-
+  val requirePass    = config.get[Boolean]("registration.requirePassword")
+  val requireFields  = config.get[String]("registration.requiredFields").split(",").map(_.trim).toList
 
   implicit def listUserWrites = new Writes[Seq[User]] {
     override def writes(o: Seq[User]): JsValue = JsArray(for (obj <- o) yield Json.toJson(obj))

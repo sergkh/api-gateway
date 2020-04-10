@@ -78,15 +78,22 @@ POST          /users                                              @controllers.U
 #   - Users
 # operationId: confirmUser
 # security: []
-# parameters:
-#   - name: body
-#     schema:
-#      $ref: '#/components/schemas/forms.ConfirmForm.ConfirmData'
+# requestBody:
+#   required: true
+#   content:
+#     application/json:
+#       schema:
+#         type: object
+#         properties:
+#           login:
+#             type: string
+#             description: Users email, phone or id
+#           code:
+#             type: string
+#             description: Received code
 # responses:
-#   200:
-#     description: Token response
-#     schema:
-#      $ref: '#/components/schemas/tokenResponse'
+#   204:
+#     description: Confirmed
 #   404:
 #     description: Confirmation code not found
 ###

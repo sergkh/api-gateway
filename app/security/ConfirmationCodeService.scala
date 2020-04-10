@@ -1,7 +1,7 @@
 package security
 
 import com.fotolog.redis.{BinaryConverter, RedisClient}
-import javax.inject.Inject
+import javax.inject.{ Inject, Singleton }
 import models.ConfirmationCode
 import org.mindrot.jbcrypt.BCrypt
 import play.api.Configuration
@@ -15,6 +15,7 @@ import zio._
 
 import scala.concurrent.Future
 
+@Singleton
 class ConfirmationCodeService @Inject()(conf: Configuration, lifecycle: ApplicationLifecycle) extends Logging {
   final val SALT_ITERATIONS = 10
 
@@ -57,12 +58,16 @@ class ConfirmationCodeService @Inject()(conf: Configuration, lifecycle: Applicat
     val signedCode = code.withSignature(signCode(code))
 
     Task.collectAll(searchIdentifiers.map { id =>
-      Task.fromFuture(_ => redis.setAsync(prefix + id, signedCode, ttl))
+      Task.fromFuture(_ => 
+        redis.setAsync(prefix + id, signedCode, ttl)
+      )
     }).map(_ => ())
   }
 
   def get(login: String): Task[Option[ConfirmationCode]] =
-    Task.fromFuture(_ => redis.getAsync[ConfirmationCode](login)).map(_.filterNot(c => c.expired || c.signature != signCode(c)))
+    Task.fromFuture(_ => redis.getAsync[ConfirmationCode](prefix + login)).map {codeOpt => 
+      codeOpt.filterNot(c => c.expired || c.signature != signCode(c))
+    }
   
   def consume(login: String, code: String): Task[Option[ConfirmationCode]] = for {
     codeOpt <- get(login)

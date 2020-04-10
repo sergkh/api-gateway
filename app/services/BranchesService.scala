@@ -61,8 +61,8 @@ class MongoBranchesService @Inject()(conf: Configuration, userService: UserServi
       oldParentHierarchy = oldBranch.hierarchy.drop(1)
       _ <- if (oldParentHierarchy != newParentHierarchy) {
         val selector = all("hierarchy", oldBranch.hierarchy)
-        val push = Updates.pushEach("hierarchy", newParentHierarchy)
-        val pull = Updates.pullAll("hierarchy", oldParentHierarchy)
+        val push = Updates.pushEach("hierarchy", newParentHierarchy:_*)
+        val pull = Updates.pullAll("hierarchy", oldParentHierarchy:_*)
         for {
           _ <- col.updateOne(selector, push).toTask
           _ <- col.updateMany(selector, pull).toTask
