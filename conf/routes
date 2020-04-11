@@ -203,10 +203,22 @@ POST          /users/recovery                                     @controllers.U
 #     description: Otp successfully generated. Use '/users/recovery/confirm' to complete password recovery.
 #   404:
 #     description: User or confirmation code not found
-# parameters:
-#   - name: body
-#     schema:
-#      $ref: '#/components/schemas/forms.ResetPasswordForm.SetNewPassword'
+# requestBody:
+#   required: true
+#   content:
+#     application/json:
+#       schema:
+#         type: object
+#         properties:
+#           login:
+#             type: string
+#             description: Login of user to reset password for
+#           code:
+#             type: string
+#             description: received OTP code
+#           password:
+#             type: string
+#             description: New password
 ###
 POST          /users/recovery/confirm                             @controllers.UserController.resetPasswordConfirm
 

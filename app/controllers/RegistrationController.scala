@@ -49,9 +49,9 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
 
   implicit val createUserFormat = Json.reads[UserForm.CreateUser].map { c =>
     import forms.FormConstraints._
-   
+    // TODO: use proper form exceptions
     require(c.email.forall(email => emailAddress.apply(email) == Valid), "Email format is invalid")
-    require(c.phone.forall(phone => phoneNumber(phone) == Valid), "Email format is invalid")  
+    require(c.phone.forall(phone => phoneNumber(phone) == Valid), "Phone format is invalid")  
     require(c.password.forall(pass => passwordConstraint(pass) == Valid), "Password format is invalid")
 
    c
