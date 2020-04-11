@@ -47,26 +47,16 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
 
   log.info(s"Required user identifiers: ${requireFields.mkString(",")}. Password required: $requirePass")
 
-  implicit val createUserFormat = Json.reads[UserForm.CreateUser].map { c =>
-    import forms.FormConstraints._
-    // TODO: use proper form exceptions
-    require(c.email.forall(email => emailAddress.apply(email) == Valid), "Email format is invalid")
-    require(c.phone.forall(phone => phoneNumber(phone) == Valid), "Phone format is invalid")  
-    require(c.password.forall(pass => passwordConstraint(pass) == Valid), "Password format is invalid")
-
-   c
-  }
-    
   def register = silh.UserAwareAction.async(parse.json) { implicit request =>
     for {
-      registerBody  <- registrationFilters(request.body)
-      user          <- userRegistrationRequest(registerBody)
-      _             <- eventBus.publish(Signup(user, request))
+      transformedReq  <- registrationFilters(request)
+      user            <- userRegistrationRequest(transformedReq)
+      _               <- eventBus.publish(Signup(user, request))
     } yield Ok(Json.toJson(user))
   }
 
-  private def userRegistrationRequest(registerBody: JsValue): Task[User] = {
-    val data = registerBody.as[UserForm.CreateUser]
+  private def userRegistrationRequest(req: RequestHeader): Task[User] = {
+    val data = req.asForm(UserForm.createUser)
 
     val user = User(
       email = data.email,
