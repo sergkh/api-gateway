@@ -59,14 +59,14 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
     
   def register = silh.UserAwareAction.async(parse.json) { implicit request =>
     for {
-      registerBody  <- registrationFilters(request.body)
-      user          <- userRegistrationRequest(registerBody)
-      _             <- eventBus.publish(Signup(user, request))
+      transformedReq  <- registrationFilters(request)
+      user            <- userRegistrationRequest(transformedReq)
+      _               <- eventBus.publish(Signup(user, transformedReq))
     } yield Ok(Json.toJson(user))
   }
 
-  private def userRegistrationRequest(registerBody: JsValue): Task[User] = {
-    val data = registerBody.as[UserForm.CreateUser]
+  private def userRegistrationRequest(req: RequestHeader): Task[User] = {
+    val data = req.asForm(UserForm.createUser)
 
     val user = User(
       email = data.email,

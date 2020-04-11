@@ -1,8 +1,8 @@
 package services
 
-import play.api.libs.json.JsValue
+import play.api.mvc.RequestHeader
 import zio.Task
 
 trait RegistrationFilter {
-  def filter(request: JsValue): Task[JsValue]
+  def filter(request: RequestHeader): Task[RequestHeader]
 }
