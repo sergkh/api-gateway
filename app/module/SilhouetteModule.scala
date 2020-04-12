@@ -38,7 +38,7 @@ import play.api.libs.openid.OpenIdClient
 import play.api.libs.ws.WSClient
 import play.api.mvc.Cookie
 import security.{CustomJWTAuthenticatorService, KeysManager}
-import utils.{CustomEventBus, ServerErrorHandler}
+import utils.ServerErrorHandler
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -65,7 +65,6 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
     bind[CacheLayer].to[PlayCacheLayer]
     bind[IDGenerator].toInstance(new SecureRandomIDGenerator())
     bind[PasswordHasher].toInstance(new BCryptSha256PasswordHasher())
-    bind[EventBus].to[CustomEventBus].asEagerSingleton()
     bind[Clock].toInstance(Clock())
     bind[UnsecuredErrorHandler].to[ServerErrorHandler]
     bind[SecuredErrorHandler].to[ServerErrorHandler]

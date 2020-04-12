@@ -16,12 +16,11 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
 
 import scala.compat.Platform
 import scala.concurrent.duration._
+import play.api.Configuration
 
 @Singleton
-class KeysManager {
-  if (Security.getProvider("BC") == null) {
-    Security.addProvider(new BouncyCastleProvider())
-  }
+class KeysManager(conf: Configuration) {
+  if (Security.getProvider("BC") == null) Security.addProvider(new BouncyCastleProvider())
 
   val g = KeyPairGenerator.getInstance("ECDSA", "BC")
   g.initialize(new ECGenParameterSpec("P-521"), new SecureRandom())
@@ -33,7 +32,7 @@ class KeysManager {
   def authCertificates: Map[String, X509Certificate] = Map("default" -> authCertificate)
 
   def currentAuthPrivKey: (String, PrivateKey) = "default" -> authKeyPair.getPrivate()
-  def authPubKey(keyId: String): Option[PublicKey]     = Some(authKeyPair.getPublic())
+  def authPubKey(keyId: String): Option[PublicKey] = Some(authKeyPair.getPublic())
 
   private[this] def genCertificate(pair: KeyPair): X509Certificate = {
     val now = Platform.currentTime

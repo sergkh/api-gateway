@@ -83,22 +83,6 @@ object FormConstraints extends Constraints {
     Forms.of(enumFormat(enum, lowercase))
   }
 
-  def isoDate: Mapping[ju.Date] = {
-    def isoDateFormat: Formatter[ju.Date] = new Formatter[ju.Date] {
-      def bind(key: String, data: Map[String, String]) = {
-        play.api.data.format.Formats.stringFormat.bind(key, data).right.flatMap { s =>
-          scala.util.control.Exception.allCatch[ju.Date]
-            .either(DateHelpers.readTimestampIso(s))
-            .left.map(e => Seq(FormError(key, "error.date", Nil)))
-        }
-      }
-
-      def unbind(key: String, value: ju.Date) = Map(key -> value.getTime.toString)
-    }
-
-    Forms.of(isoDateFormat)
-  }
-
   private def validateField(field: String, regex: Regex, emptyMsg: String, invalidMsg: String) = {
     field.trim match {
       case empty if empty.isEmpty => Invalid(ValidationError(emptyMsg))

@@ -63,14 +63,6 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
 
   /**
    * Requires client authorization, using basic auth.
-   * Calling options:
-   * Access token:
-   *   grant_type=authorization_code&code=SplxlOBeZQQYbYS6WxSbIA&redirect_uri=https%3A%2F%2Fclient%2Eexample%2Ecom%2Fcb    
-   * Refresh token: 
-   *  grant_type=refresh_token&refresh_token=tGzv3JOkF0XG5Qx2TlKWIA&client_id=s6BhdRkqt3&client_secret=7Fjfp0ZBr1KtDRbnfVdmIw
-   * Password:
-   *   grant_type=password&username=johndoe&password=A3ddj3w
-   * 
    * Since this client authentication method involves a password, the authorization server MUST protect any endpoint utilizing it against
    * brute force attacks.
    */
