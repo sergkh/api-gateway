@@ -78,7 +78,8 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
     val grantType = request.asForm(OAuthForm.grantType)
 
     val (clientId, clientSecret) = request.basicAuth.getOrElse {
-      throw new AppException(AUTHORIZATION_FAILED, "Client authorization failed")
+      log.warn("No client authentication provided")
+      throw new AppException(AUTHORIZATION_FAILED, "Client authorization required")
     }
     
     log.info(s"Requesting access token for ${clientId}")
@@ -110,7 +111,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
         "access_token" -> token,
         "expires_in" -> expireIn,
         "scope" -> auth.scope,
-        "refresh_token" -> auth.refreshToken.map(_.id)
+        "refresh_token" -> auth.refreshToken
         // TODO: "id_token": "ID_token"
       ).filterNull)
     }
@@ -159,28 +160,28 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
     for {
       loginInfo     <- Task.fromFuture(ec => credentialsProvider.authenticate(Credentials(req.username, req.password)))
       user          <- Task.fromFuture(ec => userService.retrieve(loginInfo)).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
-      _             <- failIf(user.hasAllPermission(req.scopesList:_*), ACCESS_DENIED, "Wrong scopes")
+      _             <- failIf(!user.hasAllPermission(req.scopesList:_*), ACCESS_DENIED, "Wrong scopes")
       refreshToken  <- optIssueRefreshToken(user, req.scope, clientId)
       _             <- failIf(user.flags.contains(User.FLAG_2FACTOR), AUTHORIZATION_FAILED, "User authorization failed") // TODO: support OTPs 
     } yield AuthResult(user, req.scope)
   }
 
   private def authorizeByAuthorizationCode(clientId: String, req: AccessTokenByAuthorizationCode): Task[AuthResult] = for {
-    authCode     <- authCodes.getAndRemove(req.authCode).map(_.filter(_.expired)).orFail(AppException(AUTHORIZATION_FAILED, "Invalid authorization code"))
+    authCode     <- authCodes.getAndRemove(req.authCode).orFail(AppException(AUTHORIZATION_FAILED, "Invalid authorization code"))
     user         <- userService.getActiveUser(authCode.userId).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
     refreshToken <- optIssueRefreshToken(user, authCode.scope, clientId)
   } yield {
     AuthResult(user, authCode.scope, refreshToken)
   }
 
-  private def optIssueRefreshToken(user: User, scope: Option[String], clientId: String): Task[Option[RefreshToken]] = {
+  private def optIssueRefreshToken(user: User, scope: Option[String], clientId: String): Task[Option[String]] = {
     if (scope.exists(_.split(" ").contains("offline_access"))) {
-      tokens.store(RefreshToken(
+      tokens.create(
         user.id, 
         scope, 
         LocalDateTime.now().plusSeconds(RefreshTokenTTL.toSeconds),
         clientId
-      )).map(Some(_))
+      ).map(Some(_))
     } else {
       Task.succeed(None)
     }
@@ -192,5 +193,5 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
 }
 
 object TokenController {
-  case class AuthResult(user: User, scope: Option[String] = None, refreshToken: Option[RefreshToken] = None)
+  case class AuthResult(user: User, scope: Option[String] = None, refreshToken: Option[String] = None)
 }

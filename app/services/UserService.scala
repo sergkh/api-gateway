@@ -140,7 +140,7 @@ class UserService @Inject()(
 
     col.updateOne(criteria,
       combine(
-        set("password", pass.password),
+        set("password", pass),
         inc("version", 1))
     ).toUnitTask
   }

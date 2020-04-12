@@ -494,28 +494,30 @@ GET          /oauth/certs                                        @controllers.To
 
 
 ###
-# summary: Refresh access token
-# description: Allows to obtain new access token from existing Refresh token.
+# summary: Obtain access token
+# description: Allows to obtain new access token from existing Refresh token, authorization code or login and password. Requires client id and secret in the basci auth header
 # tags:
-#   - OAuth
-# operationId: refreshToken
-# parameters:
-#   - name: body
-#     schema:
-#      type: object
-#      properties:
-#        grant_type:
-#          type: string
-#          description: Grant type. Should be refresh_token
-#        client_id:
-#          type: string
-#          description: Client ID
-#        client_secret:
-#          type: string
-#          description: Client Secret
-#        refresh_token:
-#          type: string
-#          description: Refresh token
+#   - Login
+# operationId: getAccessToken
+# security:
+#   - basicAuth: []
+# requestBody:
+#   required: true
+#   content:
+#     application/json:
+#       schema:
+#          example: { "grant_type": "password", "username": "user@mail.com", "password": "secretpassword", "scope": "offline_access" }
+#          anyOf:
+#            - $ref: '#/components/schemas/AccessTokenByPassword'
+#            - $ref: '#/components/schemas/AccessTokenByRefreshToken'
+#            - $ref: '#/components/schemas/AccessTokenByAuthCode'
+#     application/x-www-form-urlencoded:
+#       schema:
+#          example: { "grant_type": "password", "username": "user@mail.com", "password": "secretpassword", "scope": "offline_access" }
+#          anyOf:
+#            - $ref: '#/components/schemas/AccessTokenByPassword'
+#            - $ref: '#/components/schemas/AccessTokenByRefreshToken'
+#            - $ref: '#/components/schemas/AccessTokenByAuthCode'
 # responses:
 #   200:
 #     description: Access token

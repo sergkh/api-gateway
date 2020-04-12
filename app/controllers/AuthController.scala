@@ -160,18 +160,13 @@ class AuthController @Inject()(
 
   private def respondWithCode(profile: CommonSocialProfile, user: User, authInfo: AuthInfo, authReq: AuthorizeUsingProvider)
                                     (implicit request: RequestHeader): Task[Result] = {
-    val code = AuthCode(
-      user.id,
-      authReq.scope,
-      expirationTime = LocalDateTime.now().plusNanos(AuthCodeTTL.toNanos),
-      clientId = authReq.clientId
-    )
-
-    authCodes.store(code) map { _ =>
+    
+    val expTime = LocalDateTime.now().plusNanos(AuthCodeTTL.toNanos)
+    authCodes.create(user.id, authReq.scope, expTime, authReq.clientId) map { code =>
       log.info(s"User $user auth code created")
 
       authReq.redirectUri.map { uri =>
-        val query = ("code" -> code.id) +: uri.query()
+        val query = ("code" -> code) +: uri.query()
         val queryWithState = authReq.state.map(s => ("state" -> s) +: query).getOrElse(query)
         val fullUri = uri.withQuery(queryWithState)
 
@@ -179,7 +174,7 @@ class AuthController @Inject()(
       }  getOrElse {
 
         val json = Json.obj(
-          "code" -> code.id,
+          "code" -> code,
           "state" -> authReq.state,
           "scope" -> authReq.scope
         ).filterNull

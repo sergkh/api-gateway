@@ -6,12 +6,18 @@ import models.AuthCode
 import play.api.Configuration
 import zio._
 import play.api.libs.json.Json
+import play.api.libs.crypto.DefaultCookieSigner
+import play.api.http.SecretConfiguration
+import utils.RandomStringGenerator
+import utils.Logging
+import org.mindrot.jbcrypt.BCrypt
+import java.time.LocalDateTime
 
 /**
   * Service manages short term Authentication codes in redis.
   */
 @Singleton
-class AuthCodesService @Inject() (conf: Configuration) {
+class AuthCodesService @Inject() (conf: Configuration) extends Logging {
   private[this] final val redis = RedisClient(conf.get[String]("redis.host"))
 
   private[this] implicit val format = Json.format[AuthCode]
@@ -21,20 +27,43 @@ class AuthCodesService @Inject() (conf: Configuration) {
     override def write(v: AuthCode): Array[Byte] = Json.toBytes(Json.toJson(v))
   }
 
+  private val signer = new DefaultCookieSigner(SecretConfiguration(
+    conf.getOptional[String]("oauth.sign-key").getOrElse {
+      log.info("No Auth codes signature key set, using random")
+      RandomStringGenerator.generateSecret(64)
+    }
+  ))
+
   private[this] val prefix = "auth-code:"
 
-  def store(code: AuthCode): Task[AuthCode] = {
+  def create(userId: String, scope: Option[String], expTime: LocalDateTime, clientId: String): Task[String] = {
+    val secretPart = RandomStringGenerator.generateSecret(10)
+
+    val authCode = AuthCode(userId, scope, expTime, clientId, hashSecretPart(secretPart))
+    val code = authCode.id + "_" + secretPart
+
     Task.fromFuture(ec => 
-      redis.setAsync(key(code.id), code, code.expireIn)
+      redis.setAsync(key(authCode.id), authCode.copy(sign = signCode(authCode)), authCode.expireIn)
     ).map(_ => code)
   }
 
-  def getAndRemove(id: String): Task[Option[AuthCode]] = for {
-    codeOpt <- Task.fromFuture(ec => redis.getAsync[AuthCode](id))
-    _       <- Task.fromFuture(ec => redis.delAsync(id))
-  } yield codeOpt
-  
+  def getAndRemove(code: String): Task[Option[AuthCode]] = code.split("_") match {
+    case Array(id, secret) =>
+      for {
+        codeOpt <- Task.fromFuture(ec => redis.getAsync[AuthCode](id))
+        _       <-  if (codeOpt.isDefined) Task.fromFuture(ec => redis.delAsync(id)) else Task.unit
+      } yield codeOpt.filter(c => c.sign == signCode(c) && !c.expired && validateSecret(secret, c))
+    case _ =>
+      log.warn("Wrong auth code format")
+      Task.none
+  }
+
+  private def signCode(c: AuthCode): String = 
+    signer.sign(s"${c.userId}:${c.scope}:${c.expirationTime}:${c.clientId}:${c.id}:${c.requestedTime}:${c.secretHash}")
 
   @inline
   private[this] def key(id: String): String = prefix + id
+
+  private def hashSecretPart(secret: String): String = BCrypt.hashpw(secret, BCrypt.gensalt(10))
+  private def validateSecret(secret: String, c: AuthCode): Boolean = BCrypt.checkpw(secret, c.secretHash)
 }

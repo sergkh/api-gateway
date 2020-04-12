@@ -23,6 +23,9 @@ components:
       description: Authorization Token
       name: X-Auth-Token
       in: header
+    basicAuth:
+      type: http
+      scheme: basic  
     oauth2:
       type: oauth2
       flows:
@@ -112,3 +115,48 @@ components:
         parent:
           type: string
           description: Parent branch Id
+    AccessTokenByPassword:
+      type: object
+      required: [grant_type, username, password]
+      properties:
+        grant_type:
+          type: string
+          description: Grant type. 'password' in this case
+          enum: [ password, refresh_token, authorization_code ]
+        username:
+          type: string
+          description: Users name
+        password:
+          type: string
+          description: Users password
+        scope:
+          type: string
+          description: Space separated list of requested scopes
+    AccessTokenByRefreshToken:
+      type: object
+      required: [grant_type, refresh_token]
+      properties:
+        grant_type:
+          type: string
+          description: Grant type. 'refresh_token' in this case
+          enum: [ password, refresh_token, authorization_code ]
+        refresh_token:
+          type: string
+          description: Previously obtained refresh token        
+    AccessTokenByAuthCode:
+      type: object
+      required: [grant_type, code]
+      properties:
+        grant_type:
+          type: string
+          description: Grant type. 'authorization_code' in this case
+          enum: [ password, refresh_token, authorization_code ]
+        code:
+          type: string
+          description: Auth code obtained using /auth/* endpoint
+        redirect_ui:
+          type: string
+          description: Optional redirect URL. Has to be enabled for client. If not set JSON response is returned
+        client_id:
+          type: string
+          description: Client identifier

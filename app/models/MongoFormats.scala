@@ -4,32 +4,10 @@ import com.mohiva.play.silhouette.api.LoginInfo
 import com.mohiva.play.silhouette.api.util.PasswordInfo
 import com.mohiva.play.silhouette.impl.providers.{OAuth1Info, OAuth2Info}
 import org.mongodb.scala.bson.codecs.Macros
-import org.mongodb.scala.bson.codecs.DEFAULT_CODEC_REGISTRY
+import org.mongodb.scala.MongoClient.DEFAULT_CODEC_REGISTRY
 import org.bson.codecs.configuration.CodecRegistries
 
 object MongoFormats {
-
-//  implicit val passwordInfoReader: BSONReader[BSONString, PasswordInfo] = BSONReader[BSONString, PasswordInfo] { str =>
-//    str.value.split("$") match {
-//      case Array(hasher, pass, salt) => PasswordInfo(hasher, pass, Some(salt))
-//      case Array(hasher, pass) => PasswordInfo(hasher, pass, None)
-//    }
-//  }
-//
-//  implicit val passwordInfoWriter: BSONWriter[PasswordInfo, BSONString] = BSONWriter[PasswordInfo, BSONString] { info =>
-//    BSONString(info.hasher + "$" + info.password + info.salt.map(salt => "$" + salt).getOrElse(""))
-//  }
-//
-//  implicit object LocalDateTimeWriter extends BSONWriter[LocalDateTime, BSONDateTime] {
-//    def write(dt: LocalDateTime) : BSONDateTime = BSONDateTime(dt.toInstant(ZoneOffset.UTC).getEpochSecond)
-//  }
-//
-//  implicit object LocalDateTimeReader extends BSONReader[BSONDateTime, LocalDateTime] {
-//    def read(dt:BSONDateTime): LocalDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(dt.value), ZoneOffset.UTC)
-//  }
-
-  // implicit val traitBsonTransformer = BsonTransformer()
-
 
   val rolePermissionsCodec = Macros.createCodecProviderIgnoreNone[RolePermissions]()
   val refreshTokenCodec = Macros.createCodecProviderIgnoreNone[RefreshToken]()

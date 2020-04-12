@@ -25,7 +25,7 @@ class ConfirmationCodeService @Inject()(conf: Configuration, lifecycle: Applicat
   private val prefix = "ccds:"
 
   private val signer = new DefaultCookieSigner(SecretConfiguration(
-    conf.getOptional[String]("confirmation.otp.sign-key").getOrElse {
+    conf.getOptional[String]("confirmation.sign-key").getOrElse {
       log.info("No OTP signature key set, using random")
       RandomStringGenerator.generateSecret(64)
     }

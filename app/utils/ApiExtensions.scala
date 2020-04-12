@@ -99,7 +99,7 @@ object RichRequest {
 
     def basicAuth: Option[(String, String)] = 
       r.headers.get(HeaderNames.AUTHORIZATION).map(_.split(" ")).collect {
-        case Array("Bearer", data) => Try {
+        case Array("Basic", data) => Try {
           val Array(user, pass) = new String(ju.Base64.getDecoder.decode(data)).split(":")
           user -> pass
         }.toOption
