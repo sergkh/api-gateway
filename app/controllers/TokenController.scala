@@ -100,7 +100,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
       token           <- Task.fromFuture(ec => silh.env.authenticatorService.init(authenticator))
       _               <- eventBus.publish(Login(auth.user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis))
     } yield {
-      log.info(s"Succeed user authentication ${auth.user.id}")
+      log.info(s"User ${auth.user.id} authenticated by $clientId ${auth.refreshToken.map(_ => " with refresh token").getOrElse("")} using $grantType with scopes: ${auth.scope}")
               
       val expireIn = ((authenticator.expirationDateTime.toInstant.getMillis / 1000) -
                   LocalDateTime.now().toInstant(ZoneOffset.UTC).getEpochSecond())
@@ -161,29 +161,29 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
       loginInfo     <- Task.fromFuture(ec => credentialsProvider.authenticate(Credentials(req.username, req.password)))
       user          <- Task.fromFuture(ec => userService.retrieve(loginInfo)).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
       _             <- failIf(!user.hasAllPermission(req.scopesList:_*), ACCESS_DENIED, "Wrong scopes")
-      refreshToken  <- optIssueRefreshToken(user, req.scope, clientId)
+      refreshToken  <- optIssueRefreshToken(user, req.scopesList, clientId)
       _             <- failIf(user.flags.contains(User.FLAG_2FACTOR), AUTHORIZATION_FAILED, "User authorization failed") // TODO: support OTPs 
-    } yield AuthResult(user, req.scope)
+    } yield AuthResult(user, req.scope, refreshToken)
   }
 
   private def authorizeByAuthorizationCode(clientId: String, req: AccessTokenByAuthorizationCode): Task[AuthResult] = for {
     authCode     <- authCodes.getAndRemove(req.authCode).orFail(AppException(AUTHORIZATION_FAILED, "Invalid authorization code"))
     user         <- userService.getActiveUser(authCode.userId).orFail(AppException(AUTHORIZATION_FAILED, "User authorization failed"))
-    refreshToken <- optIssueRefreshToken(user, authCode.scope, clientId)
+    refreshToken <- optIssueRefreshToken(user, authCode.scopesList, clientId)
   } yield {
     AuthResult(user, authCode.scope, refreshToken)
   }
 
-  private def optIssueRefreshToken(user: User, scope: Option[String], clientId: String): Task[Option[String]] = {
-    if (scope.exists(_.split(" ").contains("offline_access"))) {
+  private def optIssueRefreshToken(user: User, scopes: List[String], clientId: String): Task[Option[String]] = {
+    if (scopes.contains("offline_access")) {
       tokens.create(
         user.id, 
-        scope, 
+        Option(scopes.mkString(" ")).filter(_.nonEmpty),
         LocalDateTime.now().plusSeconds(RefreshTokenTTL.toSeconds),
         clientId
       ).map(Some(_))
     } else {
-      Task.succeed(None)
+      Task.none
     }
   }
 

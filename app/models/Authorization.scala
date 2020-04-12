@@ -31,6 +31,7 @@ case class AuthCode(userId: String,
                     sign: String = "") {
   def expireIn: Int = ((expirationTime.toInstant(ZoneOffset.UTC).toEpochMilli / 1000) - LocalDateTime.now().toInstant(ZoneOffset.UTC).getEpochSecond).toInt
   def expired: Boolean = expirationTime.isBefore(LocalDateTime.now())
+  def scopesList: List[String] = scope.map(_.split(" ").toList).getOrElse(Nil)
 }
 
 /**

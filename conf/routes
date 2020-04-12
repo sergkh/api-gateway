@@ -495,7 +495,9 @@ GET          /oauth/certs                                        @controllers.To
 
 ###
 # summary: Obtain access token
-# description: Allows to obtain new access token from existing Refresh token, authorization code or login and password. Requires client id and secret in the basci auth header
+# description: Allows to obtain new access token from existing Refresh token, authorization code or 
+#              login and password. Requires client id and secret in the basci auth header. Add 'offline_access' to scopes to get 
+#              refresh token as well.
 # tags:
 #   - Login
 # operationId: getAccessToken
