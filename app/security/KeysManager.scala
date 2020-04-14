@@ -17,24 +17,132 @@ import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
 import scala.compat.Platform
 import scala.concurrent.duration._
 import play.api.Configuration
+import scala.io.Source
+import java.security.spec.PKCS8EncodedKeySpec
+import java.security.spec.X509EncodedKeySpec
+import java.security.cert.CertificateFactory
+import java.io.FileInputStream
+import java.io.InputStream
+import utils.{RandomStringGenerator, Logging}
+import net.ceedubs.ficus.Ficus._
+import net.ceedubs.ficus.readers.ArbitraryTypeReader._
+import com.typesafe.config.Config
+import models.ConfigException
 
 @Singleton
-class KeysManager(conf: Configuration) {
+class KeysManager(conf: Configuration) extends Logging {
+  import KeysManager._
+
   if (Security.getProvider("BC") == null) Security.addProvider(new BouncyCastleProvider())
 
-  val g = KeyPairGenerator.getInstance("ECDSA", "BC")
-  g.initialize(new ECGenParameterSpec("P-521"), new SecureRandom())
+  private[this] val authKeys = loadAuthKeys
 
-  val authKeyPair = g.generateKeyPair()
+  /**
+    * @return map of certificates and their key ID's used to verify the 
+    * auth token signature
+    */
+  def authCertificates: Map[String, X509Certificate] = authKeys.certsMap
 
-  val authCertificate = genCertificate(authKeyPair)
+  /**
+    * @return current private key used to sign auth token with it's key ID
+    */
+  def currentAuthPrivKey: (String, PrivateKey) = authKeys.currentPrivKey
 
-  def authCertificates: Map[String, X509Certificate] = Map("default" -> authCertificate)
+  /**
+    * @return returns certificate used to verify auth token signature by key ID
+    */
+  def authPubKey(keyId: String): Option[PublicKey] = authKeys.certsMap.get(keyId).map(_.getPublicKey())
 
-  def currentAuthPrivKey: (String, PrivateKey) = "default" -> authKeyPair.getPrivate()
-  def authPubKey(keyId: String): Option[PublicKey] = Some(authKeyPair.getPublic())
+  private[this] def loadAuthKeys: AuthKeys = {
+    val cryptoConf = conf.underlying.as[CryptoConfig]("crypto")
 
-  private[this] def genCertificate(pair: KeyPair): X509Certificate = {
+    cryptoConf.keystore.file.map { ksFile =>
+      val pass = cryptoConf.keystore.pass.getOrElse{
+        throw new ConfigException(
+          "Keystore is set, but no password provided. Use 'KEYSTORE_PASSWORD' or 'KEYSTORE_PASSWORD_FILE' environment variable",
+          "crypto.keystore.password"
+        )
+      }
+
+      val keystore = loadKeystore(ksFile, pass)
+
+      val (keyId, cert, privKey) = cryptoConf.accessToken.signKeyAlias.map { keyAlias =>
+        val primaryKeyId = cryptoConf.accessToken.signKeyId.getOrElse(keyAlias)
+        
+        val privKey = Option(keystore.getKey(keyAlias, pass.toCharArray()).asInstanceOf[PrivateKey]).getOrElse {
+          throw new RuntimeException(s"Private key '$keyAlias' is not found")
+        }
+        val cert = Option(keystore.getCertificate(keyAlias).asInstanceOf[X509Certificate]).getOrElse {
+          throw new RuntimeException(s"Certificate '$keyAlias' is not found")
+        }
+
+        (primaryKeyId, cert, privKey)
+      }.getOrElse {
+        val (cert, privKey) = generateAuthKeys
+        (RandomStringGenerator.generateId(), cert, privKey)
+      }
+      
+      val authCodesKey = cryptoConf.authCodes.signKeyAlias.map { alias =>
+        keystore.getKey(alias, pass.toCharArray())
+      }.getOrElse {
+        genAESKey
+      }
+
+      AuthKeys(
+        keyId, privKey, cert, authCodesKey
+      )
+    }.getOrElse { 
+      log.warn("!WARNING! No keystore file set. Generating keys.")
+      val (cert, privKey) = generateAuthKeys
+
+      AuthKeys(RandomStringGenerator.generateId(), privKey, cert, genAESKey)
+    }
+  }
+}
+
+object KeysManager extends App {
+  case class KeystoreConfig(
+    file: Option[String], 
+    password: Option[String],
+    passwordFile: Option[String]
+  ) {
+    def pass: Option[String] = password orElse passwordFile
+  }
+
+  case class AccessTokenConfig(signKeyId: Option[String], signKeyAlias: Option[String], deprecatedKeyAliases: Option[String])
+  case class AuthCodesConfig(signKeyAlias: Option[String])
+
+  case class CryptoConfig(
+    keystore: KeystoreConfig,
+    accessToken: AccessTokenConfig,
+    authCodes: AuthCodesConfig
+  )
+
+  case class AuthKeys(
+    keyId: String,
+    singKey: PrivateKey,
+    signCert: X509Certificate,
+    codesSignKey: Key,
+    deprecatedCerts: Map[String, X509Certificate] = Map()    
+  ) {
+    val currentPrivKey: (String, PrivateKey) = keyId -> singKey
+    val certsMap: Map[String, X509Certificate] = Map(keyId -> signCert) ++ deprecatedCerts
+  }
+
+  def loadKeystore(storeFile: String, password: String): KeyStore = {
+    val ks = KeyStore.getInstance("JCEKS")  
+    ks.load(new FileInputStream(storeFile), password.toCharArray())
+    ks
+  }
+
+  def generateAuthKeys: (X509Certificate, PrivateKey) = {
+    val g = KeyPairGenerator.getInstance("ECDSA", "BC")
+    g.initialize(new ECGenParameterSpec("P-521"), new SecureRandom())
+    val pair = g.generateKeyPair()
+    genCertificate(pair) -> pair.getPrivate()
+  }
+
+  def genCertificate(pair: KeyPair): X509Certificate = {
     val now = Platform.currentTime
 
     val generator = new X509v3CertificateBuilder(
@@ -49,5 +157,11 @@ class KeysManager(conf: Configuration) {
     val holder = generator.build(new JcaContentSignerBuilder("SHA256withECDSA").build(pair.getPrivate))
 
     new JcaX509CertificateConverter().setProvider("BC").getCertificate(holder)
+  }
+
+  def genAESKey: Key = {
+    val keyGen = javax.crypto.KeyGenerator.getInstance("AES", "BC")
+    keyGen.init(256)
+    keyGen.generateKey()
   }
 }

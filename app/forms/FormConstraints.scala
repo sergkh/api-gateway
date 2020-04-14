@@ -11,13 +11,13 @@ import play.api.data.Forms
 import play.api.data.FormError
 import play.api.data.Mapping
 import play.api.data.format.Formatter
-import utils.DateHelpers
 import java.{util => ju}
 
 object FormConstraints extends Constraints {
   private final val ERROR_PHONE_EMPTY = "error.phone.empty"
   private final val ERROR_PASSWORD_FORMAT = "error.password.format"
   private final val MIN_PASSWORD_LENGTH = 6
+  private final val MAX_PASSWORD_LENGTH = 64 // Bcrypt limitation
 
   val EMAIL_VALIDATION_PATTERN = Pattern.compile("""^[a-zA-Z0-9\.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$""")
   val PHONE_VALIDATION_PTRN = """^(\+\d{10,15})$""".r
@@ -27,7 +27,8 @@ object FormConstraints extends Constraints {
   val passwordConstraint: Constraint[String] = Constraint("constraints.password") {
     case allNumbers() => Invalid(Seq(ValidationError(ERROR_PASSWORD_FORMAT)))
     case allLetters() => Invalid(Seq(ValidationError(ERROR_PASSWORD_FORMAT)))
-    case short if short.length < MIN_PASSWORD_LENGTH => Invalid(Seq(ValidationError(ERROR_PASSWORD_FORMAT)))
+    case wrongLen if wrongLen.length < MIN_PASSWORD_LENGTH || wrongLen.length > MAX_PASSWORD_LENGTH => 
+      Invalid(Seq(ValidationError(ERROR_PASSWORD_FORMAT)))
     case _ => Valid
   }
   

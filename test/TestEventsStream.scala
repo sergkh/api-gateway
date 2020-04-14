@@ -1,5 +1,6 @@
 package service.fakes
 
+import zio.Task
 import akka.actor.{Actor, ActorSystem, Props}
 import events.{AppEvent, EventsStream}
 import javax.inject.Inject

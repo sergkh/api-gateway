@@ -44,7 +44,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
                               )
                                (implicit exec: ExecutionContext) extends BaseController {
 
-  val RefreshTokenTTL = conf.get[FiniteDuration]("oauth.refreshTokenTTL")
+  val RefreshTokenTTL = conf.get[FiniteDuration]("oauth.refreshToken.ttl")
 
   def authCerts = Action { _ =>
 

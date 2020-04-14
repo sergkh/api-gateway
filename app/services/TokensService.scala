@@ -19,7 +19,7 @@ import play.api.Configuration
 class TokensService @Inject() (mongoApi: MongoApi, conf: Configuration)(implicit exec: ExecutionContext) extends Logging {
   
   private val signer = new DefaultCookieSigner(SecretConfiguration(
-    conf.getOptional[String]("oauth.sign-key").getOrElse {
+    conf.getOptional[String]("oauth.refreshToken.sign-key").getOrElse {
       log.info("No Refresh tokens signature key set, using random")
       RandomStringGenerator.generateSecret(64)
     }

@@ -18,7 +18,6 @@ import play.api.libs.streams.Accumulator
 import play.api.mvc.BodyParser
 import security.WithPermission
 import services.{ProxyService, RoutingService, StreamedProxyRequest}
-import utils.Responses._
 import utils.RichJson._
 
 import scala.concurrent.ExecutionContext

@@ -100,7 +100,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
   }
 
   @Provides
-  def provideKeyManger: KeysManager = new KeysManager()
+  def provideKeyManger(conf: Configuration): KeysManager = new KeysManager(conf)
 
   /**
     * Provides the social provider registry.

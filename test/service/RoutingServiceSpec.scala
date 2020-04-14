@@ -16,6 +16,7 @@ import org.scalatest.time.{Seconds, Span}
 import service.fakes.TestEventsStream
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatest.matchers.should.Matchers
+import utils.TaskExt._
 
 class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
   with AnyWordSpecLike
@@ -23,7 +24,7 @@ class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
   with MockWSHelpers
   with Eventually
   with MockitoSugar {
-
+ 
   val json: JsValue = Json.parse(
     """{
       |"paths":{
@@ -70,7 +71,7 @@ class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
   "Router" should {
     "return rates service" in {
 
-      bus.publish(ServiceDiscovered(rates))
+      bus.publish(ServiceDiscovered(rates)).toUnsafeFuture
 
       eventually (timeout(Span(1, Seconds))) {
         router.matchService("/rates/USDEUR") shouldEqual Some(rates)
