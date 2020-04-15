@@ -27,7 +27,7 @@ import utils.TaskExt._
 import zio._
 
 import scala.concurrent.ExecutionContext
-import services.CodeGenerator
+import utils.RandomStringGenerator
 
 /**
   * Created by yaroslav on 29/11/15.
@@ -173,7 +173,7 @@ class UserController @Inject()(
 
     for {
       user   <- userService.getActiveUser(login).orFail(AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User $login not found"))      
-      otp     =  CodeGenerator.generateNumericPassword(otpLength, otpLength)
+      otp     =  RandomStringGenerator.generateNumericPassword(otpLength, otpLength)
       _      <- confirmationService.create(
                       user.id, 
                       List(user.id) ++ user.email.toList ++ user.phone.toList,
@@ -345,7 +345,7 @@ class UserController @Inject()(
     val updatedUser = newUser.withFlags(addFlags:_*)
 
     val phoneUpdate = if (phoneChanged) {
-      val otp = CodeGenerator.generateNumericPassword(otpLength, otpLength)
+      val otp = RandomStringGenerator.generateNumericPassword(otpLength, otpLength)
 
             for {
         _ <- confirmationService.create(oldUser.id, List(oldUser.id, newUser.phone.get), ConfirmationCode.OP_PHONE_CONFIRM, otp, otpPhoneTTLSeconds)
@@ -357,7 +357,7 @@ class UserController @Inject()(
     } else Task.unit
 
     val emailUpdate = if (emailChanged) {
-      val otp = CodeGenerator.generateNumericPassword(otpEmailLength, otpEmailLength)
+      val otp = RandomStringGenerator.generateNumericPassword(otpEmailLength, otpEmailLength)
 
       for {
         _ <- confirmationService.create(oldUser.id, List(oldUser.id, newUser.email.get), ConfirmationCode.OP_EMAIL_CONFIRM, otp, optEmailTTLSeconds)

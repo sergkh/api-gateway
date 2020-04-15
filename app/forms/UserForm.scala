@@ -11,31 +11,31 @@ object UserForm {
     mapping(
       "password" -> optional(password),
       "newPassword" -> password,
-      "login" -> optional(nonEmptyText)
+      "login" -> optional(login)
     )(UpdatePass.apply)(UpdatePass.unapply)
   )
 
   val createUser = Form(
     mapping(
-      "email" -> optional(nonEmptyText.verifying(_.contains("@")).transform(_.toLowerCase, (a: String) => a)),
+      "email" -> optional(email.verifying(_.contains("@")).transform(_.toLowerCase, (a: String) => a)),
       "phone" -> optional(nonEmptyText.verifying(phoneNumber)),
-      "firstName" -> optional(nonEmptyText),
-      "lastName" -> optional(nonEmptyText),
+      "firstName" -> optional(name),
+      "lastName" -> optional(name),
       "password" -> optional(password),
-      "flags" -> optional(list(nonEmptyText)),
-      "roles" -> optional(list(nonEmptyText)),
+      "flags" -> optional(list(role)),
+      "roles" -> optional(list(role)),
       "branch" -> optional(text(Branch.BranchIdSize, Branch.BranchIdSize))
     )(CreateUser.apply)(CreateUser.unapply)
   )
 
   val updateUser = Form(
     mapping(
-      "email" -> optional(nonEmptyText.verifying(_.contains("@")).transform(_.toLowerCase, (a: String) => a)),
+      "email" -> optional(email.transform(_.toLowerCase, (a: String) => a)),
       "phone" -> optional(nonEmptyText.verifying(phoneNumber)),
-      "firstName" -> optional(nonEmptyText),
-      "lastName" -> optional(nonEmptyText),
-      "flags" -> default(list(nonEmptyText), Nil),
-      "roles" -> default(list(nonEmptyText), Nil),
+      "firstName" -> optional(name),
+      "lastName" -> optional(name),
+      "flags" -> default(list(role), Nil),
+      "roles" -> default(list(role), Nil),
       "branch" -> optional(text(Branch.BranchIdSize, Branch.BranchIdSize)),
       "version" -> default(number(min = 0), 0)
     )(UpdateUser.apply)(UpdateUser.unapply)

@@ -12,12 +12,13 @@ import utils.RandomStringGenerator
 import utils.Logging
 import org.mindrot.jbcrypt.BCrypt
 import java.time.LocalDateTime
+import security.KeysManager
 
 /**
   * Service manages short term Authentication codes in redis.
   */
 @Singleton
-class AuthCodesService @Inject() (conf: Configuration) extends Logging {
+class AuthCodesService @Inject() (conf: Configuration, keys: KeysManager) extends Logging {
   private[this] final val redis = RedisClient(conf.get[String]("redis.host"))
 
   private[this] implicit val format = Json.format[AuthCode]
@@ -26,13 +27,6 @@ class AuthCodesService @Inject() (conf: Configuration) extends Logging {
     override def read(data: Array[Byte]): AuthCode = Json.parse(data).as[AuthCode]
     override def write(v: AuthCode): Array[Byte] = Json.toBytes(Json.toJson(v))
   }
-
-  private val signer = new DefaultCookieSigner(SecretConfiguration(
-    conf.getOptional[String]("oauth.sign-key").getOrElse {
-      log.info("No Auth codes signature key set, using random")
-      RandomStringGenerator.generateSecret(64)
-    }
-  ))
 
   private[this] val prefix = "auth-code:"
 
@@ -59,7 +53,7 @@ class AuthCodesService @Inject() (conf: Configuration) extends Logging {
   }
 
   private def signCode(c: AuthCode): String = 
-    signer.sign(s"${c.userId}:${c.scope}:${c.expirationTime}:${c.clientId}:${c.id}:${c.requestedTime}:${c.secretHash}")
+    keys.codesSigner(s"${c.userId}:${c.scope}:${c.expirationTime}:${c.clientId}:${c.id}:${c.requestedTime}:${c.secretHash}")
 
   @inline
   private[this] def key(id: String): String = prefix + id

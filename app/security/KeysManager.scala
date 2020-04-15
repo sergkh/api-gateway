@@ -28,6 +28,7 @@ import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ArbitraryTypeReader._
 import com.typesafe.config.Config
 import models.ConfigException
+import play.api.Logger
 
 @Singleton
 class KeysManager(conf: Configuration) extends Logging {
@@ -35,7 +36,7 @@ class KeysManager(conf: Configuration) extends Logging {
 
   if (Security.getProvider("BC") == null) Security.addProvider(new BouncyCastleProvider())
 
-  private[this] val authKeys = loadAuthKeys
+  private[this] val authKeys = loadAuthKeys(conf.underlying.as[CryptoConfig]("crypto"), log)
 
   /**
     * @return map of certificates and their key ID's used to verify the 
@@ -49,74 +50,29 @@ class KeysManager(conf: Configuration) extends Logging {
   def currentAuthPrivKey: (String, PrivateKey) = authKeys.currentPrivKey
 
   /**
-    * @return returns certificate used to verify auth token signature by key ID
+    * @return certificate used to verify auth token signature by key ID
     */
   def authPubKey(keyId: String): Option[PublicKey] = authKeys.certsMap.get(keyId).map(_.getPublicKey())
 
-  private[this] def loadAuthKeys: AuthKeys = {
-    val cryptoConf = conf.underlying.as[CryptoConfig]("crypto")
-
-    cryptoConf.keystore.file.map { ksFile =>
-      val pass = cryptoConf.keystore.pass.getOrElse{
-        throw new ConfigException(
-          "Keystore is set, but no password provided. Use 'KEYSTORE_PASSWORD' or 'KEYSTORE_PASSWORD_FILE' environment variable",
-          "crypto.keystore.password"
-        )
-      }
-
-      val keystore = loadKeystore(ksFile, pass)
-
-      val (keyId, cert, privKey) = cryptoConf.accessToken.signKeyAlias.map { keyAlias =>
-        val primaryKeyId = cryptoConf.accessToken.signKeyId.getOrElse(keyAlias)
-        
-        val privKey = Option(keystore.getKey(keyAlias, pass.toCharArray()).asInstanceOf[PrivateKey]).getOrElse {
-          throw new RuntimeException(s"Private key '$keyAlias' is not found")
-        }
-        val cert = Option(keystore.getCertificate(keyAlias).asInstanceOf[X509Certificate]).getOrElse {
-          throw new RuntimeException(s"Certificate '$keyAlias' is not found")
-        }
-
-        (primaryKeyId, cert, privKey)
-      }.getOrElse {
-        val (cert, privKey) = generateAuthKeys
-        (RandomStringGenerator.generateId(), cert, privKey)
-      }
-      
-      val authCodesKey = cryptoConf.authCodes.signKeyAlias.map { alias =>
-        keystore.getKey(alias, pass.toCharArray())
-      }.getOrElse {
-        genAESKey
-      }
-
-      AuthKeys(
-        keyId, privKey, cert, authCodesKey
-      )
-    }.getOrElse { 
-      log.warn("!WARNING! No keystore file set. Generating keys.")
-      val (cert, privKey) = generateAuthKeys
-
-      AuthKeys(RandomStringGenerator.generateId(), privKey, cert, genAESKey)
-    }
+  /**
+    * @return function that used to sign internal codes stored in the database.
+    */
+  def codesSigner: String => String = { message =>
+    val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+    mac.init(authKeys.codesSignKey)
+    ju.Base64.getEncoder.encodeToString(mac.doFinal(message.getBytes()))
   }
 }
 
 object KeysManager extends App {
-  case class KeystoreConfig(
-    file: Option[String], 
-    password: Option[String],
-    passwordFile: Option[String]
-  ) {
+  case class KeystoreConfig(file: Option[String], password: Option[String], passwordFile: Option[String]) {
     def pass: Option[String] = password orElse passwordFile
   }
 
   case class AccessTokenConfig(signKeyId: Option[String], signKeyAlias: Option[String], deprecatedKeyAliases: Option[String])
   case class AuthCodesConfig(signKeyAlias: Option[String])
 
-  case class CryptoConfig(
-    keystore: KeystoreConfig,
-    accessToken: AccessTokenConfig,
-    authCodes: AuthCodesConfig
-  )
+  case class CryptoConfig(keystore: KeystoreConfig, accessToken: AccessTokenConfig, authCodes: AuthCodesConfig)
 
   case class AuthKeys(
     keyId: String,
@@ -127,6 +83,58 @@ object KeysManager extends App {
   ) {
     val currentPrivKey: (String, PrivateKey) = keyId -> singKey
     val certsMap: Map[String, X509Certificate] = Map(keyId -> signCert) ++ deprecatedCerts
+  }
+
+  def loadAuthKeys(cryptoConf: CryptoConfig, log: Logger): AuthKeys = {
+    cryptoConf.keystore.file.map { ksFile =>
+      val pass = cryptoConf.keystore.pass.getOrElse{
+        throw ConfigException(
+          "Keystore is set, but no password provided. Use 'KEYSTORE_PASSWORD' or 'KEYSTORE_PASSWORD_FILE' environment variable",
+          "crypto.keystore.password"
+        )
+      }
+
+      val keystore = loadKeystore(ksFile, pass)
+
+      val (keyId, cert, privKey) = cryptoConf.accessToken.signKeyAlias.map { keyAlias =>
+        log.warn("!WARNING! Access token key alias is not set. Generating key pair.")
+
+        val primaryKeyId = cryptoConf.accessToken.signKeyId.getOrElse(keyAlias)
+        
+        val privKey = Option(keystore.getKey(keyAlias, pass.toCharArray()).asInstanceOf[PrivateKey]).getOrElse {
+          throw ConfigException(s"Private key '$keyAlias' is not found", "crypto.accessToken.signKeyAlias")
+        }
+        val cert = Option(keystore.getCertificate(keyAlias).asInstanceOf[X509Certificate]).getOrElse {
+          throw ConfigException(s"Certificate '$keyAlias' is not found", "crypto.accessToken.signKeyAlias")
+        }
+
+        (primaryKeyId, cert, privKey)
+      }.getOrElse {
+        val (cert, privKey) = generateAuthKeys
+        (RandomStringGenerator.generateId(), cert, privKey)
+      }
+      
+      val authCodesKey = cryptoConf.authCodes.signKeyAlias.map { alias => keystore.getKey(alias, pass.toCharArray()) } getOrElse {
+        log.warn("!WARNING! Codes signature not set using generated one.")
+        genAESKey
+      }
+
+      val deprecatedCerts = cryptoConf.accessToken.deprecatedKeyAliases.map { keyAliases =>
+        keyAliases.split(",").map(_.split("=")).map {
+          case Array(keyId, keyAlias) => keyId -> Option(keystore.getCertificate(keyAlias)).getOrElse {
+            throw ConfigException(s"Certificate for alias $keyAlias is not found", 
+                                        "crypto.accessToken.deprecatedKeyAliases")
+          }.asInstanceOf[X509Certificate]
+        }.toMap
+      }.getOrElse(Map.empty)
+
+      AuthKeys(keyId, privKey, cert, authCodesKey, deprecatedCerts)
+    }.getOrElse { 
+      log.warn("!WARNING! No keystore file set. Generating keys.")
+      val (cert, privKey) = generateAuthKeys
+
+      AuthKeys(RandomStringGenerator.generateId(), privKey, cert, genAESKey)
+    }
   }
 
   def loadKeystore(storeFile: String, password: String): KeyStore = {

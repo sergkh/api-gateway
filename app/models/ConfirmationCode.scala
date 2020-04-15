@@ -5,7 +5,6 @@ import models.ConfirmationCode._
 import org.mindrot.jbcrypt.BCrypt
 import play.api.libs.json.{JsValue, Json}
 import play.api.mvc.{Request, RequestHeader}
-import services.CodeGenerator
 
 case class ConfirmationCode(userId: String,
                             ids: List[String],

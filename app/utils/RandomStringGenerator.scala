@@ -10,8 +10,7 @@ object RandomStringGenerator {
   final val UCASE = "ABCDEFGHJKLMNPQRSTWXYZ"
   final val NUMERIC = "1234567890"
   final val SPECIALS = "*$-+?_&=!%^#~"
-  final val SAFE_SPECIALS = "~-_"
-
+  final val SAFE_SPECIALS = "-_"
   final val URL_SAFE_ALPHABET = LCASE + UCASE + NUMERIC + SAFE_SPECIALS
 
   def generateNumericPassword(minLen: Int, maxLen: Int): String =

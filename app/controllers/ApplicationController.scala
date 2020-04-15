@@ -26,6 +26,7 @@ import zio._
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.concurrent.Future
 import scala.language.implicitConversions
+import utils.RandomStringGenerator
 
 @Singleton
 class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
@@ -68,7 +69,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
     for {
       code <- confirmationService.get(login)
                                  .orFail(AppException(ErrorCodes.CONFIRM_CODE_NOT_FOUND, s"Confirmation code is not found"))
-      otp = CodeGenerator.generateNumericPassword(code.otpLen, code.otpLen)      
+      otp = RandomStringGenerator.generateNumericPassword(code.otpLen, code.otpLen)      
       _ <- confirmationService.create(
         code.userId,
         code.ids,

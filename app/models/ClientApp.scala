@@ -2,8 +2,7 @@ package models
 
 import org.mongodb.scala.bson.annotations.BsonProperty
 import play.api.libs.json._
-import services.CodeGenerator
-import utils.UuidGenerator
+import utils.RandomStringGenerator
 
 case class ClientApp(
   ownerId: String,
@@ -13,8 +12,8 @@ case class ClientApp(
   url: String,
   contacts: List[String] = Nil,
   redirectUrlPatterns: List[String] = Nil,
-  @BsonProperty("_id") id: String = UuidGenerator.generateId,
-  secret: String = CodeGenerator.generateSecret(ClientApp.SECRET_LENGTH)) {
+  @BsonProperty("_id") id: String = RandomStringGenerator.generateId(),
+  secret: String = RandomStringGenerator.generateSecret(ClientApp.SECRET_LENGTH)) {
 
   def update(appName: Option[String],
              appDescription: Option[String],

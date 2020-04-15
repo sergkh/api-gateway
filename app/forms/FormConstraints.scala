@@ -16,6 +16,7 @@ import java.{util => ju}
 object FormConstraints extends Constraints {
   private final val ERROR_PHONE_EMPTY = "error.phone.empty"
   private final val ERROR_PASSWORD_FORMAT = "error.password.format"
+  private final val ERROR_FORBIDDEN_CHARACTERS = "error.text.forbidden.format"
   private final val MIN_PASSWORD_LENGTH = 6
   private final val MAX_PASSWORD_LENGTH = 64 // Bcrypt limitation
 
@@ -23,21 +24,30 @@ object FormConstraints extends Constraints {
   val PHONE_VALIDATION_PTRN = """^(\+\d{10,15})$""".r
   private val allNumbers = """\d*""".r
   private val allLetters = """[A-Za-z]*""".r
+  private val forbiddenChars = "$[]{}<>"
   
   val passwordConstraint: Constraint[String] = Constraint("constraints.password") {
     case allNumbers() => Invalid(Seq(ValidationError(ERROR_PASSWORD_FORMAT)))
     case allLetters() => Invalid(Seq(ValidationError(ERROR_PASSWORD_FORMAT)))
-    case wrongLen if wrongLen.length < MIN_PASSWORD_LENGTH || wrongLen.length > MAX_PASSWORD_LENGTH => 
-      Invalid(Seq(ValidationError(ERROR_PASSWORD_FORMAT)))
     case _ => Valid
+  }
+
+  val textConstraint: Constraint[String] = Constraint("constraints.text") {
+    case cleanText if !forbiddenChars.exists(c => cleanText.contains(c.toString())) => Valid
+    case _ => Invalid(Seq(ValidationError(ERROR_FORBIDDEN_CHARACTERS)))
   }
   
   val limit = number(min = 1, max = 100)
   val offset = number(min = 0)
-  val longUuid = longNumber
-  val email = nonEmptyText.verifying(_.contains("@"))
-  val password = nonEmptyText(minLength = MIN_PASSWORD_LENGTH).verifying(passwordConstraint)
+  val password = nonEmptyText(MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH).verifying(passwordConstraint)
   
+  val login = text(3, 128).verifying(textConstraint)
+  val code = text(4, 60)
+  val role = text(4, 10).verifying(textConstraint)
+  val permission = text(4, 60).verifying(textConstraint)
+  val name = text(3, 30).verifying(textConstraint)
+  val description = text(3, 2048).verifying(textConstraint)
+
   def or[T](constraints: Constraint[T]*): Constraint[T] = Constraint("constraint.or") { field: T =>
       val validationResults = constraints.map(_.apply(field))
       validationResults.find(_ == Valid) match {

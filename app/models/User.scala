@@ -3,7 +3,7 @@ package models
 import com.mohiva.play.silhouette.api.Identity
 import com.mohiva.play.silhouette.impl.providers.{OAuth1Info, OAuth2Info}
 import play.api.libs.json._
-import utils.UuidGenerator
+import utils.RandomStringGenerator
 import utils.StringHelpers._
 import utils.RichJson._
 import com.mohiva.play.silhouette.api.util.PasswordInfo
@@ -18,7 +18,7 @@ case class User(email: Option[String] = None,
                 firstName: Option[String] = None,
                 lastName: Option[String] = None,
                 permissions: Option[List[String]] = None,
-                @BsonProperty("_id") id: String = UuidGenerator.generateId,
+                @BsonProperty("_id") id: String = RandomStringGenerator.generateId(),
                 version: Int = 0) extends Identity {
 
   def fullName: Option[String] = {

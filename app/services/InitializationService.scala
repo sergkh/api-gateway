@@ -79,20 +79,19 @@ class InitializationService @Inject()(config: Configuration,
 
   def initDefaultOAuthApp(user: User): Task[Unit] = {
     val appName = config.get[String]("swagger.appName")
-    val clientId = RandomStringGenerator.generateSecret(11)
-    val clientSecret = RandomStringGenerator.generateSecret(32)
+    val client = ClientApp(user.id, appName, "Default application", "", "", Nil, Nil)
 
     log.info(
       s"""
         +=====================================================================
         | Creating default OAuth client credentials:
-        | ClientId: ${clientId}
-        | Secret: ${clientSecret}
+        | ClientId: ${client.id}
+        | Secret: ${client.secret}
         +=====================================================================
       """.stripMargin)
     for {
       _ <- clientAppsService.col.createIndex(Indexes.ascending("ownerId")).toUnitTask
-      _ <- clientAppsService.createApp(ClientApp(user.id, appName, "Default application", "", "", Nil, Nil, clientId, clientSecret))
+      _ <- clientAppsService.createApp(client)
     } yield ()
   }
 }

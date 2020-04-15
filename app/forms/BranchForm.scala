@@ -3,13 +3,13 @@ package forms
 import models.Branch
 import play.api.data.Form
 import play.api.data.Forms._
-import utils.Settings._
+import FormConstraints._
 
 object BranchForm {
   val createBranch = Form(
     mapping(
-      "name" -> text(3, 1024),
-      "description" -> optional(text(3, 4096)),
+      "name" -> name,
+      "description" -> optional(description),
       "parent" -> optional(text(6, 6))
     )(CreateBranch.apply)(CreateBranch.unapply)
   )

@@ -26,7 +26,7 @@ import forms.UserForm
 import play.api.libs.json.JsValue
 import akka.http.scaladsl.util.FastFuture
 import play.api.data.validation.Valid
-import services.CodeGenerator
+import utils.RandomStringGenerator
 
 @Singleton
 class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
@@ -101,7 +101,7 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
   private def publishEmailConfirmationCode(user: User): Task[Unit] = {
     user.email.map { email =>
 
-      val otp = CodeGenerator.generateNumericPassword(otpEmailLength, otpEmailLength)
+      val otp = RandomStringGenerator.generateNumericPassword(otpEmailLength, otpEmailLength)
 
       for {
         _ <- confirmations.create(
@@ -114,7 +114,7 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
 
   private def publishPhoneConfirmationCode(user: User): Task[Unit] = {
     user.phone.map { phone =>
-      val otp = CodeGenerator.generateNumericPassword(otpEmailLength, otpEmailLength)
+      val otp = RandomStringGenerator.generateNumericPassword(otpEmailLength, otpEmailLength)
 
       for {
         _ <- confirmations.create(

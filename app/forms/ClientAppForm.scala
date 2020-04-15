@@ -9,8 +9,8 @@ object ClientAppForm {
 
   val create = Form[CreateApps](
     mapping(
-      "name" -> nonEmptyText,
-      "description" -> nonEmptyText,
+      "name" -> name,
+      "description" -> description,
       "logo" -> nonEmptyText,
       "url" -> nonEmptyText,
       "contacts" -> list(nonEmptyText),
@@ -20,8 +20,8 @@ object ClientAppForm {
 
   val update = Form[UpdateApps](
     mapping(
-      "name" -> optional(nonEmptyText),
-      "description" -> optional(nonEmptyText),
+      "name" -> optional(name),
+      "description" -> optional(description),
       "logo" -> optional(nonEmptyText),
       "url" -> optional(nonEmptyText),
       "contacts" -> optional(list(nonEmptyText)),
