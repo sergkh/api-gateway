@@ -14,22 +14,16 @@ import utils.{Logging, RandomStringGenerator}
 import zio._
 
 import scala.concurrent.Future
+import scala.concurrent.duration._
 
 @Singleton
-class ConfirmationCodeService @Inject()(conf: Configuration, lifecycle: ApplicationLifecycle) extends Logging {
+class ConfirmationCodeService @Inject()(conf: Configuration, keys: KeysManager, lifecycle: ApplicationLifecycle) extends Logging {
   final val SALT_ITERATIONS = 10
 
   private val redis = RedisClient(conf.get[String]("redis.host"))
 
-  private val DefaultTTL = 12 * 60 * 60
+  private val DefaultTTL = 3.hours.toSeconds.toInt
   private val prefix = "ccds:"
-
-  private val signer = new DefaultCookieSigner(SecretConfiguration(
-    conf.getOptional[String]("confirmation.sign-key").getOrElse {
-      log.info("No OTP signature key set, using random")
-      RandomStringGenerator.generateSecret(64)
-    }
-  ))
 
   private val logOtp = conf.getOptional[Boolean]("confirmation.otp.log").getOrElse(false)
 
@@ -77,7 +71,7 @@ class ConfirmationCodeService @Inject()(conf: Configuration, lifecycle: Applicat
   private def hashOtpCode(code: String): String = BCrypt.hashpw(code, BCrypt.gensalt(SALT_ITERATIONS))
 
   private def signCode(c: ConfirmationCode): String =
-    signer.sign(s"${c.userId}:${c.ids}:${c.operation}:${c.codeHash}:${c.otpLen}:${c.expiresAt}:${c.ttl}")
+    keys.codesSigner(s"${c.userId}:${c.ids}:${c.operation}:${c.codeHash}:${c.otpLen}:${c.expiresAt}:${c.ttl}")
 
   lifecycle.addStopHook(() => Future.successful(redis.shutdown()))
 }

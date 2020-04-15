@@ -79,7 +79,7 @@ class InitializationService @Inject()(config: Configuration,
 
   def initDefaultOAuthApp(user: User): Task[Unit] = {
     val appName = config.get[String]("swagger.appName")
-    val client = ClientApp(user.id, appName, "Default application", "", "", Nil, Nil)
+    val client = ClientApp(user.id, appName, "Default application", "", "", Nil)
 
     log.info(
       s"""

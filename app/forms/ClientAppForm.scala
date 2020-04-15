@@ -11,10 +11,9 @@ object ClientAppForm {
     mapping(
       "name" -> name,
       "description" -> description,
-      "logo" -> nonEmptyText,
-      "url" -> nonEmptyText,
-      "contacts" -> list(nonEmptyText),
-      "redirectUrlPatterns" -> list(nonEmptyText)
+      "logo" -> url,
+      "url" -> url,
+      "redirectUrlPatterns" -> list(url)
     )(CreateApps.apply)(CreateApps.unapply)
   )
 
@@ -22,26 +21,23 @@ object ClientAppForm {
     mapping(
       "name" -> optional(name),
       "description" -> optional(description),
-      "logo" -> optional(nonEmptyText),
-      "url" -> optional(nonEmptyText),
-      "contacts" -> optional(list(nonEmptyText)),
-      "redirectUrlPatterns" -> optional(list(nonEmptyText))
+      "logo" -> optional(url),
+      "url" -> optional(url),
+      "redirectUrlPatterns" -> optional(list(url))
     )(UpdateApps.apply)(UpdateApps.unapply)
   )
 
-  val code = Form(single("code" -> nonEmptyText))
+  val code = Form(single("code" -> FormConstraints.code))
 
   case class CreateApps(name: String,
                         description: String,
                         logo: String,
                         url: String,
-                        contacts: List[String],
                         redirectUrlPattern: List[String])
 
   case class UpdateApps(name: Option[String],
                         description: Option[String],
                         logo: Option[String],
                         url: Option[String],
-                        contacts: Option[List[String]],
                         redirectUrlPattern: Option[List[String]])
 }

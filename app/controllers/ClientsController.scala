@@ -19,6 +19,7 @@ import zio._
 
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.language.implicitConversions
+import services.TokensService
 
 /**
   * @author Sergey Khruschak  <sergey.khruschak@gmail.com>
@@ -27,7 +28,7 @@ import scala.language.implicitConversions
 @Singleton
 class ClientsController @Inject()(silh: Silhouette[JwtEnv],
                                 userService: UserService,
-                                oauthService: ClientAppsService,
+                                clients: ClientAppsService,
                                 eventBus: EventsStream,
                                 conf: Configuration)(implicit system: ActorSystem) extends BaseController {
 
@@ -38,13 +39,13 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
   def createApp = silh.SecuredAction.async(parse.json) { req =>
     val data = req.asForm(ClientAppForm.create)
 
-    val app = ClientApp(req.identity.id, data.name, data.description, data.logo, data.url, data.contacts, data.redirectUrlPattern)
+    val app = ClientApp(req.identity.id, data.name, data.description, data.logo, data.url, data.redirectUrlPattern)
 
     for {
-      thirdApp <- oauthService.createApp(app)
+      thirdApp <- clients.createApp(app)
       _        <- eventBus.publish(ApplicationCreated(req.identity.id, thirdApp, req))
     } yield {
-      log.info(s"Create third party application $thirdApp")
+      log.info(s"Created client ${thirdApp.id}: ${thirdApp.name}")
       Ok(Json.obj("clientSecret" -> thirdApp.secret, "clientId" -> thirdApp.id))
     }
   }
@@ -53,28 +54,28 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
     val data = req.asForm(ClientAppForm.update)
     for {
       user <- userService.getRequestedUser(userId, req.identity)
-      app  <- oauthService.getApp4user(id, user.id)
-      newApp = app.update(data.name, data.description, data.logo, data.url, data.contacts, data.redirectUrlPattern)
-      _ <- oauthService.updateApp(id, newApp)
+      app  <- clients.getApp4user(id, user.id)
+      newApp = app.update(data.name, data.description, data.logo, data.url, data.redirectUrlPattern)
+      _ <- clients.updateApp(id, newApp)
       _ <- eventBus.publish(ApplicationUpdated(req.identity.id, app, req))
     } yield {
-      log.info("Updating client application " + id + ", for user: " + user.id)
+      log.info(s"Updated client $id for user: ${user.id} with data: $data")
       Ok(Json.toJson(app))
     }
   }
 
   def getAppByOwner(userId: String, id: String) = silh.SecuredAction(WithUser(userId)).async { req =>
     userService.getRequestedUser(userId, req.identity).flatMap { user =>
-      oauthService.getApp4user(id, user.id).map { app =>
-        log.info("Getting client application info " + id)
+      clients.getApp4user(id, user.id).map { app =>
+        log.info(s"Got client info $id by ${req.identity.info}")
         Ok(Json.toJson(app))
       }
     }
   }
 
   def getPublicAppInformation(id: String) = Action.async { _ =>
-    oauthService.getApp(id).map { app =>
-      log.info("Getting client application info " + id)
+    clients.getApp(id).map { app =>
+      log.info(s"Got public client info $id")
       Ok(Json.toJson(app).as[JsObject].without("secret"))
     }
   }
@@ -84,10 +85,10 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
       val page = req.asForm(CommonForm.paginated)
 
       for {
-        apps  <- oauthService.getApps(user.id, page.limit, page.offset)
-        count <- oauthService.countApp(Some(user.id))
+        apps  <- clients.getApps(user.id, page.limit, page.offset)
+        count <- clients.countApp(Some(user.id))
       } yield {
-        log.info("Getting client application list for user: " + user.id + ", count: " + count)
+        log.info(s"Got clients list for user: ${user.id}, count: $count by ${req.identity.info}")
         Ok(Json.obj("items" -> apps, "count" -> count))
       }
     }
@@ -96,10 +97,10 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
   def removeApplication(userId: String, id: String) = silh.SecuredAction(editPerm || WithUserAndPerm(userId, "user:edit")).async { implicit req =>
     for {
       user <- userService.getRequestedUser(userId, req.identity)
-      _    <- oauthService.removeApp(id, user)
+      _    <- clients.removeApp(id, user)
       _    <- eventBus.publish(ApplicationRemoved(user.id, id, req))
     } yield {
-      log.info("Removed client application " + id + ", for user: " + user.id)
+      log.info(s"Removed client $id for user: ${user.id} by ${req.identity.info}")
       NoContent
     }
   }

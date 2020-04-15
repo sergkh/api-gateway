@@ -18,7 +18,7 @@ object UserForm {
   val createUser = Form(
     mapping(
       "email" -> optional(email.verifying(_.contains("@")).transform(_.toLowerCase, (a: String) => a)),
-      "phone" -> optional(nonEmptyText.verifying(phoneNumber)),
+      "phone" -> optional(phone),
       "firstName" -> optional(name),
       "lastName" -> optional(name),
       "password" -> optional(password),
@@ -31,7 +31,7 @@ object UserForm {
   val updateUser = Form(
     mapping(
       "email" -> optional(email.transform(_.toLowerCase, (a: String) => a)),
-      "phone" -> optional(nonEmptyText.verifying(phoneNumber)),
+      "phone" -> optional(phone),
       "firstName" -> optional(name),
       "lastName" -> optional(name),
       "flags" -> default(list(role), Nil),

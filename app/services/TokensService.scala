@@ -14,17 +14,11 @@ import play.api.libs.crypto.DefaultCookieSigner
 import play.api.http.SecretConfiguration
 import org.mindrot.jbcrypt.BCrypt
 import play.api.Configuration
+import security.KeysManager
 
 @Singleton
-class TokensService @Inject() (mongoApi: MongoApi, conf: Configuration)(implicit exec: ExecutionContext) extends Logging {
+class TokensService @Inject() (mongoApi: MongoApi, keys: KeysManager) extends Logging {
   
-  private val signer = new DefaultCookieSigner(SecretConfiguration(
-    conf.getOptional[String]("oauth.refreshToken.sign-key").getOrElse {
-      log.info("No Refresh tokens signature key set, using random")
-      RandomStringGenerator.generateSecret(64)
-    }
-  ))
-
   val col = mongoApi.collection[RefreshToken]("refresh_tokens")
 
   def create(userId: String,
@@ -61,9 +55,11 @@ class TokensService @Inject() (mongoApi: MongoApi, conf: Configuration)(implicit
   
   def list(userId: String): Task[Seq[RefreshToken]] = col.find(equal("userId", userId)).toTask
 
+  def deleteForClient(clientId: String): Task[Unit] = col.deleteMany(equal("clientId", clientId)).toUnitTask
+
   private def hashSecretPart(secret: String): String = BCrypt.hashpw(secret, BCrypt.gensalt(10))
   private def validateSecret(secret: String, token: RefreshToken): Boolean = BCrypt.checkpw(secret, token.secretHash)
   private def signToken(t: RefreshToken): String =
-    signer.sign(s"${t.userId}:${t.scope}:${t.expirationTime}:${t.clientId}:${t.id}")
+    keys.codesSigner(s"${t.userId}:${t.scope}:${t.expirationTime}:${t.clientId}:${t.id}")
 
 }

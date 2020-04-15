@@ -36,6 +36,14 @@ object FormConstraints extends Constraints {
     case cleanText if !forbiddenChars.exists(c => cleanText.contains(c.toString())) => Valid
     case _ => Invalid(Seq(ValidationError(ERROR_FORBIDDEN_CHARACTERS)))
   }
+
+  val phoneNumber: Constraint[String] = Constraint[String]("constraint.phone") { e =>
+      Option(e) match {
+        case Some(phone) => validateField(phone, PHONE_VALIDATION_PTRN, ERROR_PHONE_EMPTY, "error.phone.invalid")
+        case None        => Invalid(ValidationError(ERROR_PHONE_EMPTY))
+      }
+  }
+
   
   val limit = number(min = 1, max = 100)
   val offset = number(min = 0)
@@ -47,6 +55,8 @@ object FormConstraints extends Constraints {
   val permission = text(4, 60).verifying(textConstraint)
   val name = text(3, 30).verifying(textConstraint)
   val description = text(3, 2048).verifying(textConstraint)
+  val phone = text(10, 13).verifying(phoneNumber)
+  val url = text(11, 256)
 
   def or[T](constraints: Constraint[T]*): Constraint[T] = Constraint("constraint.or") { field: T =>
       val validationResults = constraints.map(_.apply(field))
@@ -56,12 +66,6 @@ object FormConstraints extends Constraints {
       }
   }
 
-  def phoneNumber: Constraint[String] = Constraint[String]("constraint.phone") { e =>
-      Option(e) match {
-        case Some(phone) => validateField(phone, PHONE_VALIDATION_PTRN, ERROR_PHONE_EMPTY, "error.phone.invalid")
-        case None        => Invalid(ValidationError(ERROR_PHONE_EMPTY))
-      }
-  }
 
   
 

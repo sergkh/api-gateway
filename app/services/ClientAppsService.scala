@@ -17,6 +17,7 @@ import scala.language.implicitConversions
 @Singleton
 class ClientAppsService @Inject()(userService: UserService,
                                   mongoApi: MongoApi,
+                                  refreshTokens: TokensService,
                                   config: Configuration)(implicit exec: ExecutionContext, system: ActorSystem)
   extends Logging {
   val col = mongoApi.collection[ClientApp](ClientApp.COLLECTION_NAME)
@@ -45,16 +46,16 @@ class ClientAppsService @Inject()(userService: UserService,
       Updates.set("description", app.description),
       Updates.set("logo", app.logo),
       Updates.set("url", app.url),
-      Updates.set("contacts", app.contacts),
       Updates.set("redirectUrlPatterns", app.redirectUrlPatterns),
       Updates.set("secret", app.secret)
     )).toOptionTask
        .orFail(AppException(ErrorCodes.APPLICATION_NOT_FOUND, s"Application $id not found"))
 
-  def removeApp(appId: String, user: User): Task[Unit] = {
-    col.deleteOne(and(equal("_id", appId), equal("ownerId", user.id))).toUnitTask
+  def removeApp(clientId: String, user: User): Task[Unit] = {
+    col.deleteOne(and(equal("_id", clientId), equal("ownerId", user.id))).toUnitTask >>>
+      refreshTokens.deleteForClient(clientId)
+      // TODO: clean active sessions
 
-    // TODO: clean application tokens
     // private def tokensCollection = mongo.database.map(_.collection[BSONCollection]("oauth_tokens"))
     // tokensCollection.flatMap { tokens =>
     //   tokens.find(BSONDocument("customClaims.clientId" -> appId, "customClaims.userId" -> user.id))

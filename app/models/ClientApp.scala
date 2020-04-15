@@ -10,7 +10,6 @@ case class ClientApp(
   description: String,
   logo: String,
   url: String,
-  contacts: List[String] = Nil,
   redirectUrlPatterns: List[String] = Nil,
   @BsonProperty("_id") id: String = RandomStringGenerator.generateId(),
   secret: String = RandomStringGenerator.generateSecret(ClientApp.SECRET_LENGTH)) {
@@ -19,14 +18,12 @@ case class ClientApp(
              appDescription: Option[String],
              appLogo: Option[String],
              appUrl: Option[String],
-             appContacts: Option[List[String]],
              appRedirectUrlPatterns: Option[List[String]]): ClientApp = {
 
     copy(name = appName.getOrElse(name),
       description = appDescription.getOrElse(description),
       logo = appLogo.getOrElse(logo),
       url = appUrl.getOrElse(url),
-      contacts = appContacts.getOrElse(contacts),
       redirectUrlPatterns = appRedirectUrlPatterns.getOrElse(redirectUrlPatterns)
     )
   }
