@@ -3,9 +3,9 @@ package models
 import com.mohiva.play.silhouette.api.LoginInfo
 import com.mohiva.play.silhouette.api.util.PasswordInfo
 import com.mohiva.play.silhouette.impl.providers.{OAuth1Info, OAuth2Info}
+import org.bson.codecs.configuration.CodecRegistries
 import org.mongodb.scala.bson.codecs.Macros
 import org.mongodb.scala.MongoClient.DEFAULT_CODEC_REGISTRY
-import org.bson.codecs.configuration.CodecRegistries
 
 object MongoFormats {
 

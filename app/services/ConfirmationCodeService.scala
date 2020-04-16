@@ -1,16 +1,14 @@
-package security
+package services
 
 import com.fotolog.redis.{BinaryConverter, RedisClient}
-import javax.inject.{ Inject, Singleton }
+import javax.inject.{Inject, Singleton}
 import models.ConfirmationCode
 import org.mindrot.jbcrypt.BCrypt
 import play.api.Configuration
-import play.api.http.SecretConfiguration
 import play.api.inject.ApplicationLifecycle
-import play.api.libs.crypto.DefaultCookieSigner
 import play.api.libs.json.Json
-import security.ConfirmationCodeService._
-import utils.{Logging, RandomStringGenerator}
+import security.KeysManager
+import utils.Logging
 import zio._
 
 import scala.concurrent.Future

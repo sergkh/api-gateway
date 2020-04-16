@@ -17,9 +17,6 @@ import scala.concurrent.Future
 
 import utils.TaskExt._
 
-/**
-  * Created by sergeykhruschak on 12/9/15.
-  */
 trait BaseController extends InjectedController {
 
   val log = Logger(this.getClass.getName)
@@ -35,11 +32,4 @@ trait BaseController extends InjectedController {
   }
 
   implicit def fromTask(task: Task[Result]): Future[Result] = task.toUnsafeFuture
-
-//  implicit def securedRequestToProxyReq(req: SecuredRequest[JwtEnv, JsValue]): StreamedProxyRequest = {
-//    StreamedProxyRequest(req, Some(req.identity), Option(Source.single(ByteString(Json.stringify(req.body).getBytes))))
-//  }
-
-  @deprecated("See https://www.playframework.com/documentation/2.6.x/MessagesMigration26", "2.6.0")
-  implicit def request2lang(implicit request: RequestHeader): Lang = play.api.i18n.Lang.defaultLang
 }

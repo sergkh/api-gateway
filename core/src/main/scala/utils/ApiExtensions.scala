@@ -1,22 +1,14 @@
 package utils
 
-import zio._
-import models.FormValidationException
-import play.api.data.Form
-import play.api.libs.json.{JsValue, _}
-import play.api.mvc.{Request, RequestHeader}
-
-import scala.language.dynamics
-import play.mvc.Http.HeaderNames
-import scala.util.Try
-import java.{util => ju}
-import models.User
 import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
-
-import models.AppException
+import models.{AppException, User}
+import play.api.libs.json._
+import zio._
 
 import scala.annotation.implicitNotFound
 import scala.concurrent.{ExecutionContext, Future}
+import scala.language.dynamics
+import scala.util.Try
 
 /**
   * Some useful json methods.
@@ -48,64 +40,6 @@ object RichJson {
 
 }
 
-/**
-  * Util object containing predefined common server responses and response builders.
-  * @author Sergey Khruschak
-  * @author Yaroslav Derman
-  */
-object RichRequest {
-
-  private val HTTP_IP_HEADERS = Seq(
-    "X-Forwarded-For", "X-Real-IP", "Proxy-Client-IP", "HTTP_CLIENT_IP", "HTTP_X_FORWARDED_FOR", "WL-Proxy-Client-IP"
-  )
-
-  implicit class RichRequest(val r: RequestHeader) extends AnyVal {
-    def asForm[T](form: Form[T]): T = r match {
-      case req: Request[_] => form.bindFromRequest()(req).fold(
-        error => throw FormValidationException(error),
-        data => data
-      )
-      case _ => throw new RuntimeException("Unsupported request header type for form extracting")
-    }
-
-    /**
-      * Binds a form only from a query parameters, without checking a body.
-      * Required if GET/DELETE has invalid Content-Type
-      *
-      * @param form form to bind
-      * @tparam T form type
-      * @return binded data or exception
-      */
-    def asQueryForm[T](form: Form[T]): T = r match {
-      case req: Request[_] => form.bindFromRequest(req.queryString).fold(
-        error => throw FormValidationException(error),
-        data => data
-      )
-      case _ => throw new RuntimeException("Unsupported request header type for form extracting")
-    }
-
-    def clientIp: String = {
-      val header = HTTP_IP_HEADERS.find(name => r.headers.get(name).exists(h => h.nonEmpty && !h.equalsIgnoreCase("unknown")))
-
-      header match {
-        case Some(name) =>
-          val header = r.headers(name)
-          if (header.contains(",")) header.split(",").head else header
-        case None       => r.remoteAddress
-      }
-    }
-
-    def clientAgent: String = r.headers.get("User-Agent").getOrElse("not set")
-
-    def basicAuth: Option[(String, String)] = 
-      r.headers.get(HeaderNames.AUTHORIZATION).map(_.split(" ")).collect {
-        case Array("Basic", data) => Try {
-          val Array(user, pass) = new String(ju.Base64.getDecoder.decode(data)).split(":")
-          user -> pass
-        }.toOption
-      }.flatten
-  }  
-}
 
 object JwtExtension {
   import RichJson._

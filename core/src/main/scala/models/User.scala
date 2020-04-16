@@ -1,13 +1,13 @@
 package models
 
 import com.mohiva.play.silhouette.api.Identity
-import com.mohiva.play.silhouette.impl.providers.{OAuth1Info, OAuth2Info}
-import play.api.libs.json._
-import utils.RandomStringGenerator
-import utils.StringHelpers._
-import utils.RichJson._
 import com.mohiva.play.silhouette.api.util.PasswordInfo
+import com.mohiva.play.silhouette.impl.providers.{OAuth1Info, OAuth2Info}
 import org.mongodb.scala.bson.annotations.BsonProperty
+import play.api.libs.json.{JsObject, Json, OWrites}
+import utils.RandomStringGenerator
+import utils.RichJson._
+import utils.StringHelpers._
 
 case class User(email: Option[String] = None,
                 phone: Option[String] = None,

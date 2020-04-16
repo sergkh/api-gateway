@@ -25,12 +25,12 @@ import scala.util.{Failure, Success, Try}
 /**
   * @author Yaroslav Derman
   */
-class CustomJWTAuthenticatorService(settings: JWTAuthenticatorSettings,
-                                    repository: Option[AuthenticatorRepository[JWTAuthenticator]],
-                                    authenticatorEncoder: AuthenticatorEncoder,                                    
-                                    idGenerator: IDGenerator,
-                                    keysManager: KeysManager,
-                                    val clock: Clock)(implicit val exContext: ExecutionContext)
+class CustomJWTAuthenticator(settings: JWTAuthenticatorSettings,
+                             repository: Option[AuthenticatorRepository[JWTAuthenticator]],
+                             authenticatorEncoder: AuthenticatorEncoder,
+                             idGenerator: IDGenerator,
+                             keysManager: KeysManager,
+                             val clock: Clock)(implicit val exContext: ExecutionContext)
   extends JWTAuthenticatorService(
     settings,
     repository,

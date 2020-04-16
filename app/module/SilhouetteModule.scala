@@ -37,7 +37,7 @@ import play.api.Configuration
 import play.api.libs.openid.OpenIdClient
 import play.api.libs.ws.WSClient
 import play.api.mvc.Cookie
-import security.{CustomJWTAuthenticatorService, KeysManager}
+import security.{CustomJWTAuthenticator, KeysManager}
 import utils.ServerErrorHandler
 
 import scala.collection.JavaConverters._
@@ -175,7 +175,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
         )
     }
 
-    new CustomJWTAuthenticatorService(settings, None, encoder, idGenerator, keyManager, clock)
+    new CustomJWTAuthenticator(settings, None, encoder, idGenerator, keyManager, clock)
   }
 
 

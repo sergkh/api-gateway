@@ -54,7 +54,7 @@ case class EventBusSessionEventProcessor @Inject() (sessionsService: SessionsSer
   )
 
   eventsStream.subscribe[Login](login => sessionsService.store(
-    Session(login.sessionId, login.userId.toLong, login.expirationTime, login.token, clientAgent(login.request), clientIp(login.request))
+    Session(login.sessionId, login.userId.toLong, login.expirationTime, login.request.userAgent, login.request.ip)
   ))
 
   eventsStream.subscribe[Logout](logout => sessionsService.finish(logout.sessionId))

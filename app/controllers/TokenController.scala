@@ -70,8 +70,8 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
     val grantType = request.asForm(OAuthForm.grantType)
 
     val (clientId, clientSecret) = request.basicAuth.getOrElse {
-      log.warn("No client authentication provided")
-      throw new AppException(AUTHORIZATION_FAILED, "Client authorization required")
+      log.warn(s"No client authentication provided. Request: ${request.reqInfo}")
+      throw AppException(AUTHORIZATION_FAILED, "Client authorization required")
     }
     
     log.info(s"Requesting access token for ${clientId}")
@@ -87,15 +87,14 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
         case "authorization_code" =>
           authorizeByAuthorizationCode(clientId, request.asForm(OAuthForm.getAccessTokenFromAuthCode))
       }
-      authenticator   <- Task.fromFuture(ec => silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, auth.user.id)))
+      authenticator   <- Task.fromFuture(_ => silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, auth.user.id)))
       tokenWithUser   = authenticator.withUserInfo(auth.user, auth.scope)
-      token           <- Task.fromFuture(ec => silh.env.authenticatorService.init(authenticator))
-      _               <- eventBus.publish(Login(auth.user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis))
+      token           <- Task.fromFuture(_ => silh.env.authenticatorService.init(tokenWithUser))
+      _               <- eventBus.publish(Login(auth.user.id, authenticator.id, authenticator.expirationDateTime.getMillis, request.reqInfo))
     } yield {
       log.info(s"User ${auth.user.id} authenticated by $clientId ${auth.refreshToken.map(_ => " with refresh token").getOrElse("")} using $grantType with scopes: ${auth.scope}")
               
-      val expireIn = ((authenticator.expirationDateTime.toInstant.getMillis / 1000) -
-                  LocalDateTime.now().toInstant(ZoneOffset.UTC).getEpochSecond())
+      val expireIn = ((authenticator.expirationDateTime.toInstant.getMillis / 1000) - LocalDateTime.now().toInstant(ZoneOffset.UTC).getEpochSecond())
 
       // TODO: handle redirect
       Ok(Json.obj(
@@ -104,7 +103,6 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
         "expires_in" -> expireIn,
         "scope" -> auth.scope,
         "refresh_token" -> auth.refreshToken
-        // TODO: "id_token": "ID_token"
       ).filterNull)
     }
 

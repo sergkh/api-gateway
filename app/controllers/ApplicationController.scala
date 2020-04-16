@@ -4,10 +4,7 @@ package controllers
 //scalastyle:off public.methods.have.type
 
 import akka.actor.ActorSystem
-import com.mohiva.play.silhouette.api.services.AuthenticatorService
-import com.mohiva.play.silhouette.api.{LoginInfo, Silhouette}
-import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
-import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
+import com.mohiva.play.silhouette.api.Silhouette
 import events.EventsStream
 import forms._
 import javax.inject.{Inject, Singleton}
@@ -15,18 +12,13 @@ import models.AppEvent._
 import models._
 import play.api.Configuration
 import play.api.i18n.I18nSupport
-import play.api.libs.json.Json
-import play.api.mvc.{RequestHeader, Result}
-import security.{ConfirmationCodeService, CustomJWTAuthenticatorService, WithPermission}
-import services._
+import services.{ConfirmationCodeService, _}
+import utils.RandomStringGenerator
 import utils.RichRequest._
 import utils.TaskExt._
 import zio._
 
-import scala.concurrent.ExecutionContext.Implicits._
-import scala.concurrent.Future
 import scala.language.implicitConversions
-import utils.RandomStringGenerator
 
 @Singleton
 class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
@@ -77,7 +69,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
         otp,
         code.ttl
       )
-      _ <- eventBus.publish(OtpGeneration(Some(code.userId), code.email, code.phone, otp))
+      _ <- eventBus.publish(OtpGenerated(Some(code.userId), code.email, code.phone, otp, request.reqInfo))
     } yield {      
       log.info(s"Regenerated otp code for user: ${code.userId} by login $login")
       NoContent
@@ -92,7 +84,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
   def logout = silh.SecuredAction.async { implicit request =>
     val result = Redirect(routes.ApplicationController.index()).withNewSession
 
-    eventBus.publish(Logout(request.identity, request.authenticator.id, request, request.authenticator.id)) flatMap { _ =>
+    eventBus.publish(Logout(request.identity, request.authenticator.id, request.reqInfo)) flatMap { _ =>
       Task.fromFuture(ec => silh.env.authenticatorService.discard(request.authenticator, result))
     }
   }

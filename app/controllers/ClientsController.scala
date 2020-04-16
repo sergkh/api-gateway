@@ -2,24 +2,21 @@ package controllers
 
 //scalastyle:off public.methods.have.type
 
-import akka.actor.ActorSystem
 import com.mohiva.play.silhouette.api.Silhouette
 import events.EventsStream
 import forms.{ClientAppForm, CommonForm}
 import javax.inject.{Inject, Singleton}
 import models.AppEvent._
 import models._
-import play.api.Configuration
 import play.api.libs.json.{JsObject, Json}
 import security._
 import services.{ClientAppsService, UserService}
 import utils.RichJson._
 import utils.RichRequest._
-import zio._
+
 
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.language.implicitConversions
-import services.TokensService
 
 /**
   * @author Sergey Khruschak  <sergey.khruschak@gmail.com>
@@ -29,8 +26,7 @@ import services.TokensService
 class ClientsController @Inject()(silh: Silhouette[JwtEnv],
                                 userService: UserService,
                                 clients: ClientAppsService,
-                                eventBus: EventsStream,
-                                conf: Configuration)(implicit system: ActorSystem) extends BaseController {
+                                eventBus: EventsStream) extends BaseController {
 
   val readPerm = WithPermission("users:read")
   val editPerm = WithPermission("users:edit")
@@ -43,21 +39,21 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
 
     for {
       thirdApp <- clients.createApp(app)
-      _        <- eventBus.publish(ApplicationCreated(req.identity.id, thirdApp, req))
+      _        <- eventBus.publish(ClientCreated(thirdApp, req.reqInfo))
     } yield {
       log.info(s"Created client ${thirdApp.id}: ${thirdApp.name}")
       Ok(Json.obj("clientSecret" -> thirdApp.secret, "clientId" -> thirdApp.id))
     }
   }
 
-  def updateApp(userId: String, id: String) = silh.SecuredAction(editPerm || WithUserAndPerm(userId, "user:edit")).async(parse.json) { req =>
+  def updateApp(userId: String, id: String) = silh.SecuredAction(editPerm || WithUser(userId)).async(parse.json) { req =>
     val data = req.asForm(ClientAppForm.update)
     for {
       user <- userService.getRequestedUser(userId, req.identity)
       app  <- clients.getApp4user(id, user.id)
       newApp = app.update(data.name, data.description, data.logo, data.url, data.redirectUrlPattern)
       _ <- clients.updateApp(id, newApp)
-      _ <- eventBus.publish(ApplicationUpdated(req.identity.id, app, req))
+      _ <- eventBus.publish(ClientUpdated(app, req.reqInfo))
     } yield {
       log.info(s"Updated client $id for user: ${user.id} with data: $data")
       Ok(Json.toJson(app))
@@ -98,7 +94,7 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
     for {
       user <- userService.getRequestedUser(userId, req.identity)
       _    <- clients.removeApp(id, user)
-      _    <- eventBus.publish(ApplicationRemoved(user.id, id, req))
+      _    <- eventBus.publish(ClientRemoved(id, req.reqInfo))
     } yield {
       log.info(s"Removed client $id for user: ${user.id} by ${req.identity.info}")
       NoContent

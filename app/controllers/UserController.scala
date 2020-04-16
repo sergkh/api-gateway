@@ -19,8 +19,8 @@ import play.api.Configuration
 import play.api.libs.json.Json._
 import play.api.libs.json._
 import play.api.mvc.{RequestHeader, Result}
-import security.{ConfirmationCodeService, WithPermission, WithUser, WithUserAndPerm}
-import services.{BranchesService, UserService}
+import security.{WithPermission, WithUser, WithUserAndPerm}
+import services.{BranchesService, ConfirmationCodeService, UserService}
 import utils.JwtExtension._
 import utils.RichRequest._
 import utils.TaskExt._
@@ -82,7 +82,7 @@ class UserController @Inject()(
     }
 
     for {
-      _               <- validateBranchAccess(user.branch, request.identity)      
+      _               <- validateBranchAccess(user.branch, request.identity)
       emailExists     <- data.email.map(userService.exists).getOrElse(Task.succeed(false))
       phoneExists     <- data.phone.map(userService.exists).getOrElse(Task.succeed(false))
       _               <- failIf(emailExists, ErrorCodes.ALREADY_EXISTS, "Email already exists")
@@ -92,7 +92,7 @@ class UserController @Inject()(
                         ).getOrElse(Task.succeed(Nil))
       userWithBranch  = user.copy(hierarchy = hierarchy)
       _               <- userService.save(userWithBranch)
-      _               <- eventBus.publish(Signup(userWithBranch, request))
+      _               <- eventBus.publish(Signup(userWithBranch, request.reqInfo))
     } yield {
       log.info(s"Created a new user $userWithBranch by ${request.identity.id}")
 
@@ -143,7 +143,7 @@ class UserController @Inject()(
           if (passwordHashers.all.exists(_.matches(passInfo, data.password.get))) {
 
             Task.fromFuture(ec => passDao.update(loginInfo, updPass)).flatMap { _ =>
-              eventBus.publish(PasswordChanged(updUser, request)) map { _ =>
+              eventBus.publish(PasswordChanged(updUser, request.reqInfo)) map { _ =>
 
                 log.info(s"User $user changed password")
                 NoContent.discardingCookies()
@@ -155,7 +155,7 @@ class UserController @Inject()(
           }
         case None if data.login.isEmpty =>
           Task.fromFuture(ec => passDao.update(loginInfo, updPass)).flatMap { _ =>
-            eventBus.publish(PasswordChanged(updUser, request)) map { _ =>
+            eventBus.publish(PasswordChanged(updUser, request.reqInfo)) map { _ =>
               log.info(s"User $user set password")
               NoContent.discardingCookies()
             }
@@ -181,7 +181,7 @@ class UserController @Inject()(
                       otp,
                       otpPhoneTTLSeconds
                     )
-      _      <- eventBus.publish(PasswordReset(user, otp, request))
+      _      <- eventBus.publish(PasswordReset(user, otp, request.reqInfo))
     } yield {
       log.info(s"Generate reset password code for user: ${user.id} ($login)")
       NoContent
@@ -200,8 +200,8 @@ class UserController @Inject()(
       user          <- userService.getActiveUser(code.userId).orFail(AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User ${data.login} not found"))
       _             <- failIf(!user.checkId(login), ErrorCodes.ENTITY_NOT_FOUND, s"User ${login} is not found")
       updatedPass    = passwordHashers.current.hash(data.password)
-      _             <- Task.fromFuture(ec => passDao.update(loginInfo, updatedPass))
-      _             <- eventBus.publish(PasswordChanged(user, request))
+      _             <- Task.fromFuture(_ => passDao.update(loginInfo, updatedPass))
+      _             <- eventBus.publish(PasswordChanged(user, request.reqInfo))
     } yield {
       log.info(s"User ${user.id} reset password using login $login")
       NoContent
@@ -242,7 +242,7 @@ class UserController @Inject()(
       _                <- validateBranchAccess(oldUser.branch, editor)
       userWithRoles    <- userService.withPermissions(update)
       userWithBranches <- updateBranches(oldUser, userWithRoles, editor)
-      finalUser        <- addEmailPhoneConfirmation(oldUser, userWithBranches)
+      finalUser        <- addEmailPhoneConfirmation(oldUser, userWithBranches, request.reqInfo)
       _                <- userService.update(finalUser)
       _                <- notifyUserUpdate(oldUser, finalUser, request)
     } yield {
@@ -256,7 +256,7 @@ class UserController @Inject()(
       user <- userService.getRequestedUser(id, request.identity)
       _    <- validateBranchAccess(user.branch, request.identity)
       _    <- userService.delete(user)
-      _    <- eventBus.publish(UserDelete(user, comment, request))
+      _    <- eventBus.publish(UserRemoved(user, comment, request.reqInfo))
     } yield {
       log.info(s"User $user was deleted by $id ${comment.map(c => "with comment: " + c ).getOrElse("without comment")}")
       NoContent
@@ -290,7 +290,7 @@ class UserController @Inject()(
         addFlags    = if(block) List(User.FLAG_BLOCKED) else Nil,
         removeFlags = if(!block) List(User.FLAG_BLOCKED) else Nil
       ).orFail(AppException(ErrorCodes.INTERNAL_SERVER_ERROR, "Failed to update user"))
-      _        <- eventBus.publish(if(block) UserBlocked(user, request) else UserUnblocked(user, request))
+      _        <- eventBus.publish(if(block) UserBlocked(user, request.reqInfo) else UserUnblocked(user, request.reqInfo))
     } yield {
       log.info(s"User $user was ${if(block) "blocked" else "unblocked" } by ${request.identity.id}")
       NoContent
@@ -327,16 +327,16 @@ class UserController @Inject()(
   }
 
   private def notifyUserUpdate(editUser: User, newUser: User, request: RequestHeader): Task[Unit] = {
-    eventBus.publish(UserUpdate(newUser, request)) flatMap { _ =>
+    eventBus.publish(UserUpdated(newUser, request.reqInfo)) flatMap { _ =>
       (editUser.hasFlag(User.FLAG_BLOCKED), newUser.hasFlag(User.FLAG_BLOCKED)) match {
-        case (true, false) => eventBus.publish(UserUnblocked(newUser, request))
-        case (false, true) => eventBus.publish(UserBlocked(newUser, request))
+        case (true, false) => eventBus.publish(UserUnblocked(newUser, request.reqInfo))
+        case (false, true) => eventBus.publish(UserBlocked(newUser, request.reqInfo))
         case (_, _) => Task.unit
       }
     }
   }
 
-  private def addEmailPhoneConfirmation(oldUser: User, newUser: User): Task[User] = {
+  private def addEmailPhoneConfirmation(oldUser: User, newUser: User, reqInfo: RequestInfo): Task[User] = {
     val phoneChanged = oldUser.phone != newUser.phone && newUser.phone.isDefined
     val emailChanged = oldUser.email != newUser.email && newUser.email.isDefined
     
@@ -349,7 +349,7 @@ class UserController @Inject()(
 
             for {
         _ <- confirmationService.create(oldUser.id, List(oldUser.id, newUser.phone.get), ConfirmationCode.OP_PHONE_CONFIRM, otp, otpPhoneTTLSeconds)
-        _ <- eventBus.publish(OtpGeneration(Some(newUser.id), phone = newUser.email, code = otp))
+        _ <- eventBus.publish(OtpGenerated(Some(newUser.id), phone = newUser.email, code = otp, request = reqInfo))
         _ <- Task(log.info(s"Sent email confirmation code to ${newUser.id}"))
       } yield ()
 
@@ -361,7 +361,7 @@ class UserController @Inject()(
 
       for {
         _ <- confirmationService.create(oldUser.id, List(oldUser.id, newUser.email.get), ConfirmationCode.OP_EMAIL_CONFIRM, otp, optEmailTTLSeconds)
-        _ <- eventBus.publish(OtpGeneration(Some(newUser.id), email = newUser.email, code = otp))
+        _ <- eventBus.publish(OtpGenerated(Some(newUser.id), email = newUser.email, code = otp, request = reqInfo))
         _ <- Task(log.info(s"Sent email confirmation code to ${newUser.id}"))
       } yield ()
     } else Task.unit

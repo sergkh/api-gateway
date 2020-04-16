@@ -1,10 +1,6 @@
 package models
 
-import akka.util.ByteString
-import models.ConfirmationCode._
 import org.mindrot.jbcrypt.BCrypt
-import play.api.libs.json.{JsValue, Json}
-import play.api.mvc.{Request, RequestHeader}
 
 case class ConfirmationCode(userId: String,
                             ids: List[String],
@@ -23,8 +19,6 @@ case class ConfirmationCode(userId: String,
 }
 
 object ConfirmationCode {
-  case class StoredRequest(headers: Seq[(String, String)], req: Option[ByteString])
-
   val OP_EMAIL_CONFIRM = "email-confirm"
   val OP_PHONE_CONFIRM = "phone-confirm"
   val OP_LOGIN         = "login"

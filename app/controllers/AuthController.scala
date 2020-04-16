@@ -130,7 +130,7 @@ class AuthController @Inject()(
       authenticator     <- Task.fromFuture(_ => silh.env.authenticatorService.create(profile.loginInfo))
       userAuthenticator  = authenticator.withUserInfo(user, authReq.scope, authReq.audience)
       token             <- Task.fromFuture(_ => silh.env.authenticatorService.init(userAuthenticator))
-      _                 <- eventBus.publish(Login(user.id, token, request, authenticator.id, authenticator.expirationDateTime.getMillis))
+      _                 <- eventBus.publish(Login(user.id, authenticator.id, authenticator.expirationDateTime.getMillis, request.reqInfo))
     } yield {
         log.info(s"User $user access token created")
 

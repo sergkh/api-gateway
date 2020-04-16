@@ -1,7 +1,6 @@
 package models
 
-import java.time.LocalDateTime
-import java.time.ZoneOffset
+import java.time.{LocalDateTime, ZoneOffset}
 
 import org.mongodb.scala.bson.annotations.BsonProperty
 import utils.RandomStringGenerator
@@ -26,7 +25,7 @@ case class AuthCode(userId: String,
                     expirationTime: LocalDateTime,
                     clientId: String,
                     secretHash: String,
-                    id: String = RandomStringGenerator.generateSecret(64),                    
+                    id: String = RandomStringGenerator.generateSecret(64),
                     requestedTime: LocalDateTime = LocalDateTime.now(),
                     sign: String = "") {
   def expireIn: Int = ((expirationTime.toInstant(ZoneOffset.UTC).toEpochMilli / 1000) - LocalDateTime.now().toInstant(ZoneOffset.UTC).getEpochSecond).toInt
@@ -35,7 +34,7 @@ case class AuthCode(userId: String,
 }
 
 /**
-  * Long term Refresh token, that can be used in TokenController.getAccessToken to 
+  * Long term Refresh token, that can be used in TokenController.getAccessToken to
   * obtain an access token.
   * Refresh token consists of 2 parts separated by underscore:
   *  * id part used to lookup token

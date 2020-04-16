@@ -25,8 +25,8 @@ class OAuthUIController @Inject()(oauthService: ClientAppsService,
 
   val basePath = conf.get[String]("app.basePath").stripSuffix("/")
 
-  implicit def toService(authService: AuthenticatorService[JWTAuthenticator]): CustomJWTAuthenticatorService =
-    authService.asInstanceOf[CustomJWTAuthenticatorService]
+  implicit def toService(authService: AuthenticatorService[JWTAuthenticator]): CustomJWTAuthenticator =
+    authService.asInstanceOf[CustomJWTAuthenticator]
 
   def displayAuthorize(clientId: String, scopes: String) = silh.UserAwareAction.async { implicit request =>
     val permissions = scopes.split(' ')

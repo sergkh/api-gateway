@@ -4,7 +4,8 @@ import java.util.regex.Pattern
 
 object StringHelpers {
 
-  val EMAIL_VALIDATION_PATTERN = Pattern.compile("""^[a-zA-Z0-9\.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$""")
+  val EMAIL_VALIDATION_PATTERN =
+    Pattern.compile("""^[a-zA-Z0-9\.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$""")
   val PHONE_VALIDATION_PTRN = """^(\+\d{10,15})$""".r
 
   def isNumberString(s: String): Boolean = Option(s).exists(_.forall(_.isDigit))
@@ -23,7 +24,7 @@ object StringHelpers {
   }
 
   def isValidPhone(phone: String): Boolean = phone match {
-    case PHONE_VALIDATION_PTRN(number) => true
+    case PHONE_VALIDATION_PTRN(_) => true
     case _ => false
   }
 }

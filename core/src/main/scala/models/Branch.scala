@@ -1,7 +1,7 @@
 package models
 
 import org.mongodb.scala.bson.annotations.BsonProperty
-import play.api.libs.json._
+import play.api.libs.json.Json
 import utils.RandomStringGenerator
 
 case class Branch(name: String,

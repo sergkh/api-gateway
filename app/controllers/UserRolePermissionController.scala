@@ -7,14 +7,12 @@ import com.google.inject.Inject
 import com.mohiva.play.silhouette.api.Silhouette
 import events.EventsStream
 import forms.UserPermissionForm._
-import models.AppEvent.{RoleCreated, RoleDeleted, RoleUpdated}
+import models.AppEvent.{RoleCreated, RoleRemoved, RoleUpdated}
 import models.{AppException, ErrorCodes, JwtEnv, RolePermissions}
 import play.api.libs.json.Json
 import security.WithPermission
 import services.UsersRolesService
 import utils.RichRequest._
-
-import scala.concurrent.ExecutionContext.Implicits.global
 import zio.Task
 
 class UserRolePermissionController @Inject()(usersPermissionsService: UsersRolesService,
@@ -37,7 +35,7 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoles
       case None =>
         for {
           _       <- usersPermissionsService.save(role)
-          _       <- eventBus.publish(RoleCreated(role))
+          _       <- eventBus.publish(RoleCreated(role, request.reqInfo))
         } yield {
           log.info(s"Added new role '$role' by ${request.identity.info}")
           Ok(Json.toJson(role))
@@ -62,7 +60,7 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoles
 
     for {
       _ <- usersPermissionsService.update(rolePerms)
-      _ <- eventBus.publish(RoleUpdated(rolePerms))
+      _ <- eventBus.publish(RoleUpdated(rolePerms, request.reqInfo))
     } yield {
       log.info(s"Permission for $role was updated by ${request.identity.id}")
       NoContent.withHeaders("Content-Type" -> "application/json")
@@ -74,7 +72,7 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoles
 
     usersPermissionsService.remove(role).flatMap {
       case Some(r) =>
-        eventBus.publish(RoleDeleted(r)) map { _ =>
+        eventBus.publish(RoleRemoved(r, request.reqInfo)) map { _ =>
           NoContent.withHeaders("Content-Type" -> "application/json")
         }
       case None =>

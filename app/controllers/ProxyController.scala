@@ -36,7 +36,7 @@ class ProxyController @Inject()(silh: Silhouette[JwtEnv],
                                 conf: Configuration,
                                 eventStream: EventsStream,
                                 cache: SyncCacheApi
-                               )(implicit exec: ExecutionContext, system: ActorSystem, mat: Materializer) extends BaseController {
+                               )(implicit exec: ExecutionContext) extends BaseController {
 
   implicit val timeout: Timeout = Timeout(1 minute)
 

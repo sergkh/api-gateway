@@ -8,14 +8,14 @@ lazy val commonSettings = Seq(
   scalaVersion := "2.12.11"
 )
 
-lazy val `base-models` = project.settings(commonSettings: _*)
-lazy val etcdDiscovery = (project in file("./modules/etcd-discovery")).settings(commonSettings: _*).dependsOn(`base-models`)
-lazy val kafka = (project in file("./modules/kafka")).settings(commonSettings: _*).dependsOn(`base-models`)
+lazy val `core` = (project in file("core")).settings(commonSettings: _*)
+lazy val etcdDiscovery = (project in file("modules/etcd-discovery")).settings(commonSettings: _*).dependsOn(`core`)
+lazy val kafka = (project in file("modules/kafka")).settings(commonSettings: _*).dependsOn(`core`)
 
 lazy val root = (project in file("."))
   .enablePlugins(PlayScala, JavaAgent, SbtNativePackager, BuildInfoPlugin)
-  .aggregate(`base-models`, etcdDiscovery, kafka)
-  .dependsOn(`base-models`, etcdDiscovery, kafka)
+  .aggregate(`core`, etcdDiscovery, kafka)
+  .dependsOn(`core`, etcdDiscovery, kafka)
   .settings(commonSettings: _*)
 
 
@@ -46,21 +46,15 @@ libraryDependencies ++= Seq(
   filters,
   guice,
   ws,
-  "com.mohiva"        %% "play-silhouette"                  % silhouetteVersion,
-  "com.mohiva"        %% "play-silhouette-password-bcrypt"  % silhouetteVersion,
-  "com.mohiva"        %% "play-silhouette-persistence"      % silhouetteVersion,
-  "com.mohiva"        %% "play-silhouette-crypto-jca"       % silhouetteVersion,
   "com.pauldijou"     %% "jwt-play"                         % "4.3.0",
   "com.iheart"        %% "ficus"                            % "1.4.7",
-  "org.mongodb.scala" %% "mongo-scala-driver"               % "2.9.0",
   "com.iheart"        %% "play-swagger"                     % "0.9.1-PLAY2.8",
   "org.gnieh"         %% "diffson-play-json"                % "4.0.2",
   "com.impactua"      %% "redis-scala"                      % redisVersion,
-  "dev.zio"           %% "zio"                              % "1.0.0-RC18-2",
   "net.codingwell"    %% "scala-guice"                      % guiceVersion,
   "org.webjars"       % "swagger-ui"                        % "3.25.0",
   "org.scala-lang"    %  "scala-reflect"                    % "2.12.11",
-//  "io.kamon"          %% "kamon-bundle"                     % "2.0.6",
+  "io.kamon"          %% "kamon-bundle"                     % "2.0.6",
   "com.mohiva"        %% "play-silhouette-testkit"          % silhouetteVersion  % Test,
   "org.scalatest"     %% "scalatest"                        % "3.1.1"  % Test,
   "org.mockito"       %  "mockito-core"                     % "3.3.3"  % Test,

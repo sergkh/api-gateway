@@ -1,12 +1,11 @@
-package services.kafka
+package services
 
 import akka.actor.{Actor, ActorSystem, Props}
 import events._
 import javax.inject.{Inject, Singleton}
-
-import scala.concurrent.Future
-import scala.reflect.ClassTag
 import zio.Task
+
+import scala.reflect.ClassTag
 
 @Singleton
 class AkkaEventPublisher @Inject() (implicit as: ActorSystem) extends EventsStream {

@@ -1,32 +1,23 @@
 package controllers
 
-import zio._
-import javax.inject.{Inject, Singleton}
-import scala.concurrent.ExecutionContext.Implicits._
-import scala.concurrent.Future
-import scala.language.implicitConversions
-import com.mohiva.play.silhouette.api.{LoginInfo, Silhouette}
-import services.UserService
-import play.api.Configuration
-import models._
-import events.EventsStream
-import services.RegistrationFiltersChain
 import akka.actor.ActorSystem
-import security.ConfirmationCodeService
-import models.AppEvent.{OtpGeneration, Signup}
-import play.api.mvc.RequestHeader
-import utils.FutureUtils._
-import akka.util.ByteString
-import play.api.libs.json.Json
-import com.fotolog.redis.RedisClient
-import play.api.mvc.Request
-import utils.RichRequest._
+import com.mohiva.play.silhouette.api.Silhouette
 import com.mohiva.play.silhouette.api.util.PasswordHasherRegistry
+import events.EventsStream
 import forms.UserForm
-import play.api.libs.json.JsValue
-import akka.http.scaladsl.util.FastFuture
+import javax.inject.{Inject, Singleton}
+import models.AppEvent.{OtpGenerated, Signup}
+import models._
+import play.api.Configuration
 import play.api.data.validation.Valid
+import play.api.libs.json.Json
+import play.api.mvc.RequestHeader
+import services.{ConfirmationCodeService, RegistrationFiltersChain, UserService}
 import utils.RandomStringGenerator
+import utils.RichRequest._
+import zio._
+
+import scala.language.implicitConversions
 
 @Singleton
 class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
@@ -61,7 +52,7 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
     for {
       transformedReq  <- registrationFilters(request)
       user            <- userRegistrationRequest(transformedReq)
-      _               <- eventBus.publish(Signup(user, transformedReq))
+      _               <- eventBus.publish(Signup(user, request.reqInfo))
     } yield Ok(Json.toJson(user))
   }
 
@@ -89,8 +80,8 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
         phoneExists     <- data.phone.map(phone => userService.exists(phone)).getOrElse(Task.succeed(false))
         _               <- if (emailExists || phoneExists) Task.fail(AppException(ErrorCodes.ALREADY_EXISTS, "Email or phone already exists")) else Task.unit
         _               <- userService.save(user)
-        _               <- publishEmailConfirmationCode(user)
-        _               <- publishPhoneConfirmationCode(user)
+        _               <- publishEmailConfirmationCode(user, req.reqInfo)
+        _               <- publishPhoneConfirmationCode(user, req.reqInfo)
       } yield {
         log.info(s"New user $user registered")
         user
@@ -98,7 +89,7 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
     }
   }
 
-  private def publishEmailConfirmationCode(user: User): Task[Unit] = {
+  private def publishEmailConfirmationCode(user: User, requestInfo: RequestInfo): Task[Unit] = {
     user.email.map { email =>
 
       val otp = RandomStringGenerator.generateNumericPassword(otpEmailLength, otpEmailLength)
@@ -107,12 +98,12 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
         _ <- confirmations.create(
           user.id, List(user.id, email), ConfirmationCode.OP_EMAIL_CONFIRM, otp, ttl = otpEmailTTLSeconds
         )
-        _ <- eventBus.publish(OtpGeneration(Some(user.id), email = Some(email), code = otp))
+        _ <- eventBus.publish(OtpGenerated(Some(user.id), email = Some(email), code = otp, request = requestInfo))
       } yield ()
     } getOrElse Task.unit
   }
 
-  private def publishPhoneConfirmationCode(user: User): Task[Unit] = {
+  private def publishPhoneConfirmationCode(user: User, requestInfo: RequestInfo): Task[Unit] = {
     user.phone.map { phone =>
       val otp = RandomStringGenerator.generateNumericPassword(otpEmailLength, otpEmailLength)
 
@@ -120,7 +111,7 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
         _ <- confirmations.create(
           user.id, List(user.id, phone), ConfirmationCode.OP_PHONE_CONFIRM, otp, ttl = otpEmailTTLSeconds
         )
-        _ <- eventBus.publish(OtpGeneration(Some(user.id), phone = Some(phone), code = otp))
+        _ <- eventBus.publish(OtpGenerated(Some(user.id), phone = Some(phone), code = otp, request = requestInfo))
       } yield ()
     } getOrElse Task.unit
   }
