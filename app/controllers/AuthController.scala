@@ -10,11 +10,10 @@ import com.mohiva.play.silhouette.api.actions.UserAwareRequest
 import com.mohiva.play.silhouette.api.exceptions.ProviderException
 import com.mohiva.play.silhouette.api.repositories.AuthInfoRepository
 import com.mohiva.play.silhouette.impl.providers._
-import events.EventsStream
 import forms.OAuthForm
 import forms.OAuthForm.{AuthorizeUsingProvider, ResponseType}
 import javax.inject.Inject
-import models.AppEvent.Login
+import events.{EventsStream, Login}
 import models._
 import play.api.Configuration
 import play.api.i18n.I18nSupport
@@ -130,7 +129,7 @@ class AuthController @Inject()(
       authenticator     <- Task.fromFuture(_ => silh.env.authenticatorService.create(profile.loginInfo))
       userAuthenticator  = authenticator.withUserInfo(user, authReq.scope, authReq.audience)
       token             <- Task.fromFuture(_ => silh.env.authenticatorService.init(userAuthenticator))
-      _                 <- eventBus.publish(Login(user.id, authenticator.id, authenticator.expirationDateTime.getMillis, request.reqInfo))
+      _                 <- eventBus.publish(Login(user, authenticator.id, authenticator.expirationDateTime.getMillis, request.reqInfo))
     } yield {
         log.info(s"User $user access token created")
 

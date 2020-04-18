@@ -1,8 +1,8 @@
 package models
 import scala.util.matching.Regex
 
-case class Service(name: String, pattern: String = "", secret: String = "", basePath: String = "", swaggerUrl: String = "") {
-  lazy val prefixPattern: Regex = (pattern + "(.*)").r
+case class Service(name: String, prefix: String = "", secret: String = "", basePath: String = "", swaggerUrl: String = "") {
+  lazy val prefixPattern: Regex = (prefix + "(.*)").r
 
   def makeUrl(path: String): Option[String] = path match {
     case prefixPattern(significantPart) =>
@@ -10,5 +10,5 @@ case class Service(name: String, pattern: String = "", secret: String = "", base
     case _ => None
   }
 
-  override def toString = s"Service($name($basePath) /$pattern)"
+  override def toString = s"Service($name($basePath) /$prefix)"
 }

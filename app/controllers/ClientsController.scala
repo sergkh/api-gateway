@@ -3,10 +3,9 @@ package controllers
 //scalastyle:off public.methods.have.type
 
 import com.mohiva.play.silhouette.api.Silhouette
-import events.EventsStream
+import events._
 import forms.{ClientAppForm, CommonForm}
 import javax.inject.{Inject, Singleton}
-import models.AppEvent._
 import models._
 import play.api.libs.json.{JsObject, Json}
 import security._

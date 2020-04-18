@@ -16,6 +16,8 @@ import scala.concurrent.duration._
 
 @Singleton
 class ConfirmationCodeService @Inject()(conf: Configuration, keys: KeysManager, lifecycle: ApplicationLifecycle) extends Logging {
+  import ConfirmationCodeService._
+  
   final val SALT_ITERATIONS = 10
 
   private val redis = RedisClient(conf.get[String]("redis.host"))

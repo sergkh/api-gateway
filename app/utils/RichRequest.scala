@@ -3,7 +3,8 @@ package utils
 import java.util.Base64
 
 import com.mohiva.play.silhouette.api.actions.{SecuredRequest, UserAwareRequestHeader}
-import models.{FormValidationException, JwtEnv, RequestInfo}
+import models.{FormValidationException, JwtEnv}
+import events.RequestInfo
 import play.api.data.Form
 import play.api.http.HeaderNames
 import play.api.mvc.{Request, RequestHeader}

@@ -27,6 +27,7 @@ class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
  
   val json: JsValue = Json.parse(
     """{
+      |"openapi": "3.0.0",
       |"paths":{
       |   "/":{"get":{"tags":["Rates"],"summary":"Get list of rate","parameters":[{"in":"query","name":"offset","type":"integer","format":"int32","required":false},{"in":"query","name":"limit","type":"integer","format":"int32","required":false}],"responses":{"200":{"description":"list of rates","schema":{"type":"array","items":{"$ref":"#/definitions/PairRateList"}}}}}},
       |   "/{pair}":{
@@ -34,11 +35,8 @@ class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
       |     "put":{"tags":["Rates"],"consumes":["application/json"],"parameters":[{"in":"path","name":"pair","type":"string","required":true,"description":"Currencies pair in format 'EURUSD' or '978-840'"},{"in":"body","name":"body","schema":{"$ref":"#/definitions/Rate"}}],"responses":{"200":{"description":"Success, returns updated rate","schema":{"$ref":"#/definitions/Rate"}},"404":{"description":"No rate found for such currencies combination","schema":{"$ref":"#/definitions/errorResponse"}}}},
       |     "delete":{"tags":["Rates"],"parameters":[{"in":"path","name":"pair","type":"string","required":true,"description":"Currencies pair in format 'EURUSD' or '978-840'"}],"responses":{"200":{"description":"Success, returns removed rate","schema":{"$ref":"#/definitions/Rate"}},"404":{"description":"No rate found for such currencies combination","schema":{"$ref":"#/definitions/errorResponse"}}}}
       |   }
-      |},
-      |"definitions":{
-      |   "errorResponse":{
-      |       "properties":{"error":{"type":"string","description":"Error code","enum":["INTERNAL_SERVER_ERROR","NOT_ENOUGH_MONEY","ACCOUNT_NOT_FOUND","INVALID_AMOUNT","TRANSACTION_NOT_FOUND","USER_NOT_FOUND","INVALID_TRANSACTION_DIRECTION","INVALID_TRANSACTION_ORDER_FIELD","INVALID_ORDER_TYPE","INVALID_REQUEST","GATEWAY_NOT_FOUND","GATEWAY_SERVER_ERROR","INVALID_GATEWAY_CONFIGURATION","INVALID_TRANSACTION_ACCOUNT","APPLICATION_NOT_FOUND","TEMPORARY_TOKEN_NOT_FOUND","TOKEN_CLAIMS_NOT_FOUND","INVALID_TOKEN_CLAIMS","EXTERNAL_ACCOUNT_INFO_NOT_FOUND","UNKNOWN_SERVICE","INVALID_ACCOUNT_CURRENCY","GATEWAY_SERVICE_EXISTS","GATEWAY_SERVICE_NOT_FOUND","ACCOUNTS_ARE_SAME","TEMPLATE_NOT_FOUND","WORKFLOW_NOT_FOUND","INVALID_APPLICATION_SECRET","INVALID_TOKEN","TOKEN_NOT_FOUND","IDENTIFIER_REQUIRED","BLOCKED_USER","USER_NOT_CONFIRMED","INVALID_USER_CREDENTIALS","USER_ALREADY_EXISTS","CONFIRM_CODE_NOT_FOUND","ACCESS_DENIED","INVALID_IDENTIFIER","USER_IDENTIFIER_EXISTS","INVALID_PASSWORD","NEWS_NOT_FOUND","CURRENCY_RATE_NOT_FOUND","EXTERNAL_SERVICE_UNAVAILABLE","CONFIRMATION_REQUIRED","ENTITY_NOT_FOUND","TRANSACTION_CANT_BE_CANCELED"]},"message":{"type":"string","description":"Error message description"},"timestamp":{"type":"integer","description":"Request timestamp"},"required":["login"]}},"Rate":{"type":"object","properties":{"rate":{"type":"number","format":"double","description":"Rate value"}}},"PairRate":{"type":"object","properties":{"currencyPair":{"type":"object","properties":{"from":{"type":"string","description":"Source currency name"},"to":{"type":"string","description":"Destination currency name"}}},"rate":{"type":"number","format":"double","description":"Rate value"}}},"PairRateList":{"type":"object","properties":{"items":{"type":"array","description":"array of currency pairs","items":{"$ref":"#/definitions/PairRate"}},"count":{"type":"integer","description":"objects count"}}}},"tags":[{"name":"routes"},{"name":"Rates","description":"Currency exchange rates management"}],"host":"localhost","info":{"title":"Rates API","version":"1.0.0"},"schemes":["https"],"produces":["application/json"],"swagger":"2.0","consumes":["application/json"]
-      | }""".stripMargin)
+      |}
+      |}""".stripMargin)
 
   val rates = Service("rates", "/rates", "secret", "http://localhost:9004", "http://localhost:9004/docs/api.json")
 

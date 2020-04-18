@@ -3,10 +3,9 @@ package controllers
 import akka.actor.ActorSystem
 import com.mohiva.play.silhouette.api.Silhouette
 import com.mohiva.play.silhouette.api.util.PasswordHasherRegistry
-import events.EventsStream
+import events._
 import forms.UserForm
 import javax.inject.{Inject, Singleton}
-import models.AppEvent.{OtpGenerated, Signup}
 import models._
 import play.api.Configuration
 import play.api.data.validation.Valid
@@ -98,7 +97,7 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
         _ <- confirmations.create(
           user.id, List(user.id, email), ConfirmationCode.OP_EMAIL_CONFIRM, otp, ttl = otpEmailTTLSeconds
         )
-        _ <- eventBus.publish(OtpGenerated(Some(user.id), email = Some(email), code = otp, request = requestInfo))
+        _ <- eventBus.publish(OtpGenerated(user, email = Some(email), code = otp, request = requestInfo))
       } yield ()
     } getOrElse Task.unit
   }
@@ -111,7 +110,7 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
         _ <- confirmations.create(
           user.id, List(user.id, phone), ConfirmationCode.OP_PHONE_CONFIRM, otp, ttl = otpEmailTTLSeconds
         )
-        _ <- eventBus.publish(OtpGenerated(Some(user.id), phone = Some(phone), code = otp, request = requestInfo))
+        _ <- eventBus.publish(OtpGenerated(user, phone = Some(phone), code = otp, request = requestInfo))
       } yield ()
     } getOrElse Task.unit
   }

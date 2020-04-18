@@ -102,6 +102,7 @@ object TaskExt {
     */
   implicit class RichTaks[A](val t: Task[A]) extends AnyVal {
     implicit def toUnsafeFuture: Future[A] = zio.Runtime.default.unsafeRunToFuture(t)
+    implicit def unsafeRun: A = zio.Runtime.default.unsafeRun(t)
   }
 
   implicit class RichOptTask[A](val t: Task[Option[A]]) extends AnyVal {

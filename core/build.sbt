@@ -20,5 +20,6 @@ libraryDependencies ++= Seq(
   "com.mohiva"                %% "play-silhouette-persistence"      % silhouetteVersion,
   "com.mohiva"                %% "play-silhouette-crypto-jca"       % silhouetteVersion,
   "org.mongodb.scala"         %% "mongo-scala-driver"               % "2.9.0",
-  "dev.zio"                   %% "zio"                              % "1.0.0-RC18-2"
+  "dev.zio"                   %% "zio"                              % "1.0.0-RC18-2",
+  "dev.zio"                   %% "zio-streams"                      % "1.0.0-RC18-2"
 )

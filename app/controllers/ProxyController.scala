@@ -68,24 +68,9 @@ class ProxyController @Inject()(silh: Silhouette[JwtEnv],
       case None => throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Unknown URL: $path")
     }
 
-    validateContentType(request, service)
-
     val url = service.makeUrl(replaceMe(path, request.identity)).get
 
     streamedProxy.passToUrl(url, service.secret, StreamedProxyRequest(request, Option(request.body)))
-  }
-
-  private def validateContentType(request: UserAwareRequest[JwtEnv, Source[ByteString, _]], service: Service): Unit = {
-    if (request.method == "POST" || request.method == "PUT") {
-      val validContentTypes = router.getContentType(service, request.path, request.method).getOrElse(Nil)
-      val contentTypeValidation = request.contentType.exists { enctype => validContentTypes.contains(enctype) }
-
-      if (!contentTypeValidation) {
-        throw AppException(ErrorCodes.INVALID_REQUEST,
-          s"Request validation failed: invalid content type ${request.contentType}. These are valid: ${validContentTypes.mkString(", ")}"
-        )
-      }
-    }
   }
 
   private def replaceMe(rootPath: String, userOpt: Option[User]) = {

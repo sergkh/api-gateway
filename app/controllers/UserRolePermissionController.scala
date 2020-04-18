@@ -5,9 +5,8 @@ package controllers
 import akka.actor.ActorSystem
 import com.google.inject.Inject
 import com.mohiva.play.silhouette.api.Silhouette
-import events.EventsStream
+import events._
 import forms.UserPermissionForm._
-import models.AppEvent.{RoleCreated, RoleRemoved, RoleUpdated}
 import models.{AppException, ErrorCodes, JwtEnv, RolePermissions}
 import play.api.libs.json.Json
 import security.WithPermission

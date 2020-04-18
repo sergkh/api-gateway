@@ -142,7 +142,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
       case (provider, _) =>
         log.warn(s"Ignoring provider configuration: $provider")
         None
-    }
+    }.toSeq
 
     SocialProviderRegistry(providers)
   }

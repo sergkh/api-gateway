@@ -5,10 +5,9 @@ package controllers
 import zio._
 import akka.actor.ActorSystem
 import com.mohiva.play.silhouette.api.Silhouette
-import events.EventsStream
+import events._
 import forms.BranchForm
 import javax.inject.{Inject, Singleton}
-import models.AppEvent._
 import models.{AppException, ErrorCodes, JwtEnv}
 import play.api.libs.json.Json
 import security.{WithBranchPermission, WithPermission}

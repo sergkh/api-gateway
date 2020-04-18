@@ -83,7 +83,7 @@ class WsProxyService @Inject()(ws: WSClient, conf: Configuration)(implicit exec:
   }
 
   @inline
-  private def resultBuilder(headers: Map[String, Seq[String]], status: Int, src: Source[ByteString, _]): Result = {
+  private def resultBuilder(headers: Map[String, scala.collection.Seq[String]], status: Int, src: Source[ByteString, _]): Result = {
     val contentType = headers.get(HeaderNames.CONTENT_TYPE).flatMap(_.headOption)
 
     val length = headers.get(HeaderNames.CONTENT_LENGTH) match {
@@ -91,7 +91,7 @@ class WsProxyService @Inject()(ws: WSClient, conf: Configuration)(implicit exec:
       case _ => None
     }
 
-    val filteredHeaders = headers.filterKeys(key => !outputHeadersFilter.contains(key.toLowerCase)).mapValues(_.head)
+    val filteredHeaders = headers.view.filterKeys(key => !outputHeadersFilter.contains(key.toLowerCase)).mapValues(_.head).toMap
 
     Result(
       ResponseHeader(status, filteredHeaders), HttpEntity.Streamed(src, length, contentType)

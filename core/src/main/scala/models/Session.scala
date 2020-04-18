@@ -3,7 +3,7 @@ package models
 import scala.compat.Platform
 
 case class Session(_id: String,
-                   userId: Long,
+                   userId: String,
                    createdAt: Long,
                    expiredAt: Long,
                    agent: String,
@@ -13,7 +13,7 @@ case class Session(_id: String,
 
 object Session {
 
-  def apply(_id: String, userId: Long, expiredAt: Long, agent: String, ip: String): Session = {
+  def apply(_id: String, userId: String, expiredAt: Long, agent: String, ip: String): Session = {
     new Session(_id, userId, Platform.currentTime, expiredAt, agent, ip)
   }
 

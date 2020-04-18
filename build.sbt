@@ -5,7 +5,7 @@ name := """api-gateway"""
 
 lazy val commonSettings = Seq(
   version := (version in ThisBuild).value,
-  scalaVersion := "2.12.11"
+  scalaVersion := "2.13.1"
 )
 
 lazy val `core` = (project in file("core")).settings(commonSettings: _*)
@@ -67,7 +67,7 @@ libraryDependencies ++= Seq(
 
 routesGenerator := InjectedRoutesGenerator
 
-scalacOptions in ThisBuild ++= Seq("-feature", "-language:postfixOps","-Xmax-classfile-name","78")
+scalacOptions in ThisBuild ++= Seq("-feature", "-language:postfixOps")
 
 fork in run := true
 javaOptions in run += "-Xmx2G"

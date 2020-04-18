@@ -12,7 +12,7 @@ import com.mohiva.play.silhouette.persistence.daos.DelegableAuthInfoDAO
 import events.EventsStream
 import forms.{CommonForm, ResetPasswordForm, UserForm}
 import javax.inject.{Inject, Singleton}
-import models.AppEvent.{UserBlocked, _}
+import events._
 import models.User._
 import models._
 import play.api.Configuration
@@ -349,7 +349,7 @@ class UserController @Inject()(
 
             for {
         _ <- confirmationService.create(oldUser.id, List(oldUser.id, newUser.phone.get), ConfirmationCode.OP_PHONE_CONFIRM, otp, otpPhoneTTLSeconds)
-        _ <- eventBus.publish(OtpGenerated(Some(newUser.id), phone = newUser.email, code = otp, request = reqInfo))
+        _ <- eventBus.publish(OtpGenerated(newUser, phone = newUser.email, code = otp, request = reqInfo))
         _ <- Task(log.info(s"Sent email confirmation code to ${newUser.id}"))
       } yield ()
 
@@ -361,7 +361,7 @@ class UserController @Inject()(
 
       for {
         _ <- confirmationService.create(oldUser.id, List(oldUser.id, newUser.email.get), ConfirmationCode.OP_EMAIL_CONFIRM, otp, optEmailTTLSeconds)
-        _ <- eventBus.publish(OtpGenerated(Some(newUser.id), email = newUser.email, code = otp, request = reqInfo))
+        _ <- eventBus.publish(OtpGenerated(newUser, email = newUser.email, code = otp, request = reqInfo))
         _ <- Task(log.info(s"Sent email confirmation code to ${newUser.id}"))
       } yield ()
     } else Task.unit

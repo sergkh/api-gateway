@@ -8,8 +8,8 @@ import com.mohiva.play.silhouette.api.Silhouette
 import events.EventsStream
 import forms._
 import javax.inject.{Inject, Singleton}
-import models.AppEvent._
 import models._
+import events._
 import play.api.Configuration
 import play.api.i18n.I18nSupport
 import services.{ConfirmationCodeService, _}
@@ -61,6 +61,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
     for {
       code <- confirmationService.get(login)
                                  .orFail(AppException(ErrorCodes.CONFIRM_CODE_NOT_FOUND, s"Confirmation code is not found"))
+      user <- userService.getByAnyId(code.userId) 
       otp = RandomStringGenerator.generateNumericPassword(code.otpLen, code.otpLen)      
       _ <- confirmationService.create(
         code.userId,
@@ -69,7 +70,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
         otp,
         code.ttl
       )
-      _ <- eventBus.publish(OtpGenerated(Some(code.userId), code.email, code.phone, otp, request.reqInfo))
+      _ <- eventBus.publish(OtpGenerated(user, code.email, code.phone, otp, request.reqInfo))
     } yield {      
       log.info(s"Regenerated otp code for user: ${code.userId} by login $login")
       NoContent

@@ -62,6 +62,37 @@ POST          /register                                              @controller
 #   - Users
 # operationId: createUserByAdmin
 # security: []
+# requestBody:
+#   required: true
+#   content:
+#     application/json:
+#       schema:
+#         type: object
+#         properties:
+#           email:
+#             type: string
+#             description: Users email
+#           phone:
+#             type: string
+#             description: Users phone
+#           firstName:
+#             type: string
+#             description: Users first name
+#           lastName:
+#             type: string
+#             description: Users last name
+#           password:
+#             type: string
+#             description: Users password
+#           flags:
+#             type: string
+#             description: User flags
+#           roles:
+#             type: string
+#             description: User roles
+#           branch:
+#             type: string
+#             description: A branch user belongs to
 # responses:
 #   200:
 #     description: User information
@@ -151,10 +182,27 @@ GET          /users/confirm                                      @controllers.Ap
 POST          /users/resend-otp                                   @controllers.ApplicationController.resendOtp
 
 ###
-# summary: Changes user password
+# summary: Changes specified user password
 # tags:
 #   - Users
 # operationId: changePassword
+# security: []
+# requestBody:
+#   required: true
+#   content:
+#     application/json:
+#       schema:
+#         type: object
+#         properties:
+#           login:
+#             type: string
+#             description: Users email/phone or id
+#           password:
+#             type: string
+#             description: Users current password
+#           newPassword:
+#             type: string
+#             description: Users new password
 # responses:
 #   204:
 #     description: Password successfully changed
@@ -162,11 +210,6 @@ POST          /users/resend-otp                                   @controllers.A
 #     description: Wrong old password used
 #   404:
 #     description: User not found
-# security: []
-# parameters:
-#   - name: body
-#     schema:
-#      $ref: '#/components/schemas/forms.UserForm.UpdatePass'
 ###
 POST          /users/change-pass                                  @controllers.UserController.changePassword
 
@@ -223,7 +266,7 @@ POST          /users/recovery                                     @controllers.U
 POST          /users/recovery/confirm                             @controllers.UserController.resetPasswordConfirm
 
 ###
-# summary: Checks is user exists
+# summary: Checks if user exists
 # description: No authentication required
 # tags:
 #   - Users
@@ -244,7 +287,7 @@ POST          /users/recovery/confirm                             @controllers.U
 GET           /users/:userId/exists                               @controllers.UserController.checkExistence(userId: String)
 
 ###
-# summary: Returns count of users registered in system
+# summary: Returns a total count of users registered in the system
 # tags:
 #   - Users
 # operationId: usersCount
@@ -274,9 +317,34 @@ GET           /users/count                                        @controllers.U
 #     type: string
 #     required: true
 #     description: User identifier (email/phone/uuid) or 'me' to identify self
-#   - name: body
-#     schema:
-#      $ref: '#/components/schemas/forms.UserForm.UpdateUser'
+# requestBody:
+#   required: true
+#   content:
+#     application/json:
+#       schema:
+#         type: object
+#         properties:
+#           email:
+#             type: string
+#             description: Users email
+#           phone:
+#             type: string
+#             description: Users phone
+#           firstName:
+#             type: string
+#             description: Users first name
+#           lastName:
+#             type: string
+#             description: Users last name
+#           flags:
+#             type: string
+#             description: User flags
+#           roles:
+#             type: string
+#             description: User roles
+#           branch:
+#             type: string
+#             description: A branch user belongs to
 # responses:
 #   200:
 #     description: User successfully updated, returns updated user
@@ -331,7 +399,7 @@ PUT         /users/:userId                                        @controllers.U
 #     schema:
 #       $ref: '#/components/schemas/ErrorResponse'
 ###
-PATCH         /users/:userId                                        @controllers.UserController.patch(userId: String)
+# PATCH         /users/:userId                                        @controllers.UserController.patch(userId: String)
 
 ###
 # summary: Block or unblock specified user by admin
@@ -388,7 +456,7 @@ PUT         /users/:userId/block                                  @controllers.U
 DELETE         /users/:userId                                     @controllers.UserController.delete(userId: String, comment: Option[String])
 
 ###
-# summary: Authenticates a user against a social provider
+# summary: Authenticates a user using a social provider
 # tags:
 #   - Login
 # operationId: socialProviderLogin
@@ -542,17 +610,38 @@ GET          /oauth/certs                                        @controllers.To
 POST          /oauth/token                                        @controllers.TokenController.getAccessToken
 
 ###
-# summary: Registers Thirdparty application
+# summary: Registers OAuth Client application
 # description: >
 #               The result is the application identifier (clientId) and the application secret code (clientSecret)
 #               which require for basic authorization.
 # tags:
 #   -  Clients management
-# operationId: registerOauthApplication
-# parameters:
-#   - name: body
-#     schema:
-#      $ref: '#/components/schemas/forms.ClientAppForm.CreateApps'
+# operationId: registerClient
+# requestBody:
+#   required: true
+#   content:
+#     application/json:
+#       schema:
+#         type: object
+#         properties:
+#           name:
+#             type: string
+#             description: Client name
+#           description:
+#             type: string
+#             description: Client description
+#           logo:
+#             type: string
+#             description: Client logo URL
+#           url:
+#             type: string
+#             description: Client website if any
+#           redirectUrlPatterns:
+#             type: array
+#             description: List of allowed redirect URLs
+#             items:
+#               type: string
+#               description: Redirect URL
 # responses:
 #   200:
 #     description: Application information for OAuth token authorization
@@ -570,10 +659,10 @@ POST          /oauth/token                                        @controllers.T
 POST          /users/oauth-apps                                 @controllers.ClientsController.createApp
 
 ###
-# summary: Returns list of refresh tokens for a user
+# summary: Returns a list of refresh tokens for a user
 # tags:
 #   - OAuth
-# operationId: listUserOauthTokens
+# operationId: listUserRefreshTokens
 # parameters:
 #   - name: userId
 #     in: path
@@ -587,10 +676,10 @@ POST          /users/oauth-apps                                 @controllers.Cli
 GET           /users/:userId/tokens                                       @controllers.TokenController.listUserTokens(userId: String)
 
 ###
-# summary: Returns Thirdparty application by given id
+# summary: Returns Client application by a given id for owner
 # tags:
 #   - Clients management
-# operationId: getOAuthApplication
+# operationId: getClientByOwner
 # parameters:
 #   - name: userId
 #     in: path
@@ -601,7 +690,7 @@ GET           /users/:userId/tokens                                       @contr
 #     in: path
 #     type: string
 #     required: true
-#     description: Thirdparty application id
+#     description: Client id
 # responses:
 #   200:
 #     description: Single application information
@@ -611,16 +700,16 @@ GET           /users/:userId/tokens                                       @contr
 GET           /users/:userId/oauth-apps/:id                             @controllers.ClientsController.getAppByOwner(userId: String, id: String)
 
 ###
-# summary: Returns Thirdparty application by id
+# summary: Returns Client public application by id
 # tags:
 #   - Clients management
-# operationId: getOAuthApplicationById
+# operationId: getClientPublicInfo
 # parameters:
 #   - name: id
 #     in: path
 #     type: string
 #     required: true
-#     description: Thirdparty application id
+#     description: Client id
 # security: []
 # responses:
 #   200:
@@ -632,10 +721,10 @@ GET           /oauth-apps/:id                                     @controllers.C
 
 
 ###
-# summary: Updates Thirdparty application by given id
+# summary: Updates Client application by given id
 # tags:
 #   - Clients management
-# operationId: updateOAuthApplication
+# operationId: updateClient
 # parameters:
 #   - name: userId
 #     in: path
@@ -646,10 +735,32 @@ GET           /oauth-apps/:id                                     @controllers.C
 #     in: path
 #     type: string
 #     required: true
-#     description: Thirdparty application id
-#   - name: body
-#     schema:
-#      $ref: '#/components/schemas/forms.ClientAppForm.UpdateApps'
+#     description: Client id
+# requestBody:
+#   required: true
+#   content:
+#     application/json:
+#       schema:
+#         type: object
+#         properties:
+#           name:
+#             type: string
+#             description: Client name
+#           description:
+#             type: string
+#             description: Client description
+#           logo:
+#             type: string
+#             description: Client logo URL
+#           url:
+#             type: string
+#             description: Client website if any
+#           redirectUrlPatterns:
+#             type: array
+#             description: List of allowed redirect URLs
+#             items:
+#               type: string
+#               description: Redirect URL
 # responses:
 #   200:
 #     description: Updated application information
@@ -659,10 +770,10 @@ GET           /oauth-apps/:id                                     @controllers.C
 PUT           /users/:userId/oauth-apps/:id                             @controllers.ClientsController.updateApp(userId: String, id: String)
 
 ###
-# summary: Removes Thirdparty application by given id
+# summary: Removes Client application
 # tags:
 #   - Clients management
-# operationId: removeOAuthApplication
+# operationId: removeClient
 # parameters:
 #   - name: userId
 #     in: path
@@ -673,7 +784,7 @@ PUT           /users/:userId/oauth-apps/:id                             @control
 #     in: path
 #     type: string
 #     required: true
-#     description: Thirdparty application id
+#     description: Client application id
 # responses:
 #   204:
 #     description: Application successfully removed
@@ -681,10 +792,10 @@ PUT           /users/:userId/oauth-apps/:id                             @control
 DELETE        /users/:userId/oauth-apps/:id                             @controllers.ClientsController.removeApplication(userId: String, id: String)
 
 ###
-# summary: Returns all Thirdparty applications for given user
+# summary: Returns all Clients for a given user
 # tags:
 #   - Clients management
-# operationId: getUserOAuthApplications
+# operationId: getClients
 # parameters:
 #   - name: userId
 #     in: path

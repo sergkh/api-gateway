@@ -9,7 +9,7 @@ object UserPermissionForm {
 
   val createForm = Form(
     mapping(
-      "role" -> role, 
+      "role" -> role,
       "permissions" -> list(permission)
     )(RolePermissions.apply)(RolePermissions.unapply)
   )

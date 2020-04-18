@@ -25,7 +25,7 @@ class ApiSpecs @Inject()(val controllerComponents: ControllerComponents,
 
   def specs = Action {
     Ok(
-      router.getSwaggerJson(identity)
+      router.swaggerJson
     ).withHeaders("Cache-Control" -> "no-cache, max-age=0, must-revalidate, no-store");
   }
 

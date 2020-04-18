@@ -11,11 +11,10 @@ import com.mohiva.play.silhouette.api.{LoginInfo, Silhouette}
 import com.mohiva.play.silhouette.impl.exceptions.{IdentityNotFoundException, InvalidPasswordException}
 import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
 import controllers.TokenController._
-import events.EventsStream
+import events._
 import forms.OAuthForm
 import forms.OAuthForm.{AccessTokenByAuthorizationCode, AccessTokenByPassword, AccessTokenByRefreshToken}
 import javax.inject.{Inject, Singleton}
-import models.AppEvent.Login
 import models.ErrorCodes._
 import models._
 import play.api.Configuration
@@ -90,7 +89,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
       authenticator   <- Task.fromFuture(_ => silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, auth.user.id)))
       tokenWithUser   = authenticator.withUserInfo(auth.user, auth.scope)
       token           <- Task.fromFuture(_ => silh.env.authenticatorService.init(tokenWithUser))
-      _               <- eventBus.publish(Login(auth.user.id, authenticator.id, authenticator.expirationDateTime.getMillis, request.reqInfo))
+      _               <- eventBus.publish(Login(auth.user, authenticator.id, authenticator.expirationDateTime.getMillis, request.reqInfo))
     } yield {
       log.info(s"User ${auth.user.id} authenticated by $clientId ${auth.refreshToken.map(_ => " with refresh token").getOrElse("")} using $grantType with scopes: ${auth.scope}")
               

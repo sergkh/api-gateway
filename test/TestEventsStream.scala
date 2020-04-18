@@ -2,14 +2,14 @@ package service.fakes
 
 import zio.Task
 import akka.actor.{Actor, ActorSystem, Props}
-import events.{AppEvent, EventsStream}
+import events._
 import javax.inject.Inject
 
 import scala.concurrent.{Future, Promise}
 import scala.reflect.ClassTag
 
 class TestEventsStream @Inject ()(implicit as: ActorSystem) extends EventsStream {
-  override def publish(evt: AppEvent): Task[Unit] = Task {
+  override def publish(evt: Event): Task[Unit] = Task {
     as.eventStream.publish(evt)
   }
 

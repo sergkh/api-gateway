@@ -2,7 +2,7 @@ package services
 
 import events.EventsStream
 import javax.inject.Inject
-import models.AppEvent._
+import events._
 import models.Session
 import org.mongodb.scala.model.Filters._
 import org.mongodb.scala.model.Updates
@@ -42,8 +42,6 @@ class MongoSessionsService @Inject()(mongoApi: MongoApi) extends SessionsService
 
   def finish(id: String): Task[Unit] = updateExpiration(id, Platform.currentTime)
 
-  // def remove(id: String): Future[Unit] =
-  //   sessionCollection.flatMap(_.delete.one(byId(id)).map(_ => ()).recover(MongoErrorHandler.processError[Unit]))
 }
 
 trait SessionEventProcessor
@@ -54,7 +52,7 @@ case class EventBusSessionEventProcessor @Inject() (sessionsService: SessionsSer
   )
 
   eventsStream.subscribe[Login](login => sessionsService.store(
-    Session(login.sessionId, login.userId.toLong, login.expirationTime, login.request.userAgent, login.request.ip)
+    Session(login.sessionId, login.user.id, login.expirationTime, login.request.userAgent, login.request.ip)
   ))
 
   eventsStream.subscribe[Logout](logout => sessionsService.finish(logout.sessionId))

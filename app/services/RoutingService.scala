@@ -15,9 +15,10 @@ import utils.Logging
 import utils.RichJson._
 import utils.ProxyRoutesParser._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.concurrent.Future
 import scala.util.{Failure, Success}
+import models.Swagger
 
 
 /**
@@ -37,46 +38,17 @@ class RoutingService @Inject()(ws: WSClient,
   private val cfg = config.get[Configuration]("swagger")
 
   private val serviceDescriptors = new ConcurrentHashMap[Service, ServiceDescriptor]()
-  private val baseSwagger = SwaggerSpecGenerator(true, "forms", "models").generate().get                 
-  private val localDescriptor: ServiceDescriptor = ServiceDescriptor.fromSwagger(Service("api"), baseSwagger)
 
-  private val info = (baseSwagger \ "info").as[JsObject] ++ Json.obj(
-    "title" -> cfg.get[String]("appName"),
-    "version" -> utils.BuildInfo.version
-  )
-  private val path = cfg.get[String]("path")
-  private val host = cfg.get[String]("host")
-  private val schema = cfg.get[Seq[String]]("schema")
-  private val other = baseSwagger.without("paths", "definitions", "tags", "basePath", "schemes", "host", "info")
-  private val isProd = playEnv.mode == Mode.Prod
-
-  private val emptySeq = Seq[(String, JsValue)]()
-  private val emptyJsArray: JsArray = JsArray()
+  private val swagger = Swagger(SwaggerSpecGenerator(true, "forms", "models").generate().get)
 
   def listServices: List[Service] = serviceDescriptors.keys().asScala.toList
 
-  def getSwaggerJson(transformer: JsObject => JsObject): JsObject = {
+  def swaggerJson: JsObject = {
     log.debug("Getting Swagger Json")
 
-    val services = serviceDescriptors.values().asScala
+    val services = serviceDescriptors.values().asScala.map(_.swagger)
 
-    val fullPaths = JsObject(
-      localDescriptor.paths ++ services.map { descr: ServiceDescriptor => descr.paths }.foldLeft(emptySeq)(_ ++ _)
-    )
-
-    val paths = transformer(fullPaths)
-
-    val definitions = JsObject(localDescriptor.definitions ++ services.map { descr: ServiceDescriptor => descr.definitions }.foldLeft(emptySeq)(_ ++ _))
-    val roles = JsObject(localDescriptor.roles ++ services.map { descr: ServiceDescriptor => descr.roles }.foldLeft(emptySeq)(_ ++ _))
-
-    Json.obj(
-      "info" -> info,
-      "basePath" -> path,
-      "host" -> host,
-      "schemes" -> schema,
-      "paths" -> paths,
-      "definitions" -> definitions
-    ) ++ other.deepMerge(Json.obj("securityDefinitions" -> Json.obj("oauth" -> Json.obj("scopes" -> roles))))
+    services.foldLeft(swagger)(_ mergeIn _).toJson
   }
 
   def matchService(path: String): Option[Service] = {
@@ -84,27 +56,18 @@ class RoutingService @Inject()(ws: WSClient,
     serviceDescriptors.entrySet().asScala.find { entry => entry.getValue.matches(path) } map (_.getKey)
   }
 
-  def getContentType(service: Service, path: String, method: String): Option[List[String]] = {
-    val serviceDescriptor = Option(serviceDescriptors.get(service))
-
-    val operations = serviceDescriptor.flatMap(_.paths.find { candidate =>
-      toRegex(parse(candidate._1, '{')).pattern.matcher(path).matches()
-    }).map(_._2).getOrElse(Json.obj())
-
-    (operations \ method.toLowerCase \ "consumes").asOpt[List[String]] orElse serviceDescriptor.map(_.contentTypes)
-  }
-
-  def serviceLost(service: Service) {
+  def serviceLost(service: Service): Unit = {
     log.debug(s"Service disappeared: $service")
     serviceDescriptors.remove(service)
   }
 
-  def serviceDiscovered(service: Service) {
+  def serviceDiscovered(service: Service): Unit = {
     log.debug(s"New service discovered: $service")
     serviceDescriptors.putIfAbsent(service, ServiceDescriptor.empty(service))
 
     getServiceDescriptor(service) onComplete {
       case Success(descr) =>
+        log.info(s"Got new service descriptor: ${descr.routes}")
         serviceDescriptors.put(service, descr)
       case Failure(ex) =>
         log.debug(s"Failed to get description for service $service: ${ex.getMessage}")
@@ -113,7 +76,7 @@ class RoutingService @Inject()(ws: WSClient,
 
   private def getServiceDescriptor(service: Service): Future[ServiceDescriptor] = {
     ws.url(service.swaggerUrl).get().map(wsResp => {
-      ServiceDescriptor.fromSwagger(service, wsResp.json)
+      ServiceDescriptor.fromSwagger(service, wsResp.json.as[JsObject])
     })
   }
 
@@ -124,39 +87,19 @@ class RoutingService @Inject()(ws: WSClient,
 
 object RoutingService {
 
-  case class ServiceDescriptor(service: Service,
-                               paths: Seq[(String, JsValue)],
-                               definitions: Seq[(String, JsValue)],
-                               roles: Seq[(String, JsValue)],
-                               contentTypes: List[String]) {
+  case class ServiceDescriptor(service: Service, swagger: Swagger) {
 
-    val routes = paths map { case (path, _) => toRegex(parse(path, '{')).pattern }
+    val routes = swagger.paths map { case (path, _) => toRegex(parse(path, '{')).pattern }
 
     def matches(path: String): Boolean = routes.exists(_.matcher(path).matches())
   }
 
   object ServiceDescriptor {
 
-    def empty(service: Service): ServiceDescriptor = ServiceDescriptor(service, Nil, Nil, Nil, Nil)
+    def empty(service: Service): ServiceDescriptor = ServiceDescriptor(service, Swagger.empty)
 
-    def fromSwagger(service: Service, swaggerJson: JsValue): ServiceDescriptor = {
-      val paths = (swaggerJson \ "paths").asOpt[JsObject].map(_.fields).getOrElse(Nil)
-      val definitions = (swaggerJson \ "definitions").asOpt[JsObject].map(_.fields).getOrElse(Nil)
-      val roles = (swaggerJson \ "securityDefinitions" \ "oauth" \ "scopes").asOpt[JsObject].map(_.fields).getOrElse(Nil)
-      val contentTypes = (swaggerJson \ "consumes").asOpt[List[String]].getOrElse(List("application/json"))
-
-      val prefix = service.pattern
-
-      val pathsPrefixed = paths map { case (key, js) =>
-        (prefix, key) match {
-          case (p, k) if p == k => (p, js)
-          case (p, k) if p == "/" => (k, js)
-          case (p, k) if k == "/" => (p, js)
-          case (p, k) => (p + k, js)
-        }
-      }
-
-      ServiceDescriptor(service, pathsPrefixed, definitions, roles, contentTypes)
+    def fromSwagger(service: Service, swaggerJson: JsObject): ServiceDescriptor = {
+      ServiceDescriptor(service, Swagger(swaggerJson).prefixPaths(service.prefix))
     }
   }
 }
