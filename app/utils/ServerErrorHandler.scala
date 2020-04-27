@@ -36,7 +36,7 @@ with SecuredErrorHandler with UnsecuredErrorHandler {
     * @return The result to send to the client.
     */
   override def onNotAuthorized(implicit request: RequestHeader): Future[Result] = {
-    val timestamp = Platform.currentTime
+    val timestamp = System.currentTimeMillis()
     log.info(s"Not authorized request: ${request.method} ${request.path} $timestamp")
 
     val denied = ErrorCodes.ACCESS_DENIED
@@ -58,7 +58,7 @@ with SecuredErrorHandler with UnsecuredErrorHandler {
     * @return The result to send to the client.
     */
   override def onNotAuthenticated(implicit request: RequestHeader): Future[Result] = {
-    val timestamp = Platform.currentTime
+    val timestamp = System.currentTimeMillis()
     log.info(s"Not authenticated request: ${request.method} ${request.path} $timestamp")
 
     val denied = ErrorCodes.ACCESS_DENIED

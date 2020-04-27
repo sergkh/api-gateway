@@ -29,7 +29,7 @@ class ShutdownFilter @Inject()(appShutdownRegister: ApplicationShutdownRegister)
         ServiceUnavailable(Json.obj(
           "code" -> unavailable.toString,
           "message" -> "Service unavailable",
-          "timestamp" -> Platform.currentTime
+          "timestamp" -> System.currentTimeMillis()
         ))
       )
     } else {

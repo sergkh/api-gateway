@@ -4,16 +4,16 @@ import models._
 import java.util.UUID
 import java.time.LocalDateTime
 
-trait Event {
+sealed trait Event {
   val id: String = UUID.randomUUID().toString.replace("-", "")
   val stamp: LocalDateTime = LocalDateTime.now()
   val `type`: String
 }
 
-case class RequestInfo(ip: String, userAgent: String, userId: Option[String])
+case class RequestInfo(ip: String, userAgent: String, userId: Option[String] = None)
 
-abstract class BaseEvent(val `type`: String, val key: String) extends Event
-abstract class UserEvent(`type`: String, key: String) extends BaseEvent(`type`, key) {
+sealed abstract class BaseEvent(val `type`: String, val key: String) extends Event
+sealed abstract class UserEvent(`type`: String, key: String) extends BaseEvent(`type`, key) {
   def user: User
 }
 

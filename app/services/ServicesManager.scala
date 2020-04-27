@@ -1,7 +1,8 @@
 package services
 
+import zio._
 import java.util.concurrent.ConcurrentHashMap
-
+import utils.TaskExt._
 import akka.actor.ActorSystem
 import com.google.inject.{Inject, Singleton}
 import com.iheart.playSwagger.SwaggerSpecGenerator
@@ -10,7 +11,7 @@ import models.Service
 import play.api.libs.json._
 import play.api.libs.ws.WSClient
 import play.api.{Configuration, Environment, Mode}
-import services.RoutingService.ServiceDescriptor
+import services.ServicesManager.ServiceDescriptor
 import utils.Logging
 import utils.RichJson._
 import utils.ProxyRoutesParser._
@@ -20,13 +21,8 @@ import scala.concurrent.Future
 import scala.util.{Failure, Success}
 import models.Swagger
 
-
-/**
-  * @author faiaz
-  * @author Yaroslav Derman <yaroslav.derman@gmail.com>
-  */
 @Singleton
-class RoutingService @Inject()(ws: WSClient,
+class ServicesManager @Inject()(ws: WSClient,
                                config: Configuration,
                                eventBus: EventsStream,
                                system: ActorSystem,
@@ -39,7 +35,7 @@ class RoutingService @Inject()(ws: WSClient,
 
   private val serviceDescriptors = new ConcurrentHashMap[Service, ServiceDescriptor]()
 
-  private val swagger = Swagger(SwaggerSpecGenerator(true, "forms", "models").generate().get)
+  private val swagger = Swagger(SwaggerSpecGenerator(true).generate().get)
 
   def listServices: List[Service] = serviceDescriptors.keys().asScala.toList
 
@@ -56,50 +52,52 @@ class RoutingService @Inject()(ws: WSClient,
     serviceDescriptors.entrySet().asScala.find { entry => entry.getValue.matches(path) } map (_.getKey)
   }
 
-  def serviceLost(service: Service): Unit = {
+  def serviceLost(service: Service): UIO[Unit] = UIO {
     log.debug(s"Service disappeared: $service")
     serviceDescriptors.remove(service)
   }
 
-  def serviceDiscovered(service: Service): Unit = {
-    log.debug(s"New service discovered: $service")
-    serviceDescriptors.putIfAbsent(service, ServiceDescriptor.empty(service))
-
-    getServiceDescriptor(service) onComplete {
-      case Success(descr) =>
-        log.info(s"Got new service descriptor: ${descr.routes}")
-        serviceDescriptors.put(service, descr)
-      case Failure(ex) =>
-        log.debug(s"Failed to get description for service $service: ${ex.getMessage}")
+  def serviceDiscovered(service: Service): UIO[Unit] = {
+    for {
+      _      <- UIO(log.debug(s"New service discovered: $service"))
+      _      <- UIO(serviceDescriptors.putIfAbsent(service, ServiceDescriptor.empty(service)))
+      update <- getServiceDescriptor(service).either
+    } yield {
+      update match {
+        case Right(d) =>
+          log.info(s"Got new service descriptor: ${d.routes}")
+          serviceDescriptors.put(service, d)
+        case Left(ex) =>
+          log.debug(s"Failed to get description for service $service: ${ex.getMessage}")
+      }
     }
   }
 
-  private def getServiceDescriptor(service: Service): Future[ServiceDescriptor] = {
-    ws.url(service.swaggerUrl).get().map(wsResp => {
+  private def getServiceDescriptor(service: Service): Task[ServiceDescriptor] = {
+    Task.fromFuture(_ => ws.url(service.swaggerUrl).get()).map(wsResp => {
       ServiceDescriptor.fromSwagger(service, wsResp.json.as[JsObject])
     })
   }
 
-  eventBus.subscribe[ServiceDiscovered](discovered => serviceDiscovered(discovered.service))
-  eventBus.subscribe[ServiceLost](lost => serviceLost(lost.service))
-  eventBus.subscribe[ServicesListUpdate](list => list.services.foreach(serviceDiscovered))
+  eventBus.subscribe {
+    case e: ServiceDiscovered => serviceDiscovered(e.service)
+    case e: ServiceLost => serviceLost(e.service)
+    case e: ServicesListUpdate => UIO.collectAllParN(2)(e.services.map(serviceDiscovered)) >>> UIO.unit
+    case _ => UIO.unit
+  }.unsafeRun
 }
 
-object RoutingService {
+object ServicesManager {
 
   case class ServiceDescriptor(service: Service, swagger: Swagger) {
-
     val routes = swagger.paths map { case (path, _) => toRegex(parse(path, '{')).pattern }
-
     def matches(path: String): Boolean = routes.exists(_.matcher(path).matches())
   }
 
   object ServiceDescriptor {
-
     def empty(service: Service): ServiceDescriptor = ServiceDescriptor(service, Swagger.empty)
 
-    def fromSwagger(service: Service, swaggerJson: JsObject): ServiceDescriptor = {
+    def fromSwagger(service: Service, swaggerJson: JsObject): ServiceDescriptor = 
       ServiceDescriptor(service, Swagger(swaggerJson).prefixPaths(service.prefix))
-    }
   }
 }

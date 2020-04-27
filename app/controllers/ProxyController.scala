@@ -17,7 +17,7 @@ import play.api.libs.json.Json
 import play.api.libs.streams.Accumulator
 import play.api.mvc.BodyParser
 import security.WithPermission
-import services.{ProxyService, RoutingService, StreamedProxyRequest}
+import services.{ProxyService, ServicesManager, StreamedProxyRequest}
 import utils.RichJson._
 
 import scala.concurrent.ExecutionContext
@@ -32,7 +32,7 @@ import scala.concurrent.duration._
 @Singleton
 class ProxyController @Inject()(silh: Silhouette[JwtEnv],
                                 streamedProxy: ProxyService,
-                                router: RoutingService,
+                                services: ServicesManager,
                                 conf: Configuration,
                                 eventStream: EventsStream,
                                 cache: SyncCacheApi
@@ -50,11 +50,11 @@ class ProxyController @Inject()(silh: Silhouette[JwtEnv],
 
   def listServices = silh.SecuredAction(WithPermission("swagger:read")) { _ =>
 
-  val services = router.listServices
+    val list = services.listServices
     Ok(
       Json.obj(
-        "items" -> services.map(s => Json.toJsObject(s).withoutFields("secret")),
-        "count" -> services.size
+        "items" -> list.map(s => Json.toJsObject(s).withoutFields("secret")),
+        "count" -> list.size
       )
     )
   }
@@ -63,7 +63,7 @@ class ProxyController @Inject()(silh: Silhouette[JwtEnv],
 
     val path = request.path
 
-    val service = router.matchService(path) match {
+    val service = services.matchService(path) match {
       case Some(service: Service) => service
       case None => throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Unknown URL: $path")
     }

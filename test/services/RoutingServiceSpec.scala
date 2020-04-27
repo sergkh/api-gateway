@@ -1,4 +1,4 @@
-package service
+package services
 
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
@@ -11,14 +11,13 @@ import org.scalatest.concurrent.Eventually
 import play.api.{Configuration, Environment}
 import play.api.libs.json.{JsObject, JsValue, Json}
 import play.api.mvc.Results._
-import services.RoutingService
+import services.ServicesManager
 import org.scalatest.time.{Seconds, Span}
-import service.fakes.TestEventsStream
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.scalatest.matchers.should.Matchers
 import utils.TaskExt._
 
-class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
+class ServicesManagerSpec extends TestKit(ActorSystem("ServicesManagerSpec"))
   with AnyWordSpecLike
   with Matchers
   with MockWSHelpers
@@ -49,7 +48,7 @@ class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
     }
   }
 
-  val bus = new TestEventsStream()
+  val bus = new ZioEventPublisher()
 
   val config = Configuration(ConfigFactory.parseString("""
     swagger {
@@ -64,7 +63,7 @@ class RoutingServiceSpec extends TestKit(ActorSystem("RoutingServiceSpec"))
 
   val env = Environment.simple()
 
-  val router = new RoutingService(ws, config, bus, system, env)
+  val router = new ServicesManager(ws, config, bus, system, env)
 
   "Router" should {
     "return rates service" in {

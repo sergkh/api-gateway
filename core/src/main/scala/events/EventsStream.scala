@@ -1,9 +1,11 @@
 package events
 
-import zio.Task
+import zio._
+import zio.stream.Stream
 import scala.reflect.ClassTag
 
 trait EventsStream {
   def publish(evt: Event): Task[Unit]
-  def subscribe[T](subscriber: T => Unit)(implicit classEv: ClassTag[T])
+  def stream: UIO[Stream[Nothing, Event]]
+  def subscribe(callback: Event => UIO[Unit]): UIO[Unit]
 }

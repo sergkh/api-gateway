@@ -50,12 +50,13 @@ case class EventBusSessionEventProcessor @Inject() (sessionsService: SessionsSer
   val HTTP_IP_HEADERS = Seq(
     "X-Forwarded-For", "X-Real-IP", "Proxy-Client-IP", "HTTP_CLIENT_IP", "HTTP_X_FORWARDED_FOR", "WL-Proxy-Client-IP"
   )
+  
+  //TODO:  
+  // eventsStream.subscribe[Login](login => sessionsService.store(
+  //   Session(login.sessionId, login.user.id, login.expirationTime, login.request.userAgent, login.request.ip)
+  // ))
 
-  eventsStream.subscribe[Login](login => sessionsService.store(
-    Session(login.sessionId, login.user.id, login.expirationTime, login.request.userAgent, login.request.ip)
-  ))
-
-  eventsStream.subscribe[Logout](logout => sessionsService.finish(logout.sessionId))
+  // eventsStream.subscribe[Logout](logout => sessionsService.finish(logout.sessionId))
 
   def clientIp(r: RequestHeader): String = {
     val header = HTTP_IP_HEADERS.find(name => r.headers.get(name).exists(h => h.nonEmpty && !h.equalsIgnoreCase("unknown")))
