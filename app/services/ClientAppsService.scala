@@ -51,8 +51,8 @@ class ClientAppsService @Inject()(userService: UserService,
     )).toOptionTask
        .orFail(AppException(ErrorCodes.APPLICATION_NOT_FOUND, s"Application $id not found"))
 
-  def removeApp(clientId: String, user: User): Task[Unit] = {
-    col.deleteOne(and(equal("_id", clientId), equal("ownerId", user.id))).toUnitTask >>>
+  def removeApp(clientId: String, user: User): Task[Option[ClientApp]] = {
+    col.findOneAndDelete(and(equal("_id", clientId), equal("ownerId", user.id))).toOptionTask <<<
       refreshTokens.deleteForClient(clientId)
       // TODO: clean active sessions
 

@@ -16,6 +16,7 @@ import utils.RichRequest._
 
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.language.implicitConversions
+import zio.Task
 
 /**
   * @author Sergey Khruschak  <sergey.khruschak@gmail.com>
@@ -91,12 +92,16 @@ class ClientsController @Inject()(silh: Silhouette[JwtEnv],
 
   def removeApplication(userId: String, id: String) = silh.SecuredAction(editPerm || WithUserAndPerm(userId, "user:edit")).async { implicit req =>
     for {
-      user <- userService.getRequestedUser(userId, req.identity)
-      _    <- clients.removeApp(id, user)
-      _    <- eventBus.publish(ClientRemoved(id, req.reqInfo))
-    } yield {
-      log.info(s"Removed client $id for user: ${user.id} by ${req.identity.info}")
-      NoContent
-    }
+      user       <- userService.getRequestedUser(userId, req.identity)
+      clientOpt  <- clients.removeApp(id, user)
+      status     <- clientOpt match {
+        case Some(client) => 
+          log.info(s"Removed client $id for user: ${user.id} by ${req.identity.info}")
+          eventBus.publish(ClientRemoved(client, req.reqInfo)).map(_ => NoContent)
+        case None =>
+          log.info(s"Failed to remove client $id for user: ${user.id} by ${req.identity.info}. Client not found")
+          Task.succeed(NotFound)
+      }
+    } yield status
   }
 }

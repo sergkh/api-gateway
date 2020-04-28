@@ -7,7 +7,6 @@ import zio._
 import zio.stream._
 import utils.TaskExt._
 
-
 @Singleton
 class ZioEventPublisher extends EventsStream {  
   private val streamQueues = Ref.make(List.empty[Queue[Event]]).unsafeRun

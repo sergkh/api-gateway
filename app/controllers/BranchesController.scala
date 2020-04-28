@@ -91,9 +91,9 @@ class BranchesController @Inject()(
   def remove(branchId: String) = silh.SecuredAction(editPerm).async { request =>
     for {
       deletedBranch <- branches.remove(branchId)
-      _             <- eventBus.publish(BranchRemoved(deletedBranch.id, request.reqInfo))
+      _             <- eventBus.publish(BranchRemoved(deletedBranch, request.reqInfo))
     } yield {
-      log.info(s"Branch ${deletedBranch.id} was removed by ${request.identity}")
+      log.info(s"Branch ${deletedBranch.id} was deleted by ${request.identity}")
       NoContent
     }
   }

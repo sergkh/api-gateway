@@ -97,10 +97,12 @@ object TaskExt {
 
   def failIf[A](cond: Boolean, code: String, message: String): Task[_] = if (cond) Task.fail(AppException(code, message)) else Task.unit
 
+
+
   /**
     * Some extensions needed to make transition to ZIO easier
     */
-  implicit class RichTaks[A](val t: Task[A]) extends AnyVal {
+  implicit class RichTaks[A, E <: Throwable](val t: ZIO[ZEnv, E, A]) extends AnyVal {
     implicit def toUnsafeFuture: Future[A] = zio.Runtime.default.unsafeRunToFuture(t)
     implicit def unsafeRun: A = zio.Runtime.default.unsafeRun(t)
   }
