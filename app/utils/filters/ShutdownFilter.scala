@@ -1,17 +1,17 @@
 package utils.filters
 
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
-import javax.inject.{Inject, Singleton}
 
 import akka.stream.Materializer
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.utils.Logging
-import com.impactua.bouncer.commons.web.SignalHandlerInstaller
+import javax.inject.{Inject, Singleton}
+import models.ErrorCodes
 import play.api.Configuration
 import play.api.inject.DefaultApplicationLifecycle
 import play.api.libs.json.Json
 import play.api.mvc.Results.ServiceUnavailable
 import play.api.mvc._
+import sun.misc.{Signal, SignalHandler}
+import utils.Logging
 
 import scala.compat.Platform
 import scala.concurrent.duration._
@@ -23,14 +23,13 @@ class ShutdownFilter @Inject()(appShutdownRegister: ApplicationShutdownRegister)
 
   override def apply(nextFilter: (RequestHeader) => Future[Result])(request: RequestHeader): Future[Result] = {
     if (appShutdownRegister.isShutdown) {
-      val unavailable = ResponseCode.SERVICE_UNAVAILABLE
+      val unavailable = ErrorCodes.SERVICE_UNAVAILABLE
 
       Future.successful(
         ServiceUnavailable(Json.obj(
-          "code" -> unavailable.id,
-          "error" -> unavailable.toString,
-          "message" -> "service unavailable",
-          "timestamp" -> Platform.currentTime
+          "code" -> unavailable.toString,
+          "message" -> "Service unavailable",
+          "timestamp" -> System.currentTimeMillis()
         ))
       )
     } else {
@@ -59,7 +58,7 @@ class ApplicationShutdownRegister @Inject()(lifecycle: DefaultApplicationLifecyc
   def incrementActiveRequests: Unit = activeRequests.incrementAndGet()
   def decrementActiveRequests: Unit = activeRequests.decrementAndGet()
 
-  SignalHandlerInstaller.installHandler("TERM", "INT") { (oldHandler, signal) =>
+  installHandler("TERM", "INT") { (oldHandler, signal) =>
     log.warn(s"Shutdown signal $signal received, going into shutdown state")
     var tries = MAX_TRIES
     isShuttingDown.set(true)
@@ -75,4 +74,19 @@ class ApplicationShutdownRegister @Inject()(lifecycle: DefaultApplicationLifecyc
 
   def isShutdown: Boolean = isShuttingDown.get()
 
+  def installHandler(signals: String*)(handlerFn: (SignalHandler, Signal) => Unit): Unit = {
+    signals.foreach { signal =>
+      val handler = new InternalHandler(handlerFn)
+      handler.oldHandler = Some(Signal.handle(new Signal(signal), handler))
+    }
+  }
+
+  private[this] class InternalHandler(handlerFn: (SignalHandler, Signal) => Unit) extends SignalHandler {
+    var oldHandler: Option[SignalHandler] = None
+
+    override def handle(signal: Signal): Unit = {
+      handlerFn(oldHandler.get, signal)
+    }
+  }
 }
+

@@ -1,17 +1,13 @@
 package services
 
-import javax.inject.{Inject, Singleton}
-import akka.http.scaladsl.util.FastFuture
 import akka.stream.scaladsl.Source
 import akka.util.ByteString
-import com.impactua.bouncer.commons.utils.Logging
-import models.User
-import pdi.jwt.{Jwt, JwtAlgorithm}
+import javax.inject.{Inject, Singleton}
 import play.api.Configuration
 import play.api.http.{HeaderNames, HttpEntity}
-import play.api.libs.json.Json
 import play.api.libs.ws._
 import play.api.mvc._
+import utils.Logging
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -31,11 +27,9 @@ trait ProxyService {
 }
 
 @Singleton
-class WsProxyService @Inject()(ws: WSClient, conf: Configuration, requestStore: RequestTracker)
-                              (implicit exec: ExecutionContext)
+class WsProxyService @Inject()(ws: WSClient, conf: Configuration)(implicit exec: ExecutionContext)
   extends ProxyService with Logging {
 
-  final val filteredHeaders = List("x-auth")
   final val outputHeadersFilter = List("content-type", "content-length")
 
   def pass(serviceName: String,
@@ -63,28 +57,19 @@ class WsProxyService @Inject()(ws: WSClient, conf: Configuration, requestStore: 
                 request: StreamedProxyRequest,
                 params: Seq[(String, String)] = Seq(),
                 headers: Seq[(String, String)] = Seq()): Future[Result] = {
+      log.info(s"Proxy $request to $url")
+      val body = request.body.map(SourceBody)
 
-    requestStore.checkForDuplicate(request) flatMap {
-      case Some(result) =>
-        log.warn(s"Duplicate request: $request")
-        FastFuture.successful(result)
+      val call = ws.url(url)
+        .withMethod(request.method)
+        .addQueryStringParameters(queryParams(request, params): _*)
+        .withHttpHeaders(buildHeaders(request, secretKey, headers): _*)
 
-      case None =>
-        log.info(s"Proxy $request to $url")
-        val body = request.body.map(SourceBody)
+      val callWithBody = body.map(call.withBody(_)) getOrElse call
 
-        val call = ws.url(url)
-          .withMethod(request.method)
-          .addQueryStringParameters(queryParams(request, params): _*)
-          .withHttpHeaders(buildHeaders(request, secretKey, headers): _*)
-
-        val callWithBody = body.map(call.withBody(_)) getOrElse call
-
-        callWithBody.stream().flatMap { response =>
-          val result = resultBuilder(response.headers, response.status, response.bodyAsSource)
-          requestStore.storeResponse(request, result)
-        }
-    }
+      callWithBody.stream().map { response =>
+        resultBuilder(response.headers, response.status, response.bodyAsSource)
+      }
   }
 
   @inline
@@ -94,21 +79,11 @@ class WsProxyService @Inject()(ws: WSClient, conf: Configuration, requestStore: 
 
   @inline
   private def buildHeaders(request: StreamedProxyRequest, secretKey: String, headers: Seq[(String, String)]) = {
-    val allHeaders = (request.req.headers.headers ++ headers).toMap
-      .filterKeys(key => !filteredHeaders.contains(key.toLowerCase)).toSeq
-
-    implicit val writer = User.shortUserWriter
-
-    val jwtHeaders = request.userOpt.map { user =>
-      val token = Jwt.encode(Json.stringify(Json.toJson(user)), secretKey, JwtAlgorithm.HS256)
-      Seq("x-auth" -> token)
-    } getOrElse Nil
-
-    allHeaders ++ jwtHeaders
+    request.req.headers.headers ++ headers
   }
 
   @inline
-  private def resultBuilder(headers: Map[String, Seq[String]], status: Int, src: Source[ByteString, _]) = {
+  private def resultBuilder(headers: Map[String, scala.collection.Seq[String]], status: Int, src: Source[ByteString, _]): Result = {
     val contentType = headers.get(HeaderNames.CONTENT_TYPE).flatMap(_.headOption)
 
     val length = headers.get(HeaderNames.CONTENT_LENGTH) match {
@@ -116,7 +91,7 @@ class WsProxyService @Inject()(ws: WSClient, conf: Configuration, requestStore: 
       case _ => None
     }
 
-    val filteredHeaders = headers.filterKeys(key => !outputHeadersFilter.contains(key.toLowerCase)).mapValues(_.head)
+    val filteredHeaders = headers.view.filterKeys(key => !outputHeadersFilter.contains(key.toLowerCase)).mapValues(_.head).toMap
 
     Result(
       ResponseHeader(status, filteredHeaders), HttpEntity.Streamed(src, length, contentType)
@@ -126,7 +101,6 @@ class WsProxyService @Inject()(ws: WSClient, conf: Configuration, requestStore: 
 }
 
 case class StreamedProxyRequest(req: Request[_],
-                                userOpt: Option[User],
                                 source: Option[Source[ByteString, _]],
                                 methodOpt: Option[String] = None) {
   def method: String = methodOpt.getOrElse(req.method)

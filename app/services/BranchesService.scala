@@ -1,160 +1,119 @@
 package services
 
-import javax.inject.{Inject, Singleton}
-import akka.http.scaladsl.util.FastFuture
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.utils.Logging
 import forms.BranchForm.CreateBranch
-import models.{Branch, User}
-import play.api.Configuration
-import play.api.libs.json._
-import play.modules.reactivemongo.ReactiveMongoApi
-import reactivemongo.api.indexes.{Index, IndexType}
-import reactivemongo.api.{Cursor, ReadPreference}
-import reactivemongo.play.json._
-import reactivemongo.core.errors.DatabaseException
-import reactivemongo.play.json.collection.JSONCollection
+import javax.inject.{Inject, Singleton}
+import models.{AppException, Branch, ErrorCodes, User}
+import org.mongodb.scala.model.Filters._
+import org.mongodb.scala.model.Updates
+import play.api.{Configuration, Logging}
+import services.MongoApi._
+import utils.TaskExt._
+import zio._
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 
 trait BranchesService {
-  def create(create: CreateBranch, user: User): Future[Branch]
-  def update(branchId: String, update: CreateBranch, user: User): Future[(Branch, Branch)]
-  def isAuthorized(branchId: String, user: User): Future[Boolean]
-  def get(branchId: String): Future[Option[Branch]]
-  def list(parent: String): Future[List[Branch]]
-  def remove(branchId: String): Future[Branch]
+  def create(create: CreateBranch, user: User): Task[Branch]
+  def update(branchId: String, update: CreateBranch, user: User): Task[(Branch, Branch)]
+  def isAuthorized(branchId: String, user: User): Task[Boolean]
+  def get(branchId: String): Task[Option[Branch]]
+  def list(parent: String): Task[List[Branch]]
+  def remove(branchId: String): Task[Branch]
 }
 
 @Singleton
-class MongoBranchesService @Inject()(conf: Configuration,
-                                     mongoApi: ReactiveMongoApi)(implicit exec: ExecutionContext)
+class MongoBranchesService @Inject()(conf: Configuration, userService: UserService, mongoApi: MongoApi)
+                                    (implicit exec: ExecutionContext)
   extends BranchesService with Logging {
 
   private val MAX_TRIES = 5
 
-  branches.map(_.indexesManager) map { manager =>
-    manager.ensure(Index(Seq("hierarchy" -> IndexType.Ascending), background = true, unique = false, sparse = true))
-  }
+  val col = mongoApi.collection[Branch]("branches")
 
-  implicit val format = Branch.mongoFormat
-
-  def create(create: CreateBranch, user: User): Future[Branch] = {
+  def create(create: CreateBranch, user: User): Task[Branch] = {
     val id = Branch.nextId
-    val branchFuture = create.parentOrRoot match {
+    val branch = create.parentOrRoot match {
       case Branch.ROOT =>
-        Future.successful(
-          Branch(create.name, user.uuid, create.description, id :: Nil, id)
+        Task(
+          Branch(create.name, user.id, create.description, id :: Nil, id)
         )
       case parentId: String =>
         getOrFail(parentId) map { parent =>
-          Branch(create.name, user.uuid, create.description, id :: parent.hierarchy, id)
+          Branch(create.name, user.id, create.description, id :: parent.hierarchy, id)
         }
     }
 
-    branchFuture flatMap { b =>
+    branch flatMap { b =>
       createSafe(b, MAX_TRIES)
     }
   }
 
-  def update(id: String, update: CreateBranch, user: User): Future[(Branch, Branch)] = {
+  def update(id: String, update: CreateBranch, user: User): Task[(Branch, Branch)] = {
 
     for {
       newParentHierarchy <- update.parentOrRoot match {
-        case Branch.ROOT => Future.successful(Nil)
+        case Branch.ROOT => Task.succeed(Nil)
         case parentId: String => getOrFail(parentId) map (parent => parent.hierarchy)
       }
-      uCollection <- users
-      bCollection <- branches
-      updateBranch = Branch(update.name, user.uuid, update.description, id :: newParentHierarchy, id)
-      optionalOldBranch <- bCollection.findAndUpdate(byId(id), updateBranch, false).map(_.result[Branch])
-    } yield {
-      optionalOldBranch match {
-        case Some(oldBranch) =>
-          val oldParentHierarchy = oldBranch.hierarchy.drop(1)
-          if (oldParentHierarchy != newParentHierarchy) {
-            val selector = Json.obj("hierarchy" -> Json.obj("$all" -> oldBranch.hierarchy))
-            val push = Json.obj("$push" -> Json.obj("hierarchy" -> Json.obj("$each" -> newParentHierarchy)))
-            val pull = Json.obj("$pullAll" -> Json.obj("hierarchy" -> oldParentHierarchy))
-            bCollection.update(selector, push, multi = true)
-            bCollection.update(selector, pull, multi = true)
-            uCollection.update(selector, push, multi = true)
-            uCollection.update(selector, pull, multi = true)
-          }
-          oldBranch -> updateBranch
-        case _ => throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Branch $id isn't found")
-      }
-    }
+      updateBranch = Branch(update.name, user.id, update.description, id :: newParentHierarchy, id)
+      oldBranch   <- col.findOneAndReplace(equal("_id", id), updateBranch)
+                        .toOptionTask.orFail(AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Branch $id isn't found"))
+      oldParentHierarchy = oldBranch.hierarchy.drop(1)
+      _ <- if (oldParentHierarchy != newParentHierarchy) {
+        val selector = all("hierarchy", oldBranch.hierarchy)
+        val push = Updates.pushEach("hierarchy", newParentHierarchy:_*)
+        val pull = Updates.pullAll("hierarchy", oldParentHierarchy:_*)
+        for {
+          _ <- col.updateOne(selector, push).toTask
+          _ <- col.updateMany(selector, pull).toTask
+          _ <- userService.updateHierarchy(oldBranch.hierarchy, newParentHierarchy)
+        } yield ()
+      } else { Task.unit }
+    } yield oldBranch -> updateBranch
   }
 
-  def get(id: String): Future[Option[Branch]] = branches.flatMap(_.find(byId(id)).one[Branch])
+  def get(id: String): Task[Option[Branch]] = col.find(equal("_id", id)).first.toOptionTask
 
-  override def list(parent: String): Future[List[Branch]] = parent match {
+  override def list(parent: String): Task[List[Branch]] = parent match {
     case Branch.ROOT =>
-      branches.flatMap(
-        _.find(Json.obj("hierarchy" -> Json.obj("$size" -> 1)))
-          .cursor[Branch](ReadPreference.secondaryPreferred)
-          .collect[List](-1, Cursor.FailOnError[List[Branch]]())
-      )
+      col.find(size("hierarchy", 1)).toTask.map(_.toList)
     case branch: String =>
-      branches.flatMap(
-        _.find(Json.obj("hierarchy.1" -> branch))
-          .cursor[Branch](ReadPreference.secondaryPreferred)
-          .collect[List](-1, Cursor.FailOnError[List[Branch]]())
-      )
+      col.find(equal("hierarchy.1", branch)).toTask.map(_.toList)
   }
 
-  def remove(id: String): Future[Branch] = {
-
-    val futureResult = for {
-      uCollection <- users
-      bCollection <- branches
-      assignedUsers <- uCollection.count(Some(Json.obj("hierarchy.0" -> id)))
-      childBranches <- bCollection.count(Some(Json.obj("hierarchy.1" -> id)))
-    } yield {
-      if (childBranches > 0) { throw AppException(ResponseCode.NON_EMPTY_SET, s"Branch $id containing at least one child branch!") }
-      else if (assignedUsers > 0) { throw AppException(ResponseCode.NON_EMPTY_SET, s"Branch $id containing at least one user!") }
-      else { bCollection.findAndRemove(byId(id)).map(_.result[Branch]).map (
-        _.getOrElse(throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Branch $id isn't found"))
-      ) }
-    }
-    futureResult.flatten
+  def remove(id: String): Task[Branch] = {
+    for {
+      assignedUsers <- userService.count(Some(id))
+      childBranches <- col.countDocuments(equal("hierarchy.1", id)).toTask
+      _ <- if (childBranches > 0) Task.fail(AppException(ErrorCodes.NON_EMPTY_SET, s"Branch $id containing at least one child branch!")) else Task.unit
+      _ <- if (assignedUsers > 0) Task.fail(AppException(ErrorCodes.NON_EMPTY_SET, s"Branch $id containing at least one user!")) else Task.unit
+      c <- col.findOneAndDelete(equal("_id", id)).toOptionTask.map (_.getOrElse(throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Branch $id isn't found")))
+    } yield c
   }
 
-  override def isAuthorized(branchId: String, user: User): Future[Boolean] = user.branch match {
+  override def isAuthorized(branchId: String, user: User): Task[Boolean] = user.branch match {
     case Some(`branchId`) => // users branch match `branchId`
-      FastFuture.successful(true)
+      Task.succeed(true)
     case Some(userBranch) =>
       branchId match {
-        case Branch.ROOT => FastFuture.successful(false) // user with a branch is not allowed to access root
+        case Branch.ROOT => Task.succeed(false) // user with a branch is not allowed to access root
         case id: String => getOrFail(id) map { branch => branch.belongs(userBranch) }
       }
 
-    case None => FastFuture.successful(true)
+    case None => Task.succeed(true)
   }
 
-  private def getOrFail(id: String): Future[Branch] = get(id).map(_.getOrElse {
-    throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Branch $id is not found")
+  private def getOrFail(id: String): Task[Branch] = get(id).map(_.getOrElse {
+    throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Branch $id is not found")
   })
 
-  private def createSafe(branch: Branch, tries: Int): Future[Branch] = {
-    branches.flatMap(_.insert(branch).map(_ => branch)).recoverWith {
-      case dbEx: DatabaseException if dbEx.code.exists(c => c == 11000 || c == 11001) && tries > 0 =>
+  private def createSafe(branch: Branch, tries: Int): Task[Branch] = {
+    col.insertOne(branch).toUnitTask.map(_ => branch).catchSome {
+      case dbEx: Exception if tries > 0 => // TODO: check for exact exception
         // duplicate key, try another ID
         val id = Branch.nextId
         val updatedBranch = branch.copy(id = Branch.nextId, hierarchy = id :: branch.hierarchy.tail)
-
         createSafe(updatedBranch, tries - 1)
-
-      case other: Throwable =>
-        throw other
     }
   }
-
-  private def users = mongoApi.database.map(_.collection[JSONCollection]("users"))
-
-  private def branches = mongoApi.database.map(_.collection[JSONCollection]("branches"))
-
-  private def byId(id: String) = Json.obj("_id" -> id)
 }

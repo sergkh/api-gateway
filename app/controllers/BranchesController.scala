@@ -2,19 +2,17 @@ package controllers
 
 //scalastyle:off public.methods.have.type
 
+import zio._
 import akka.actor.ActorSystem
-import javax.inject.{Inject, Singleton}
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.utils.RichRequest._
 import com.mohiva.play.silhouette.api.Silhouette
-import events.EventsStream
+import events._
 import forms.BranchForm
-import models.AppEvent._
-import models.JwtEnv
+import javax.inject.{Inject, Singleton}
+import models.{AppException, ErrorCodes, JwtEnv}
 import play.api.libs.json.Json
-import security.{WithAnyPermission, WithBranchPermission}
+import security.{WithBranchPermission, WithPermission}
 import services.BranchesService
+import utils.RichRequest._
 
 import scala.concurrent.ExecutionContext
 
@@ -25,10 +23,9 @@ class BranchesController @Inject()(
                                    branches: BranchesService
                                   )(implicit exec: ExecutionContext, system: ActorSystem)
  extends BaseController {
-
   implicit val branchesService = branches
 
-  val editPerm = WithAnyPermission("branches:edit")
+  val editPerm = WithPermission("branches:edit")
   val readPerm = WithBranchPermission("branches:read")
 
   def create = silh.SecuredAction(editPerm).async { request =>
@@ -37,14 +34,16 @@ class BranchesController @Inject()(
 
     branches.isAuthorized(create.parentOrRoot, user) flatMap {
       case true =>
-        branches.create(create, user) map { createdBranch =>
+        branches.create(create, user) flatMap { createdBranch =>
           log.info(s"Branch created: $createdBranch")
-          eventBus.publish(BranchCreated(request.identity.uuidStr, createdBranch, request))
-          Ok(Json.toJson(createdBranch))
+
+          eventBus.publish(BranchCreated(createdBranch, request.reqInfo)) map { _ =>
+            Ok(Json.toJson(createdBranch))
+          }
         }
       case false =>
         log.info(s"User $user not allowed to access parent branch $create")
-        throw AppException(ResponseCode.ACCESS_DENIED, s"User cannot access parent branch")
+        Task.fail(AppException(ErrorCodes.ACCESS_DENIED, s"User cannot access parent branch"))
     }
   }
 
@@ -56,14 +55,14 @@ class BranchesController @Inject()(
       case true =>
         for {
           result <- branches.update(branchId, update, user)
-          _ <- eventBus.publish(BranchUpdated(request.identity.uuidStr, result._1, result._2, request))
+          _      <- eventBus.publish(BranchUpdated(result._1, result._2, request.reqInfo))
         } yield {
           log.info(s"Branch $branchId updated")
           Ok(Json.toJson(result))
         }
       case false =>
         log.info(s"User $user not allowed to access parent branch $update")
-        throw AppException(ResponseCode.ACCESS_DENIED, s"User cannot access parent branch")
+        throw AppException(ErrorCodes.ACCESS_DENIED, s"User cannot access parent branch")
     }
   }
 
@@ -74,7 +73,7 @@ class BranchesController @Inject()(
         Ok(Json.toJson(branch))
       case None =>
         log.info(s"Branch $branchId is not found by ${request.identity}")
-        throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Branch is not found $branchId")
+        throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Branch is not found $branchId")
     }
   }
 
@@ -92,9 +91,9 @@ class BranchesController @Inject()(
   def remove(branchId: String) = silh.SecuredAction(editPerm).async { request =>
     for {
       deletedBranch <- branches.remove(branchId)
-      _ <- eventBus.publish(BranchRemoved(request.identity.uuidStr, deletedBranch.id, request))
+      _             <- eventBus.publish(BranchRemoved(deletedBranch, request.reqInfo))
     } yield {
-      log.info(s"Branch ${deletedBranch.id} was removed by ${request.identity}")
+      log.info(s"Branch ${deletedBranch.id} was deleted by ${request.identity}")
       NoContent
     }
   }

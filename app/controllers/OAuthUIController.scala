@@ -2,14 +2,13 @@ package controllers
 
 //scalastyle:off public.methods.have.type
 
-import javax.inject.{Inject, Singleton}
-
 import com.mohiva.play.silhouette.api.Silhouette
 import com.mohiva.play.silhouette.api.services.AuthenticatorService
 import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
+import javax.inject.{Inject, Singleton}
 import models.JwtEnv
+import play.api.Configuration
 import play.api.i18n.I18nSupport
-import play.api.{Configuration, Mode}
 import security._
 import services._
 
@@ -18,8 +17,7 @@ import scala.concurrent.Future
 import scala.language.implicitConversions
 
 @Singleton
-class OAuthUIController @Inject()(oauth: Oauth,
-                                  oauthService: OAuthService,
+class OAuthUIController @Inject()(oauthService: ClientAppsService,
                                   silh: Silhouette[JwtEnv],
                                   playEnv: play.api.Environment,
                                   assets: Assets,
@@ -27,10 +25,10 @@ class OAuthUIController @Inject()(oauth: Oauth,
 
   val basePath = conf.get[String]("app.basePath").stripSuffix("/")
 
-  implicit def toService(authService: AuthenticatorService[JWTAuthenticator]): CustomJWTAuthenticatorService =
-    authService.asInstanceOf[CustomJWTAuthenticatorService]
+  implicit def toService(authService: AuthenticatorService[JWTAuthenticator]): CustomJWTAuthenticator =
+    authService.asInstanceOf[CustomJWTAuthenticator]
 
-  def displayAuthorize(clientId: Long, scopes: String) = silh.UserAwareAction.async { implicit request =>
+  def displayAuthorize(clientId: String, scopes: String) = silh.UserAwareAction.async { implicit request =>
     val permissions = scopes.split(' ')
 
     request.identity match {
@@ -40,7 +38,7 @@ class OAuthUIController @Inject()(oauth: Oauth,
           Ok(views.html.authorization(basePath, app, permissions))
         }
       case Some(user) =>
-        val diff = permissions.toSet.diff(user.permissions.toSet)
+        val diff = permissions.toSet.diff(user.permissions.getOrElse(Nil).toSet)
         log.warn(s"User $user does not have required permissions: [${diff.mkString(",")}]")
         Future.successful(Forbidden(views.html.login(basePath)))
       case _ =>

@@ -1,7 +1,6 @@
 package module
 
-import javax.inject.Singleton
-import _root_.services._
+import services._
 import com.google.inject.name.Named
 import com.google.inject.{AbstractModule, Provides}
 import com.mohiva.play.silhouette.api.actions.{SecuredErrorHandler, UnsecuredErrorHandler}
@@ -13,27 +12,35 @@ import com.mohiva.play.silhouette.api.{Environment, EventBus, Silhouette, Silhou
 import com.mohiva.play.silhouette.crypto._
 import com.mohiva.play.silhouette.impl.authenticators._
 import com.mohiva.play.silhouette.impl.providers._
+import com.mohiva.play.silhouette.impl.providers.oauth1.{TwitterProvider, XingProvider}
 import com.mohiva.play.silhouette.impl.providers.oauth1.secrets.{CookieSecretProvider, CookieSecretSettings}
+import com.mohiva.play.silhouette.impl.providers.oauth1.services.PlayOAuth1Service
+import com.mohiva.play.silhouette.impl.providers.oauth2._
+import com.mohiva.play.silhouette.impl.providers.openid.YahooProvider
+import com.mohiva.play.silhouette.impl.providers.openid.services.PlayOpenIDService
 import com.mohiva.play.silhouette.impl.providers.state.{CsrfStateItemHandler, CsrfStateSettings}
 import com.mohiva.play.silhouette.impl.services._
 import com.mohiva.play.silhouette.impl.util._
-import com.mohiva.play.silhouette.password.BCryptPasswordHasher
+import com.mohiva.play.silhouette.password.BCryptSha256PasswordHasher
 import com.mohiva.play.silhouette.persistence.daos.DelegableAuthInfoDAO
 import com.mohiva.play.silhouette.persistence.repositories.DelegableAuthInfoRepository
 import com.typesafe.config.Config
-import models.dao._
+import javax.inject.Singleton
+import services.dao._
 import models.{JwtEnv, User}
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ArbitraryTypeReader._
 import net.ceedubs.ficus.readers.{EnumerationReader, ValueReader}
 import net.codingwell.scalaguice.ScalaModule
+import org.slf4j.LoggerFactory
 import play.api.Configuration
+import play.api.libs.openid.OpenIdClient
 import play.api.libs.ws.WSClient
 import play.api.mvc.Cookie
-import security.{CustomJWTAuthenticatorService, JWTTokensDao, JWTTokensDaoWrapper}
-import services.social.providers.CustomFacebookProvider
-import utils.{CustomEventBus, ServerErrorHandler}
+import security.{CustomJWTAuthenticator, KeysManager}
+import utils.ServerErrorHandler
 
+import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
 
 /**
@@ -41,13 +48,13 @@ import scala.concurrent.ExecutionContext.Implicits.global
   */
 class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationReader {
 
+  val log = LoggerFactory.getLogger(getClass())
+
   implicit val cookieSamesiteReader = new ValueReader[Cookie.SameSite] {
     def read(config: Config, path: String) = Cookie.SameSite.parse(config.getString(path)).getOrElse {
       throw new IllegalArgumentException(s"Failed to read cookie same site config value from path: $path, invalid value: ${config.getString(path)}")
     }
   }
-
-  private val HASHER_ROUNDS = 5
 
   /**
     * Configures the module.
@@ -57,8 +64,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
     bind[Silhouette[JwtEnv]].to[SilhouetteProvider[JwtEnv]]
     bind[CacheLayer].to[PlayCacheLayer]
     bind[IDGenerator].toInstance(new SecureRandomIDGenerator())
-    bind[PasswordHasher].toInstance(new BCryptPasswordHasher(HASHER_ROUNDS))
-    bind[EventBus].to[CustomEventBus].asEagerSingleton()
+    bind[PasswordHasher].toInstance(new BCryptSha256PasswordHasher())
     bind[Clock].toInstance(Clock())
     bind[UnsecuredErrorHandler].to[ServerErrorHandler]
     bind[SecuredErrorHandler].to[ServerErrorHandler]
@@ -93,23 +99,52 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
     Environment[JwtEnv](userService, authService, Seq(), eventBus)
   }
 
+  @Provides
+  def provideKeyManger(conf: Configuration): KeysManager = new KeysManager(conf)
+
   /**
     * Provides the social provider registry.
     *
     * @return The Silhouette environment.
     */
   @Provides
-  def provideSocialProviderRegistry(facebookProvider: CustomFacebookProvider): SocialProviderRegistry = {
-    SocialProviderRegistry(Seq(facebookProvider))
-  }
+  def provideSocialProviderRegistry(httpLayer: HTTPLayer,
+                                    stateHandler: SocialStateHandler,
+                                    tokenSecretProvider: OAuth1TokenSecretProvider,
+                                    client: OpenIdClient,
+                                    conf: Configuration): SocialProviderRegistry = {
 
-  @Provides
-  def provideFacebookProvider(httpLayer: HTTPLayer,
-                              stateHandler: SocialStateHandler,
-                              configuration: Configuration): CustomFacebookProvider = {
+    val socialConfigs = conf.underlying.getConfigList("silhouette.social").asScala
+    
+    val providers = socialConfigs.flatMap {
+      case cfg: Config =>
+        Some(cfg.getString("type") -> cfg).filter(_._2.getBoolean("enabled"))
+    }
+    .flatMap {
+      case ("facebook", cfg) =>
+        log.debug(s"Adding Facebook social provider")
+        Some(new FacebookProvider(httpLayer, stateHandler, cfg.as[OAuth2Settings]))
+      case ("google", cfg) =>
+        log.debug(s"Adding Google social provider")
+        Some(new GoogleProvider(httpLayer, stateHandler, cfg.as[OAuth2Settings]))
+      case ("twitter", cfg) =>
+        log.debug(s"Adding Twitter social provider")
+        val settings = cfg.as[OAuth1Settings]
+        Some(new TwitterProvider(httpLayer, new PlayOAuth1Service(settings), tokenSecretProvider, settings))
+      case ("xing", cfg) =>
+        log.debug(s"Adding Xing social provider")
+        val settings = cfg.as[OAuth1Settings]
+        Some(new XingProvider(httpLayer, new PlayOAuth1Service(settings), tokenSecretProvider, settings))
+      case ("yahoo", cfg) =>
+        log.debug(s"Adding Yahoo social provider")
+        val settings = cfg.as[OpenIDSettings]
+        Some(new YahooProvider(httpLayer, new PlayOpenIDService(client, settings), settings))      
+      case (provider, _) =>
+        log.warn(s"Ignoring provider configuration: $provider")
+        None
+    }.toSeq
 
-    val settings = configuration.underlying.as[OAuth2Settings]("silhouette.facebook")
-    new CustomFacebookProvider(httpLayer, stateHandler, settings)
+    SocialProviderRegistry(providers)
   }
 
   /**
@@ -125,8 +160,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
   def provideAuthenticatorService(idGenerator: IDGenerator,
                                   conf: Configuration,
                                   @Named("authenticator-crypter") crypter: Crypter,
-                                  sessionsService: SessionsService,
-                                  mongoTokensDao: OAuthService,
+                                  keyManager: KeysManager,
                                   clock: Clock): AuthenticatorService[JWTAuthenticator] = {
 
     val settings = conf.underlying.as[JWTAuthenticatorSettings]("silhouette.authenticator")
@@ -141,17 +175,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
         )
     }
 
-    val store = conf.getOptional[String]("silhouette.authenticator.store").map(_.toLowerCase) match {
-      case Some("none") => None
-      case Some("redis") => Some(new JWTTokensDao(settings, encoder, conf, sessionsService))
-      case Some("mongo") => Some(mongoTokensDao)
-      case Some("combined") => Some(new JWTTokensDaoWrapper(new JWTTokensDao(settings, encoder, conf, sessionsService), mongoTokensDao))
-      case Some(other) => throw new IllegalArgumentException(
-        s"Setting silhouette.authenticator.store(AUTHENTICATOR_STORE) value $other is not supported." +
-          s"Use: none, redis, mongo or combined")
-    }
-
-    new CustomJWTAuthenticatorService(settings, store, encoder, idGenerator, clock)
+    new CustomJWTAuthenticator(settings, None, encoder, idGenerator, keyManager, clock)
   }
 
 
@@ -184,7 +208,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
   @Provides
   def provideAuthInfoRepository(passwordInfoDAO: DelegableAuthInfoDAO[PasswordInfo],
                                 oAuth1InfoDao: DelegableAuthInfoDAO[OAuth1Info],
-                                oAuth2InfoDao: DelegableAuthInfoDAO[OAuth2Info]): AuthInfoRepository = {
+                                oAuth2InfoDao: DelegableAuthInfoDAO[OAuth2Info]): AuthInfoRepository = { 
     new DelegableAuthInfoRepository(passwordInfoDAO, oAuth1InfoDao, oAuth2InfoDao)
   }
 
@@ -222,9 +246,6 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
     new CredentialsProvider(authInfoRepository, passwordHasherRegistry)
   }
 
-
-
-
   @Provides
   def provideOAuth1TokenSecretProvider(configuration: Configuration,
                                        @Named("authenticator-signer") cookieSigner: Signer,
@@ -237,7 +258,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
   @Provides
   @Named("auth2-cookie-signer")
   def provideOAuth2StageCookieSigner(configuration: Configuration): Signer = {
-    val config = configuration.underlying.as[JcaSignerSettings]("silhouette.oauth2StateProvider.cookie.signer")
+    val config = configuration.underlying.as[JcaSignerSettings]("silhouette.authenticator.signer")
     new JcaSigner(config)
   }
 

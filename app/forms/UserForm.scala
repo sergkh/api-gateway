@@ -1,73 +1,65 @@
 package forms
 
-import com.impactua.bouncer.commons.utils.FormConstraints._
-import com.impactua.bouncer.commons.utils.FormMapping._
+import forms.FormConstraints._
+import models.{Branch, User}
 import play.api.data.Form
 import play.api.data.Forms._
-import play.api.data.validation.{Constraint, Invalid, Valid, ValidationError}
-import utils.Settings._
-import models.{Branch, QueryParams, User}
 
 object UserForm {
 
   val updatePass = Form(
     mapping(
-      TAG_PASS -> optional(password),
-      TAG_NEW_PASS -> password,
-      TAG_LOGIN -> optional(nonEmptyText.verifying(or(emailAddress, phoneNumber)))
+      "password" -> optional(password),
+      "newPassword" -> password,
+      "login" -> optional(login)
     )(UpdatePass.apply)(UpdatePass.unapply)
   )
 
-  val passwordTTL = Form(
+  val createUser = Form(
     mapping(
-      "passTtl" -> optional(longNumber),
-      "expireOnce" -> optional(boolean),
-    )(PasswordTTL.apply)(PasswordTTL.unapply)
+      "email" -> optional(email.verifying(_.contains("@")).transform(_.toLowerCase, (a: String) => a)),
+      "phone" -> optional(phone),
+      "firstName" -> optional(name),
+      "lastName" -> optional(name),
+      "password" -> optional(password),
+      "flags" -> optional(list(role)),
+      "roles" -> optional(list(role)),
+      "branch" -> optional(text(Branch.BranchIdSize, Branch.BranchIdSize))
+    )(CreateUser.apply)(CreateUser.unapply)
   )
 
   val updateUser = Form(
     mapping(
-      TAG_EMAIL -> optional(nonEmptyText.verifying(emailAddress).transform(_.toLowerCase, (a: String) => a)),
-      TAG_PHONE -> optional(nonEmptyText.verifying(phoneNumber)),
-      TAG_FIRST_NAME -> optional(nonEmptyText),
-      TAG_LAST_NAME -> optional(nonEmptyText),
-      TAG_FLAGS -> default(seq(nonEmptyText), Nil),
-      "roles" -> default(seq(nonEmptyText), Nil),
+      "email" -> optional(email.transform(_.toLowerCase, (a: String) => a)),
+      "phone" -> optional(phone),
+      "firstName" -> optional(name),
+      "lastName" -> optional(name),
+      "flags" -> default(list(role), Nil),
+      "roles" -> default(list(role), Nil),
       "branch" -> optional(text(Branch.BranchIdSize, Branch.BranchIdSize)),
       "version" -> default(number(min = 0), 0)
     )(UpdateUser.apply)(UpdateUser.unapply)
   )
 
-  val searchUser = Form(
-    mapping(
-      TAG_Q -> nonEmptyText(3),
-      TAG_LIMIT -> optional(limit)
-    )(SearchUser.apply)(SearchUser.unapply)
-  )
+  val blockUser = Form(single("block" -> boolean))
 
-  val queryUser = Form(
-    mapping(
-      TAG_SINCE -> optional(isoDate),
-      TAG_UNTIL -> optional(isoDate),
-      TAG_LIMIT -> optional(limit),
-      TAG_OFFSET -> optional(offset)
-    )(QueryParams.apply)(QueryParams.unapply)
-  )
+  case class CreateUser(email: Option[String],
+                        phone: Option[String],
+                        firstName: Option[String],
+                        lastName: Option[String],
+                        password: Option[String],
+                        flags: Option[List[String]],
+                        roles: Option[List[String]],
+                        branch: Option[String])
 
-  val blockUser = Form(
-    mapping(
-      TAG_BLOCK -> boolean
-    )(BlockUser.apply)(BlockUser.unapply)
-  )
-
-  case class UpdatePass(pass: Option[String], newPass: String, login: Option[String] = None)
+  case class UpdatePass(password: Option[String], newPassword: String, login: Option[String] = None)
 
   case class UpdateUser(email: Option[String],
                         phone: Option[String],
                         firstName: Option[String],
                         lastName: Option[String],
-                        flags: Seq[String],
-                        roles: Seq[String],
+                        flags: List[String],
+                        roles: List[String],
                         branch: Option[String],
                         version: Int) {
 
@@ -79,18 +71,13 @@ object UserForm {
         lastName = lastName,
         flags = flags,
         roles = roles,
-        hierarchy = if (origin.branch == branch) origin.hierarchy else branch.toSeq,
+        hierarchy = if (origin.branch == branch) origin.hierarchy else branch.toList,
         version = version
       )
     }
   }
 
   case class SearchUser(q: String, limit: Option[Int])
-  case class BlockUser(block: Boolean)
   case class PasswordTTL(passTTL: Option[Long], expireOnce: Option[Boolean])
-
-  def genderConstraint: Constraint[Int] = Constraint[Int]("constraint.gender") { gender =>
-    if (gender == 0 || gender == 1 || gender == 2) Valid else Invalid(ValidationError("Invalid gender value"))
-  }
 
 }

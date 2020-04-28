@@ -3,23 +3,16 @@ package forms
 import models.RolePermissions
 import play.api.data.Forms._
 import play.api.data._
+import FormConstraints._
 
-/**
-  * Created by faiaz on 19.10.16.
-  */
 object UserPermissionForm {
 
   val createForm = Form(
     mapping(
-      "role" -> text,
-      "permissions" -> seq(text)
+      "role" -> role,
+      "permissions" -> list(permission)
     )(RolePermissions.apply)(RolePermissions.unapply)
   )
 
-  val updateForm = Form(
-    single(
-      "permissions" -> seq(text)
-    )
-  )
-
+  val updateForm = Form(single("permissions" -> list(permission)))
 }

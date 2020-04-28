@@ -1,3 +1,0 @@
-name := """base-models"""
-
-publish := ()

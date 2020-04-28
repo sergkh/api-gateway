@@ -4,340 +4,75 @@ package controllers
 //scalastyle:off public.methods.have.type
 
 import akka.actor.ActorSystem
-import javax.inject.{Inject, Singleton}
-import akka.http.scaladsl.util.FastFuture
-import akka.stream.scaladsl.Source
-import akka.util.ByteString
-import com.impactua.bouncer.commons.models.ResponseCode._
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.models.{ResponseCode, User => CommonsUser}
-import com.impactua.bouncer.commons.security.ConfirmationProvider
-import com.impactua.bouncer.commons.utils.JsonHelper
-import com.impactua.bouncer.commons.utils.RichRequest._
-import com.mohiva.play.silhouette.api.exceptions.ProviderException
-import com.mohiva.play.silhouette.api.repositories.AuthInfoRepository
-import com.mohiva.play.silhouette.api.services.AuthenticatorService
-import com.mohiva.play.silhouette.api.util.{Credentials, PasswordHasher}
-import com.mohiva.play.silhouette.api.{LoginInfo, Silhouette}
-import com.mohiva.play.silhouette.impl.authenticators.JWTAuthenticator
-import com.mohiva.play.silhouette.impl.exceptions.{IdentityNotFoundException, InvalidPasswordException}
-import com.mohiva.play.silhouette.impl.providers.CredentialsProvider
+import com.mohiva.play.silhouette.api.Silhouette
 import events.EventsStream
-import forms.LoginForm.LoginCredentials
 import forms._
-import models.AppEvent._
+import javax.inject.{Inject, Singleton}
 import models._
-import net.ceedubs.ficus.Ficus._
-import play.api.i18n.{I18nSupport, Messages}
-import play.api.libs.json.Json
-import play.api.mvc.{Headers, Request, RequestHeader, Result}
+import events._
 import play.api.Configuration
-import security.{ConfirmationCodeService, CustomJWTAuthenticatorService, WithPermission}
-import services._
-import services.impl.RegistrationFiltersChain
+import play.api.i18n.I18nSupport
+import services.{ConfirmationCodeService, _}
+import utils.RandomStringGenerator
+import utils.RichRequest._
+import utils.TaskExt._
+import zio._
 
-import scala.concurrent.ExecutionContext.Implicits._
-import scala.concurrent.Future
-import scala.concurrent.duration.FiniteDuration
 import scala.language.implicitConversions
 
-/**
-  * The main application controller that handles login/logout, registration etc. requests.
-  */
 @Singleton
 class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
                                       userService: UserService,
-                                      authInfoRepository: AuthInfoRepository,
-                                      credentialsProvider: CredentialsProvider,
-                                      passwordHasher: PasswordHasher,
                                       confirmationService: ConfirmationCodeService,
                                       config: Configuration,
-                                      eventBus: EventsStream,
-                                      proxy: ProxyService,
-                                      confirmations: ConfirmationProvider,
-                                      registration: RegistrationService,
-                                      sessionsService: SessionsService,
-                                      registrationFilters: RegistrationFiltersChain)(implicit system: ActorSystem) extends BaseController with I18nSupport {
-  val requirePass = config.getOptional[Boolean]("app.requirePassword").getOrElse(true)
-  val appSecret = config.get[String]("play.http.secret.key")
-  val otpLength = config.getOptional[Int]("confirmation.otp.length").getOrElse(ConfirmationCodeService.DEFAULT_OTP_LEN)
+                                      eventBus: EventsStream)(implicit system: ActorSystem) extends BaseController with I18nSupport {
 
   val baseUrl = config.get[String]("app.basePath").stripSuffix("/")
 
-  val createUserPermission = "users:create"
-
-  private val ETERNAL_TOKEN_TTL = config.underlying.as[FiniteDuration]("oauth.ttl")
-
-  val internalWebPermission = "internal_web"
-
-  implicit def toService(authService: AuthenticatorService[JWTAuthenticator]): CustomJWTAuthenticatorService =
-    authService.asInstanceOf[CustomJWTAuthenticatorService]
-
-  def index = Action { _ =>
-    Redirect(baseUrl + "/docs/api.html")
-  }
-
-  def version = silh.SecuredAction(WithPermission(internalWebPermission)) { _ =>
-    Ok(utils.BuildInfo.toJson)
-  }
-
-  /**
-    * Authenticates a user against the credentials provider.
-    *
-    * @return The result to display.
-    */
-  def authenticate = Action.async(parse.json) { implicit request =>
-    val credentials = request.asForm(LoginForm.form)
-
-    val futureResult = for {
-      loginInfo <- credsTologinInfo(credentials)
-      optUser   <- userService.retrieve(loginInfo)
-      result    <- processUserLogin(optUser, loginInfo, credentials)
-    } yield result
-
-    futureResult.recover {
-      case e: IdentityNotFoundException =>
-        log.info(s"User: ${credentials.login} not found " + e.getMessage)
-        throw AppException(AUTHORIZATION_FAILED, Messages("invalid.credentials"))
-      case e: InvalidPasswordException =>
-        log.info(s"Password for user: ${credentials.login} not match " + e.getMessage)
-        throw AppException(AUTHORIZATION_FAILED, Messages("invalid.credentials"))
-      case e: ProviderException =>
-        log.info(s"Invalid credentials for user: ${credentials.login} " + e.getMessage)
-        throw AppException(AUTHORIZATION_FAILED, Messages("invalid.credentials"))
-      case e: AppException[_] =>
-        log.info(s"App exception occurred for user: ${credentials.login} " + e.message)
-        throw e
-    }
-  }
-
-  private def credsTologinInfo(creds: LoginCredentials) = creds.password match {
-    case Some(pass) =>
-      log.trace(s"Login of ${creds.loginFormatted} with password")
-      credentialsProvider.authenticate(Credentials(creds.loginFormatted, pass))
-    case None if requirePass =>
-      log.warn(s"Password for user ${creds.login} required but not set")
-      throw AppException(INVALID_PASSWORD, "Invalid password")
-
-    case None if !requirePass =>
-      val credentials = Credentials(creds.loginFormatted, "eternal-pass")
-      log.trace(s"Login of ${creds.loginFormatted} without password")
-      FastFuture.successful(LoginInfo(CredentialsProvider.ID, credentials.identifier))
-  }
-
-  private def processUserLogin(optUser: Option[User], loginInfo: LoginInfo,
-                               credentials: LoginCredentials)(implicit request: RequestHeader): Future[Result] = optUser match {
-    case Some(user) if user.hasFlag(User.FLAG_BLOCKED) =>
-      log.warn(s"User ${credentials.login} is blocked")
-      throw AppException(BLOCKED_USER, s"User ${credentials.login} is blocked")
-
-    case Some(user) if credentials.password.nonEmpty && user.flags.contains(User.FLAG_2FACTOR) => // 2-factor authentication, password always required
-      val (secret, code) = ConfirmationCode.generatePair(credentials.login, ConfirmationCode.OP_LOGIN, otpLength, None)
-
-      confirmationService.create(code)
-
-      eventBus.publish(OtpGeneration(Some(user.uuidStr), user.email, user.phone, secret, request)) map { _ =>
-        log.info("Generated login code for " + user.uuidStr)
-        throw AppException(ResponseCode.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
-      }
-
-    case Some(user) if credentials.password.isEmpty && !user.flags.contains(User.FLAG_2FACTOR) => // passwordless authentication
-      val (secret, code) = ConfirmationCode.generatePair(credentials.login, ConfirmationCode.OP_LOGIN, otpLength, None)
-      confirmationService.create(code)
-
-      eventBus.publish(OtpGeneration(Some(user.uuidStr), user.email, user.phone, secret, request)) map { _ =>
-        log.info("Generated passwordless login code for " + user.uuidStr)
-        throw AppException(ResponseCode.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
-      }
-
-    case Some(user)  =>
-      val userIdLoginInfo = LoginInfo(CredentialsProvider.ID, user.uuidStr)
-      silh.env.authenticatorService.create(userIdLoginInfo) flatMap { authenticator =>
-        silh.env.authenticatorService.init(authenticator).flatMap { token =>
-          log.info(s"Succeed user authentication ${userIdLoginInfo.providerKey}")
-
-          eventBus.publish(Login(user.uuidStr, token, request, authenticator.id, authenticator.expirationDateTime.getMillis)).flatMap { _ =>
-            silh.env.authenticatorService.embed(token, Ok(JsonHelper.toNonemptyJson(
-              "passExpiration" -> user.passwordExpiration.map(_.toString), "token" -> token)
-            ))
-          }
-        }
-      }
-
-    case None =>
-      log.warn(s"User with login: ${credentials.login} is not found")
-      throw AppException(USER_NOT_FOUND, s"User with login: ${credentials.login} is not found")
-  }
-
-  def register = silh.UserAwareAction.async(parse.json) { implicit request =>
-    request.identity match {
-      case Some(user) if user.hasPermission(createUserPermission) =>
-        registration.userRegistrationRequest(request).flatMap { regData =>
-          registration.confirmUserRegistrationRequest(regData.login).map { u =>
-            Ok(Json.toJson(u))
-          }
-        }
-      case _ =>
-        registrationFilters(request.body).flatMap { _ =>
-          registration.userRegistrationRequest(request).flatMap { data =>
-
-            val (otp, code) = ConfirmationCode.generatePair(
-              data.loginFormatted, ConfirmationCode.OP_REGISTER, otpLength, Some((request.headers.headers, Some(ByteString(Json.toJson(data).toString()))))
-            )
-
-            confirmationService.create(code, ttl = data.ttl)
-
-            eventBus.publish(OtpGeneration(None, data.optEmail, data.optPhone, otp, request)).map {_ =>
-              log.info(s"Generated registration code for user login ${data.loginFormatted}")
-              throw AppException(ResponseCode.CONFIRMATION_REQUIRED, "Otp confirmation required using POST /users/confirm")
-            }
-          }
-        }
-    }
-  }
+  def index = Action { _ => Redirect(baseUrl + "/docs/api.html") }
+  def version = Action { _ => Ok(utils.BuildInfo.toJson) }
 
   def confirm = Action.async { implicit request =>
     val confirmation = request.asForm(ConfirmForm.confirm)
 
-    log.info(s"Confirmation of code for login ${confirmation.login}")
+    log.info(s"Confirmation code for login ${confirmation.login}")
 
-    getConfirmCode(confirmation.login)
-      .map(_.filter(_.verify(confirmation.code)))
+    confirmationService.consume(confirmation.login, confirmation.code)
       .flatMap {
-        case Some(code) if ConfirmationCode.OP_REGISTER == code.operation => confirmUserRegistration(code)
-        case Some(code) if ConfirmationCode.OP_LOGIN == code.operation => confirmUserAuthorization(code)
-        case Some(code) => sendConfirmed(code, confirmation.code)
-        case None =>
-          log.info(s"Code $confirmation not found")
-          throw AppException(ResponseCode.CONFIRM_CODE_NOT_FOUND, s"Code for login ${confirmation.login} is not found")
+        case Some(emailConfirm) if emailConfirm.operation == ConfirmationCode.OP_EMAIL_CONFIRM =>
+          userService.updateFlags(emailConfirm.userId, removeFlags = List(User.FLAG_EMAIL_NOT_CONFIRMED)).map { _ =>
+            log.info(s"Users ${emailConfirm.userId} email confirmed")
+          }
+        case Some(phoneConfirm) if phoneConfirm.operation == ConfirmationCode.OP_PHONE_CONFIRM =>
+          userService.updateFlags(phoneConfirm.userId, removeFlags = List(User.FLAG_PHONE_NOT_CONFIRMED)).map { _ =>
+            log.info(s"Users ${phoneConfirm.userId} phone confirmed")
+          }
+        case code =>
+          log.info(s"Code requested by $confirmation is not found or not supported. Got: $code")
+          Task.fail(AppException(ErrorCodes.CONFIRM_CODE_NOT_FOUND, s"Code for login ${confirmation.login} is not found"))
+      }.map { _ =>
+        NoContent
       }
   }
 
-  /** Gets code by specified login, but if it's not found – retrieves user and tries all his possible logins */
-  private def getConfirmCode(login: String): Future[Option[ConfirmationCode]] = {
-    confirmationService.retrieveByLogin(login) flatMap {
-      case Some(code) => FastFuture.successful(Some(code))
-      case None => // try by other user logins, option filter to avoid calls if code was already found
-        for {
-          userOpt     <- userService.getByAnyIdOpt(login)
-          codeByUuid  <- userOpt.map(u => confirmationService.retrieveByLogin(u.uuidStr))
-                                .getOrElse(FastFuture.successful(None))
-          codeByEmail <- userOpt.flatMap(_.email)
-                                .filter(_ => codeByUuid.isEmpty)
-                                .map(email => confirmationService.retrieveByLogin(email))
-                                .getOrElse(FastFuture.successful(None))
-          codeByPhone <- userOpt.flatMap(_.phone)
-                                .filter(_ => codeByEmail.isEmpty && codeByUuid.isEmpty)
-                                .map(phone => confirmationService.retrieveByLogin(phone))
-                                .getOrElse(FastFuture.successful(None))
-        } yield codeByUuid orElse codeByEmail orElse codeByPhone
-    }
-  }
-
-  def invite() = silh.SecuredAction.async { request =>
-    val data = request.asForm(InviteForm.form)
-
-    eventBus.publish(UserInvitation(data.email, data.url, request.identity)) map {_ =>
-      log.info(s"User ${request.identity.uuid} try to invite ${data.email}")
-      NoContent
-    }
-  }
-
-  private def sendConfirmed(code: ConfirmationCode, otp: String)(implicit request: RequestHeader): Future[Result] = {
-    userService.retrieve(LoginInfo(CredentialsProvider.ID, code.login)) flatMap {
-      case Some(user) =>
-        val Array(method, path) = code.operation.split(" ") // example: POST /someurl
-
-        val base = config.get[String]("app.host").stripSuffix("/") + baseUrl
-
-        log.info(s"Confirming $method request to $path using URL: ${base + path}")
-
-        val originalReq = code.request.get
-        val (originalHeaders, Some(body)) = originalReq
-        // update content length to fully match new request size
-        val headers = originalHeaders :+ ("Content-Length" -> body.size.toString)
-
-        val newReq = Request(request.withMethod(method), body).withHeaders(Headers(headers:_*))
-
-        proxy.passToUrl(
-          base + path,
-          appSecret,
-          StreamedProxyRequest(newReq, Some(user), Some(Source.single(body)), Some(method)),
-          headers = Seq(confirmations.confirmationHeader(otp, appSecret))).map { res =>
-          confirmationService.consumeByLogin(code.login)
-          res
-        }
-      case None =>
-        log.info(s"User ${code.login} for code $code not found")
-        throw AppException(ResponseCode.ACCESS_DENIED, s"Access denied for unknown user: ${code.login}")
-    }
-  }
-
-  private def confirmUserAuthorization(confirmationCode: ConfirmationCode)(implicit request: RequestHeader) = {
-    confirmAction(confirmationCode, action = loginInfo =>
-      userService.retrieve(loginInfo).map(_.getOrElse {
-          log.info(s"User ${loginInfo.providerKey} not found")
-          throw AppException(ResponseCode.USER_NOT_FOUND, s"User ${loginInfo.providerKey} not found")
-        }
-      )
-    )
-  }
-
-  private def confirmUserRegistration(confirmationCode: ConfirmationCode)(implicit request: RequestHeader) = {
-    confirmAction(confirmationCode, action = _ =>
-      registration.confirmUserRegistrationRequest(confirmationCode.login)
-    )
-  }
-
-  private def confirmAction(confirmationCode: ConfirmationCode, action: LoginInfo => Future[User])(implicit request: RequestHeader): Future[Result] = {
-    val loginInfo = LoginInfo(CredentialsProvider.ID, confirmationCode.login)
-
-    action(loginInfo).flatMap { user =>
-
-      val loginConfirmation = confirmationCode.operation == ConfirmationCode.OP_LOGIN
-      confirmationService.consumeByLogin(confirmationCode.login)
-
-      for {
-        authenticator <- silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, user.uuidStr))
-        value <- silh.env.authenticatorService.init(authenticator)
-        result <- silh.env.authenticatorService.embed(value, Ok(Json.obj("token" -> value)))
-        _ <- if (loginConfirmation) {
-          eventBus.publish(WithoutPassConfirmation(user, request, request2lang))
-        } else {
-          eventBus.publish(LoginConfirmation(user, request, request2lang))
-        }
-      } yield {
-        if (loginConfirmation) {
-          log.info(s"User ${confirmationCode.login} confirm auth/registration without password")
-        } else {
-          log.info(s"User ${confirmationCode.login} confirm registration")
-        }
-
-        result
-      }
-    }
-  }
-
-  def resendOtp = Action.async(parse.json(512)) { implicit request =>
-    val login = request.asForm(ConfirmForm.reConfirm).login
-
-    def codeToUser(c: Option[ConfirmationCode]): Future[Option[User]] = c.map(_.operation match {
-      case ConfirmationCode.OP_REGISTER => registration.getUserByLogin(login)
-      case _ => userService.getByAnyIdOpt(login)
-    }).getOrElse(Future.successful(None))
+  def resendOtp = Action.async { implicit request =>
+    val login = request.asForm(ConfirmForm.regenerateCode)
 
     for {
-      codeOpt <- getConfirmCode(login)
-      userOpt <- codeToUser(codeOpt)
-      _       <- if(codeOpt.isEmpty || userOpt.isEmpty) {
-                   log.info(s"OTP for user: $login doesn't exist")
-                   throw AppException(ResponseCode.CONFIRM_CODE_NOT_FOUND, s"OTP for user: $login doesn't exist")
-                 } else { Future.unit }
-      (otp, newCode) = codeOpt.get.regenerate()
-      _ <- eventBus.publish(OtpGeneration(Some(userOpt.get.uuidStr), userOpt.get.email, userOpt.get.phone, otp, request))
-    } yield {
-      confirmationService.create(newCode)
-      log.info(s"Regenerated otp code for user: ${userOpt.get.uuidStr} by login $login")
+      code <- confirmationService.get(login)
+                                 .orFail(AppException(ErrorCodes.CONFIRM_CODE_NOT_FOUND, s"Confirmation code is not found"))
+      user <- userService.getByAnyId(code.userId) 
+      otp = RandomStringGenerator.generateNumericPassword(code.otpLen, code.otpLen)      
+      _ <- confirmationService.create(
+        code.userId,
+        code.ids,
+        code.operation,
+        otp,
+        code.ttl
+      )
+      _ <- eventBus.publish(OtpGenerated(user, code.email, code.phone, otp, request.reqInfo))
+    } yield {      
+      log.info(s"Regenerated otp code for user: ${code.userId} by login $login")
       NoContent
     }
   }
@@ -350,30 +85,8 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
   def logout = silh.SecuredAction.async { implicit request =>
     val result = Redirect(routes.ApplicationController.index()).withNewSession
 
-    eventBus.publish(Logout(request.identity, request.authenticator.id, request, request.authenticator.id)) flatMap { _ =>
-      silh.env.authenticatorService.discard(request.authenticator, result)
-    }
-  }
-
-  def session = Action.async { req =>
-    silh.env.authenticatorService.retrieve(req) flatMap {
-      case Some(auth) =>
-        sessionsService.retrieve(auth.id) map {
-          case Some(session) =>
-
-            log.info(s"Getting session info, session ${auth.id} for ${auth.loginInfo}")
-
-            Ok(Json.obj(
-              "createdAt" -> session.createdAt,
-              "expiredAt" -> session.expiredAt,
-              "onlineTime" -> session.onlineTime
-            ))
-          case None =>
-            log.warn(s"Session info ${auth.id} for ${auth.loginInfo} is not found")
-            throw AppException(ResponseCode.ENTITY_NOT_FOUND, "Session not found")
-        }
-      case None =>
-        throw AppException(ResponseCode.ACCESS_DENIED, "Authorization header not specified")
+    eventBus.publish(Logout(request.identity, request.authenticator.id, request.reqInfo)) flatMap { _ =>
+      Task.fromFuture(ec => silh.env.authenticatorService.discard(request.authenticator, result))
     }
   }
 }

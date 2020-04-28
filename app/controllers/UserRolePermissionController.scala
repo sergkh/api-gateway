@@ -4,30 +4,20 @@ package controllers
 
 import akka.actor.ActorSystem
 import com.google.inject.Inject
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.models.exceptions.AppException
-import com.impactua.bouncer.commons.utils.Logging
-import com.impactua.bouncer.commons.utils.RichRequest._
 import com.mohiva.play.silhouette.api.Silhouette
-import events.EventsStream
+import events._
 import forms.UserPermissionForm._
-import models.AppEvent.{RoleCreated, RoleDeleted, RoleUpdated}
-import models.{JwtEnv, RolePermissions}
+import models.{AppException, ErrorCodes, JwtEnv, RolePermissions}
 import play.api.libs.json.Json
 import security.WithPermission
-import services.{UserService, UsersRolePermissionsService}
+import services.UsersRolesService
+import utils.RichRequest._
+import zio.Task
 
-import scala.concurrent.ExecutionContext.Implicits.global
-
-
-/**
-  * Created by faiaz on 19.10.16.
-  */
-class UserRolePermissionController @Inject()(usersPermissionsService: UsersRolePermissionsService,
-                                             usersService: UserService,
+class UserRolePermissionController @Inject()(usersPermissionsService: UsersRolesService,
                                              eventBus: EventsStream,
                                              silh: Silhouette[JwtEnv])
-                                            (implicit system: ActorSystem) extends BaseController with Logging {
+                                            (implicit system: ActorSystem) extends BaseController {
 
 
   val editPerm = WithPermission("permissions:edit")
@@ -37,30 +27,29 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoleP
     val role = request.asForm(createForm)
 
     usersPermissionsService.get(role.role.toString) flatMap {
-      case Some(job) =>
+      case Some(_) =>
         log.info(s"Permissions for role ${role.role} already exist")
-        throw AppException(ResponseCode.ALREADY_EXISTS, s"Role ${role.role} already exist")
+        Task.fail(AppException(ErrorCodes.ALREADY_EXISTS, s"Role ${role.role} already exist"))
 
       case None =>
         for {
-          userPerm <- usersPermissionsService.save(role)
-          _ <- eventBus.publish(RoleCreated(role))
+          _       <- usersPermissionsService.save(role)
+          _       <- eventBus.publish(RoleCreated(role, request.reqInfo))
         } yield {
-          log.info(s"Created permissions obj $userPerm by ${request.identity.uuid}")
-          Ok(Json.toJson(userPerm))
+          log.info(s"Added new role '$role' by ${request.identity.info}")
+          Ok(Json.toJson(role))
         }
     }
   }
 
   def get(role: String) = silh.SecuredAction(readPerm).async { implicit request =>
-    usersPermissionsService.get(role).map {
+    usersPermissionsService.get(role).flatMap {
       case Some(rolePerm) =>
-        log.info(s"Retrieve permissions for $role requested by ${request.identity.uuid}")
-        Ok(Json.toJson(rolePerm))
-
+        log.info(s"Retrieve permissions for $role requested by ${request.identity.id}")
+        Task.succeed(Ok(Json.toJson(rolePerm)))
       case None =>
         log.info(s"Permissions for $role not found")
-        throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Permissions for $role not found")
+        Task.fail(AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Permissions for $role not found"))
     }
   }
 
@@ -70,29 +59,28 @@ class UserRolePermissionController @Inject()(usersPermissionsService: UsersRoleP
 
     for {
       _ <- usersPermissionsService.update(rolePerms)
-      _ <- eventBus.publish(RoleUpdated(rolePerms))
-      _ <- usersService.clearUserCaches()
+      _ <- eventBus.publish(RoleUpdated(rolePerms, request.reqInfo))
     } yield {
-      log.info(s"Permission for $role was updated by ${request.identity.uuid}")
+      log.info(s"Permission for $role was updated by ${request.identity.id}")
       NoContent.withHeaders("Content-Type" -> "application/json")
     }
   }
 
   def remove(role: String) = silh.SecuredAction(editPerm).async { request =>
-    log.info(s"Removing role $role by ${request.identity.uuid}")
+    log.info(s"Removing role $role by ${request.identity.id}")
 
     usersPermissionsService.remove(role).flatMap {
       case Some(r) =>
-        eventBus.publish(RoleDeleted(r)) map { _ =>
+        eventBus.publish(RoleRemoved(r, request.reqInfo)) map { _ =>
           NoContent.withHeaders("Content-Type" -> "application/json")
         }
       case None =>
-        throw AppException(ResponseCode.ENTITY_NOT_FOUND, s"Permissions for $role not found")
+        Task.fail(throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"Permissions for $role not found"))
     }
   }
 
   def listRoles = silh.SecuredAction(readPerm).async { request =>
-    log.info(s"Obtained list of all roles by ${request.identity.uuid}")
+    log.info(s"Obtained list of all roles by ${request.identity.id}")
     usersPermissionsService.getAvailableRoles.map(lst => Ok(Json.obj("items" -> lst)))
   }
 }

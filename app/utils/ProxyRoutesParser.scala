@@ -44,7 +44,7 @@ object ProxyRoutesParser {
         parts += StaticPart(sb.toString())
       }
     }
-    PathPattern(parts)
+    PathPattern(parts.toSeq)
   }
 
   def toRegex(pathPattern: PathPattern, withSlash: Boolean = true): Regex = {

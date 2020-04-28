@@ -1,10 +1,8 @@
 package utils
 
-import javax.inject.{Inject, Singleton}
-
-import com.impactua.bouncer.commons.models.ResponseCode
-import com.impactua.bouncer.commons.web.ErrorHandler
 import com.mohiva.play.silhouette.api.actions.{SecuredErrorHandler, UnsecuredErrorHandler}
+import javax.inject.{Inject, Singleton}
+import models.ErrorCodes
 import play.api.libs.json._
 import play.api.mvc.Results._
 import play.api.mvc.{RequestHeader, Result}
@@ -38,14 +36,13 @@ with SecuredErrorHandler with UnsecuredErrorHandler {
     * @return The result to send to the client.
     */
   override def onNotAuthorized(implicit request: RequestHeader): Future[Result] = {
-    val timestamp = Platform.currentTime
+    val timestamp = System.currentTimeMillis()
     log.info(s"Not authorized request: ${request.method} ${request.path} $timestamp")
 
-    val denied = ResponseCode.ACCESS_DENIED
+    val denied = ErrorCodes.ACCESS_DENIED
     Future.successful(
       Forbidden(Json.obj(
-        "code" -> denied.id,
-        "error" -> denied.toString,
+        "code" -> denied.toString,
         "message" -> "not authenticated",
         "timestamp" -> timestamp
       ))
@@ -61,14 +58,13 @@ with SecuredErrorHandler with UnsecuredErrorHandler {
     * @return The result to send to the client.
     */
   override def onNotAuthenticated(implicit request: RequestHeader): Future[Result] = {
-    val timestamp = Platform.currentTime
+    val timestamp = System.currentTimeMillis()
     log.info(s"Not authenticated request: ${request.method} ${request.path} $timestamp")
 
-    val denied = ResponseCode.ACCESS_DENIED
+    val denied = ErrorCodes.ACCESS_DENIED
     Future.successful(
       Unauthorized(Json.obj(
-        "code" -> denied.id,
-        "error" -> denied.toString,
+        "code" -> denied.toString,
         "message" -> "not authenticated",
         "timestamp" -> timestamp
       ))

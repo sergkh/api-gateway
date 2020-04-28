@@ -3,7 +3,7 @@ package discovery
 import akka.actor.ActorSystem
 import com.google.inject.{Inject, Singleton}
 import org.slf4j.LoggerFactory
-import events.{AppEvent, ServiceDiscovered, ServiceLost, ServicesListUpdate}
+import events._
 import models.Service
 import play.api.Configuration
 import play.api.http.Status
@@ -96,7 +96,7 @@ class EtcdServicesManager @Inject()(config: Configuration, ws: WSClient, system:
        }.getOrElse(s"$basePath/docs/api.json")
 
        if (basePath.length > http.length && !skip) {
-         Some(Service(name = name, pattern = prefix, secret = secret, basePath = basePath, swaggerUrl = swaggerUrl))
+         Some(Service(name = name, prefix = prefix, secret = secret, basePath = basePath, swaggerUrl = swaggerUrl))
        } else {
          log.debug(s"Skipping service: $name")
          None
@@ -104,9 +104,9 @@ class EtcdServicesManager @Inject()(config: Configuration, ws: WSClient, system:
      }
  }
 
-  def generateEvents(services: Set[Service], oldServices: Set[Service]): Seq[AppEvent] = {
+  def generateEvents(services: Set[Service], oldServices: Set[Service]): Seq[Event] = {
     log.debug(s"Services: $services, old services: $oldServices")
-    val events = Seq[AppEvent](ServicesListUpdate(services.toSeq))
+    val events = Seq[Event](ServicesListUpdate(services.toSeq))
 
     val additions = (services -- oldServices).map(s => ServiceDiscovered(s))
     val deletions = (oldServices -- services).map(s => ServiceLost(s))
@@ -116,12 +116,14 @@ class EtcdServicesManager @Inject()(config: Configuration, ws: WSClient, system:
 
 
   if (etcdEnabled || manualServices.nonEmpty) {
-    system.scheduler.schedule(0 second, etcdFetchTime, () => {
-      log.info("Updating services configuration")
-      if (etcdEnabled) {
-        fetchEtcdConfig()
-      } else {
-        updateManualServices()
+    system.scheduler.schedule(0 second, etcdFetchTime, new Runnable() {
+      def run(): Unit = {
+        log.info("Updating services configuration")
+        if (etcdEnabled) {
+          fetchEtcdConfig()
+        } else {
+          updateManualServices()
+        }
       }
     })
   } else {
