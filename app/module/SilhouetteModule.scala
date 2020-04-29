@@ -81,6 +81,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
     * @return The HTTP layer implementation.
     */
   @Provides
+  @Singleton
   def provideHTTPLayer(client: WSClient): HTTPLayer = new PlayHTTPLayer(client)
 
   /**
@@ -100,6 +101,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
   }
 
   @Provides
+  @Singleton
   def provideKeyManger(conf: Configuration): KeysManager = new KeysManager(conf)
 
   /**
