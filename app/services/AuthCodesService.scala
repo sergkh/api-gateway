@@ -18,9 +18,7 @@ import security.KeysManager
   * Service manages short term Authentication codes in redis.
   */
 @Singleton
-class AuthCodesService @Inject() (conf: Configuration, keys: KeysManager) extends Logging {
-  private[this] final val redis = RedisClient(conf.get[String]("redis.host"))
-
+class AuthCodesService @Inject() (redis: RedisClient, keys: KeysManager) extends Logging {
   private[this] implicit val format = Json.format[AuthCode]
 
   private[this] implicit object BinaryResultConverter extends BinaryConverter[AuthCode] {

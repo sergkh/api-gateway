@@ -17,26 +17,17 @@ import utils.RichRequest._
 import zio._
 
 import scala.language.implicitConversions
+import models.conf.{ConfirmationConfig, RegistrationConfig}
 
 @Singleton
-class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
-                                      userService: UserService,
+class RegistrationController @Inject()(userService: UserService,
                                       confirmations: ConfirmationCodeService,
-                                      config: Configuration,
+                                      config: RegistrationConfig,
+                                      confirmationConf: ConfirmationConfig,
                                       eventBus: EventsStream,
                                       passwordHashers: PasswordHasherRegistry,
                                       registrationFilters: RegistrationFiltersChain)(implicit system: ActorSystem) extends BaseController {
   
-  val otpLength = config.getOptional[Int]("confirmation.otp.length").getOrElse(ConfirmationCodeService.DEFAULT_OTP_LEN)
-  val otpEmailLength = config.getOptional[Int]("confirmation.otp.email-length").getOrElse(otpLength)
-  val otpEmailTTLSeconds = 3 * 24 * 60 * 60 // 3 days, TODO: make a setting
-  val otpPhoneTTLSeconds = 10 * 60
-
-  val requirePass    = config.get[Boolean]("registration.requirePassword")
-  val requireFields  = config.get[String]("registration.requiredFields").split(",").map(_.trim).toList
-
-  log.info(s"Required user identifiers: ${requireFields.mkString(",")}. Password required: $requirePass")
-
   implicit val createUserFormat = Json.reads[UserForm.CreateUser].map { c =>
     import forms.FormConstraints._
     // TODO: use proper form exceptions
@@ -47,7 +38,7 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
    c
   }
     
-  def register = silh.UserAwareAction.async(parse.json) { implicit request =>
+  def register = Action.async(parse.json) { implicit request =>
     for {
       transformedReq  <- registrationFilters(request)
       user            <- userRegistrationRequest(transformedReq)
@@ -67,7 +58,7 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
       flags = data.email.map(_ => User.FLAG_EMAIL_NOT_CONFIRMED).toList ++ data.phone.map(_ => User.FLAG_PHONE_NOT_CONFIRMED).toList
     )
 
-    val errors = User.validateNewUser(user, requireFields, requirePass)
+    val errors = User.validateNewUser(user, config.requiredFields, config.requirePassword)
 
     if (errors.nonEmpty) {
       log.warn(s"Registration fields were required but not set: ${errors.mkString("\n")}")
@@ -91,11 +82,11 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
   private def publishEmailConfirmationCode(user: User, requestInfo: RequestInfo): Task[Unit] = {
     user.email.map { email =>
 
-      val otp = RandomStringGenerator.generateNumericPassword(otpEmailLength, otpEmailLength)
+      val otp = RandomStringGenerator.generateNumericPassword(confirmationConf.email.length, confirmationConf.email.length)
 
       for {
         _ <- confirmations.create(
-          user.id, List(user.id, email), ConfirmationCode.OP_EMAIL_CONFIRM, otp, ttl = otpEmailTTLSeconds
+          user.id, List(user.id, email), ConfirmationCode.OP_EMAIL_CONFIRM, otp, ttl = confirmationConf.email.ttl.toSeconds.toInt
         )
         _ <- eventBus.publish(OtpGenerated(user, email = Some(email), code = otp, request = requestInfo))
       } yield ()
@@ -104,11 +95,11 @@ class RegistrationController @Inject()(silh: Silhouette[JwtEnv],
 
   private def publishPhoneConfirmationCode(user: User, requestInfo: RequestInfo): Task[Unit] = {
     user.phone.map { phone =>
-      val otp = RandomStringGenerator.generateNumericPassword(otpEmailLength, otpEmailLength)
+      val otp = RandomStringGenerator.generateNumericPassword(confirmationConf.phone.length, confirmationConf.phone.length)
 
       for {
         _ <- confirmations.create(
-          user.id, List(user.id, phone), ConfirmationCode.OP_PHONE_CONFIRM, otp, ttl = otpEmailTTLSeconds
+          user.id, List(user.id, phone), ConfirmationCode.OP_PHONE_CONFIRM, otp, ttl = confirmationConf.phone.ttl.toSeconds.toInt
         )
         _ <- eventBus.publish(OtpGenerated(user, phone = Some(phone), code = otp, request = requestInfo))
       } yield ()

@@ -13,23 +13,21 @@ import zio._
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import models.conf.ConfirmationConfig
 
 @Singleton
-class ConfirmationCodeService @Inject()(conf: Configuration, keys: KeysManager, lifecycle: ApplicationLifecycle) extends Logging {
+class ConfirmationCodeService @Inject()(conf: Configuration, 
+                                        keys: KeysManager, 
+                                        redis: RedisClient,
+                                        cfg: ConfirmationConfig) extends Logging {
   import ConfirmationCodeService._
   
   final val SALT_ITERATIONS = 10
 
-  private val redis = RedisClient(conf.get[String]("redis.host"))
-
   private val DefaultTTL = 3.hours.toSeconds.toInt
   private val prefix = "ccds:"
 
-  private val logOtp = conf.getOptional[Boolean]("confirmation.otp.log").getOrElse(false)
-
-  if (logOtp) {
-    log.warn("!WARNING : OTP codes logging is on")
-  }
+  private val logOtp = cfg.log
 
   def create(userId: String, searchIdentifiers: List[String], operation: String, otp: String,  ttl: Int = DefaultTTL): Task[Unit] = {
 
@@ -72,8 +70,6 @@ class ConfirmationCodeService @Inject()(conf: Configuration, keys: KeysManager, 
 
   private def signCode(c: ConfirmationCode): String =
     keys.codesSigner(s"${c.userId}:${c.ids}:${c.operation}:${c.codeHash}:${c.otpLen}:${c.expiresAt}:${c.ttl}")
-
-  lifecycle.addStopHook(() => Future.successful(redis.shutdown()))
 }
 
 object ConfirmationCodeService {

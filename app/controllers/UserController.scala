@@ -28,6 +28,8 @@ import zio._
 
 import scala.concurrent.ExecutionContext
 import utils.RandomStringGenerator
+import models.conf.ConfirmationConfig
+import models.conf.RegistrationConfig
 
 /**
   * Created by yaroslav on 29/11/15.
@@ -35,23 +37,16 @@ import utils.RandomStringGenerator
 @Singleton
 class UserController @Inject()(
                                 silh: Silhouette[JwtEnv],
-                                config: Configuration,
+                                regConfig: RegistrationConfig,
                                 eventBus: EventsStream,
                                 userService: UserService,
                                 passDao: DelegableAuthInfoDAO[PasswordInfo],
                                 passwordHashers: PasswordHasherRegistry,
                                 confirmationService: ConfirmationCodeService,
+                                confirmationConf: ConfirmationConfig,
                                 branches: BranchesService
                               )(implicit exec: ExecutionContext, system: ActorSystem)
   extends BaseController {
-
-  val otpLength = config.getOptional[Int]("confirmation.otp.length").getOrElse(ConfirmationCodeService.DEFAULT_OTP_LEN)
-  val otpEmailLength = config.getOptional[Int]("confirmation.otp.email-length").getOrElse(otpLength)
-  val otpPhoneTTLSeconds = 10 * 60
-  val optEmailTTLSeconds = 3 * 24 * 60 * 60 // 3 days TODO: make a setting
-
-  val requirePass    = config.get[Boolean]("registration.requirePassword")
-  val requireFields  = config.get[String]("registration.requiredFields").split(",").map(_.trim).toList
 
   implicit def listUserWrites = new Writes[Seq[User]] {
     override def writes(o: Seq[User]): JsValue = JsArray(for (obj <- o) yield Json.toJson(obj))
@@ -74,7 +69,7 @@ class UserController @Inject()(
       roles = data.roles.getOrElse(Nil)
     )
 
-    val errors = User.validateNewUser(user, requireFields, requirePass)
+    val errors = User.validateNewUser(user, regConfig.requiredFields, regConfig.requirePassword)
 
     if (errors.nonEmpty) {
       log.warn(s"Registration fields were required but not set: ${errors.mkString("\n")}")
@@ -173,13 +168,13 @@ class UserController @Inject()(
 
     for {
       user   <- userService.getActiveUser(login).orFail(AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User $login not found"))      
-      otp     =  RandomStringGenerator.generateNumericPassword(otpLength, otpLength)
+      otp     =  RandomStringGenerator.generateNumericPassword(confirmationConf.phone.length, confirmationConf.phone.length)
       _      <- confirmationService.create(
                       user.id, 
                       List(user.id) ++ user.email.toList ++ user.phone.toList,
                       ConfirmationCode.OP_PASSWORD_RESET,
                       otp,
-                      otpPhoneTTLSeconds
+                      confirmationConf.phone.ttl.toSeconds.toInt
                     )
       _      <- eventBus.publish(PasswordReset(user, otp, request.reqInfo))
     } yield {
@@ -298,7 +293,7 @@ class UserController @Inject()(
   }
 
   private def validateUpdate(update: User, oldUser: User, editor: User): Task[Unit] = {
-    val errors = User.validateNewUser(update, requireFields, requirePass)
+    val errors = User.validateNewUser(update, regConfig.requiredFields, regConfig.requirePassword)
 
     for {
       _ <- if (errors.nonEmpty) {
@@ -345,10 +340,11 @@ class UserController @Inject()(
     val updatedUser = newUser.withFlags(addFlags:_*)
 
     val phoneUpdate = if (phoneChanged) {
-      val otp = RandomStringGenerator.generateNumericPassword(otpLength, otpLength)
+      val otp = RandomStringGenerator.generateNumericPassword(confirmationConf.phone.length, confirmationConf.phone.length)
+      val ttl = confirmationConf.phone.ttl.toSeconds.toInt
 
             for {
-        _ <- confirmationService.create(oldUser.id, List(oldUser.id, newUser.phone.get), ConfirmationCode.OP_PHONE_CONFIRM, otp, otpPhoneTTLSeconds)
+        _ <- confirmationService.create(oldUser.id, List(oldUser.id, newUser.phone.get), ConfirmationCode.OP_PHONE_CONFIRM, otp, ttl)
         _ <- eventBus.publish(OtpGenerated(newUser, phone = newUser.email, code = otp, request = reqInfo))
         _ <- Task(log.info(s"Sent email confirmation code to ${newUser.id}"))
       } yield ()
@@ -357,10 +353,11 @@ class UserController @Inject()(
     } else Task.unit
 
     val emailUpdate = if (emailChanged) {
-      val otp = RandomStringGenerator.generateNumericPassword(otpEmailLength, otpEmailLength)
+      val otp = RandomStringGenerator.generateNumericPassword(confirmationConf.email.length, confirmationConf.email.length)
+      val ttl = confirmationConf.email.ttl.toSeconds.toInt
 
       for {
-        _ <- confirmationService.create(oldUser.id, List(oldUser.id, newUser.email.get), ConfirmationCode.OP_EMAIL_CONFIRM, otp, optEmailTTLSeconds)
+        _ <- confirmationService.create(oldUser.id, List(oldUser.id, newUser.email.get), ConfirmationCode.OP_EMAIL_CONFIRM, otp, ttl)
         _ <- eventBus.publish(OtpGenerated(newUser, email = newUser.email, code = otp, request = reqInfo))
         _ <- Task(log.info(s"Sent email confirmation code to ${newUser.id}"))
       } yield ()

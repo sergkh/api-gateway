@@ -1,11 +1,12 @@
 package controllers
 
 import models.Service
-import org.scalatest.{Matchers, WordSpec}
+import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.matchers.should.Matchers
 import play.core.routing.{DynamicPart, PathPattern, StaticPart}
 import utils.ProxyRoutesParser._
 
-class ProxyRoutesParserSpec extends WordSpec with Matchers {
+class ProxyRoutesParserSpec extends AnyWordSpec with Matchers {
 
   "Proxy router" should {
 
