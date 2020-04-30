@@ -35,7 +35,7 @@ class KeysManager(conf: Configuration) extends Logging {
   import KeysManager._
 
   if (Security.getProvider("BC") == null) Security.addProvider(new BouncyCastleProvider())
-
+  
   private[this] val authKeys = loadAuthKeys(conf.underlying.as[CryptoConfig]("crypto"), log)
 
   /**
@@ -114,7 +114,11 @@ object KeysManager extends App {
         (RandomStringGenerator.generateId(), cert, privKey)
       }
       
-      val authCodesKey = cryptoConf.authCodes.signKeyAlias.map { alias => keystore.getKey(alias, pass.toCharArray()) } getOrElse {
+      val authCodesKey = cryptoConf.authCodes.signKeyAlias.map { alias => 
+        Option(keystore.getKey(alias, pass.toCharArray())).getOrElse {
+          throw new ConfigException(s"Unable to find key '$alias' in keystore", "crypto.authCodes.signKeyAlias")
+        }
+      } getOrElse {
         log.warn("!WARNING! Codes signature not set using generated one.")
         genAESKey
       }

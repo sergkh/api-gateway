@@ -10,9 +10,12 @@ import utils.TaskExt._
 import zio.kafka.consumer.Offset
 import play.api.Configuration
 import play.api.Logger
+import scala.util.Success
+import scala.util.Failure
+import scala.concurrent.ExecutionContext
 
 @Singleton
-class KafkaEventWriter @Inject() (eventStream: EventsStream, conf: Configuration) {
+class KafkaEventWriter @Inject() (eventStream: EventsStream, conf: Configuration)(implicit ec: ExecutionContext) {
   val log      = Logger(this.getClass.getName)
   val enabled  = conf.get[Boolean]("kafka.enabled")
 
@@ -20,14 +23,14 @@ class KafkaEventWriter @Inject() (eventStream: EventsStream, conf: Configuration
     if (!enabled) {
       log.info("Kafka publisher is disabled")
     } else {
-      val servers = conf.get[String]("kafka.servers").split(",").map(_.trim).filter(_.isEmpty)
+      val servers = conf.get[String]("kafka.servers").split(",").map(_.trim).filter(_.nonEmpty)
       
       log.info(s"Kafka servers: ${servers.mkString(", ")}")
 
       val producerSettings = ProducerSettings(servers.toList)
       val producer = Producer.make(producerSettings, Serde.string, JsonSerde.eventJsonSerializer) ++ Blocking.live
 
-      eventStream.stream.flatMap { stream =>
+      val stream = eventStream.stream.flatMap { stream =>
         stream.mapConcat { evt => 
           eventTopicAndKey(evt).map { case (topic, key) => 
             new ProducerRecord(topic, key, evt)
@@ -35,11 +38,13 @@ class KafkaEventWriter @Inject() (eventStream: EventsStream, conf: Configuration
         }.mapM { record => Producer.produce[Any, String, Event](record) }
         .runDrain
         .provideSomeLayer(producer)
-      }.unsafeRun
-
+      }.forkDaemon
+      
+      zio.Runtime.default.unsafeRunSync(stream)
     }
   }
 
+  // certain events are not published
   def eventTopicAndKey(evt: Event): Option[(String, String)] = Option(evt).collect {
     case u: UserEvent => "users" -> u.user.id
     case r: RoleEvent => "roles" -> r.role.role
