@@ -4,15 +4,14 @@ import javax.inject.Singleton
 import com.google.inject.AbstractModule
 import events.EventsStream
 import net.codingwell.scalaguice.ScalaModule
-import services.{ZioEventPublisher, ServicesManager}
+import services.{ZioEventStream, ServicesManager}
 import com.google.inject.Provides
 import play.api.Configuration
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ArbitraryTypeReader._
 import net.ceedubs.ficus.readers.{EnumerationReader, ValueReader}
-import models.conf.ConfirmationConfig
+import models.conf._
 import com.fotolog.redis.RedisClient
-import models.conf.RegistrationConfig
 import play.api.Logger
 
 /**
@@ -24,7 +23,7 @@ class GeneralModule extends AbstractModule with ScalaModule {
 
   override def configure(): Unit = {
     bind[ServicesManager].asEagerSingleton()
-    bind[EventsStream].to[ZioEventPublisher].asEagerSingleton()
+    bind[EventsStream].to[ZioEventStream].asEagerSingleton()
   }
 
   @Provides
@@ -51,6 +50,10 @@ class GeneralModule extends AbstractModule with ScalaModule {
 
     c
   }
+
+  @Provides
+  @Singleton
+  def cryptoConfig(conf: Configuration): CryptoConfig = conf.underlying.as[CryptoConfig]("crypto")
 
   @Provides
   def redis(conf: Configuration): RedisClient = RedisClient(conf.get[String]("redis.host"))

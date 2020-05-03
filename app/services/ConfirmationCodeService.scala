@@ -14,10 +14,10 @@ import zio._
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import models.conf.ConfirmationConfig
+import zio.duration.Duration.Finite
 
 @Singleton
-class ConfirmationCodeService @Inject()(conf: Configuration, 
-                                        keys: KeysManager, 
+class ConfirmationCodeService @Inject()(keys: KeysManager, 
                                         redis: RedisClient,
                                         cfg: ConfirmationConfig) extends Logging {
   import ConfirmationCodeService._
@@ -29,9 +29,9 @@ class ConfirmationCodeService @Inject()(conf: Configuration,
 
   private val logOtp = cfg.log
 
-  def create(userId: String, searchIdentifiers: List[String], operation: String, otp: String,  ttl: Int = DefaultTTL): Task[Unit] = {
+  def create(userId: String, searchIdentifiers: List[String], operation: String, otp: String, ttl: FiniteDuration): Task[Unit] = {
 
-    val expiresAt = System.currentTimeMillis() + ttl * 1000L
+    val expiresAt = System.currentTimeMillis() + ttl.toMillis
 
     val code = ConfirmationCode(
       userId,
@@ -39,7 +39,7 @@ class ConfirmationCodeService @Inject()(conf: Configuration,
       operation,
       hashOtpCode(otp),
       otp.length(),
-      ttl = ttl,
+      ttl = ttl.toSeconds.toInt,
       expiresAt = expiresAt
     )
 
@@ -51,7 +51,7 @@ class ConfirmationCodeService @Inject()(conf: Configuration,
 
     Task.collectAll(searchIdentifiers.map { id =>
       Task.fromFuture(_ => 
-        redis.setAsync(prefix + id, signedCode, ttl)
+        redis.setAsync(prefix + id, signedCode, ttl.toSeconds.toInt)
       )
     }).map(_ => ())
   }

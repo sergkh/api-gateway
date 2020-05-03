@@ -48,7 +48,7 @@ class ServicesManagerSpec extends TestKit(ActorSystem("ServicesManagerSpec"))
     }
   }
 
-  val bus = new ZioEventPublisher()
+  val bus = new ZioEventStream()
 
   val config = Configuration(ConfigFactory.parseString("""
     swagger {

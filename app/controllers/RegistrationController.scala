@@ -26,7 +26,7 @@ class RegistrationController @Inject()(userService: UserService,
                                       confirmationConf: ConfirmationConfig,
                                       eventBus: EventsStream,
                                       passwordHashers: PasswordHasherRegistry,
-                                      registrationFilters: RegistrationFiltersChain)(implicit system: ActorSystem) extends BaseController {
+                                      registrationFilters: RegistrationFiltersChain) extends BaseController {
   
   implicit val createUserFormat = Json.reads[UserForm.CreateUser].map { c =>
     import forms.FormConstraints._
@@ -86,7 +86,7 @@ class RegistrationController @Inject()(userService: UserService,
 
       for {
         _ <- confirmations.create(
-          user.id, List(user.id, email), ConfirmationCode.OP_EMAIL_CONFIRM, otp, ttl = confirmationConf.email.ttl.toSeconds.toInt
+          user.id, List(user.id, email), ConfirmationCode.OP_EMAIL_CONFIRM, otp, ttl = confirmationConf.email.ttl
         )
         _ <- eventBus.publish(OtpGenerated(user, email = Some(email), code = otp, request = requestInfo))
       } yield ()
@@ -99,7 +99,7 @@ class RegistrationController @Inject()(userService: UserService,
 
       for {
         _ <- confirmations.create(
-          user.id, List(user.id, phone), ConfirmationCode.OP_PHONE_CONFIRM, otp, ttl = confirmationConf.phone.ttl.toSeconds.toInt
+          user.id, List(user.id, phone), ConfirmationCode.OP_PHONE_CONFIRM, otp, ttl = confirmationConf.phone.ttl
         )
         _ <- eventBus.publish(OtpGenerated(user, phone = Some(phone), code = otp, request = requestInfo))
       } yield ()

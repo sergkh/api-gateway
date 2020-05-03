@@ -174,7 +174,7 @@ class UserController @Inject()(
                       List(user.id) ++ user.email.toList ++ user.phone.toList,
                       ConfirmationCode.OP_PASSWORD_RESET,
                       otp,
-                      confirmationConf.phone.ttl.toSeconds.toInt
+                      confirmationConf.phone.ttl
                     )
       _      <- eventBus.publish(PasswordReset(user, otp, request.reqInfo))
     } yield {
@@ -341,7 +341,7 @@ class UserController @Inject()(
 
     val phoneUpdate = if (phoneChanged) {
       val otp = RandomStringGenerator.generateNumericPassword(confirmationConf.phone.length, confirmationConf.phone.length)
-      val ttl = confirmationConf.phone.ttl.toSeconds.toInt
+      val ttl = confirmationConf.phone.ttl
 
             for {
         _ <- confirmationService.create(oldUser.id, List(oldUser.id, newUser.phone.get), ConfirmationCode.OP_PHONE_CONFIRM, otp, ttl)
@@ -354,7 +354,7 @@ class UserController @Inject()(
 
     val emailUpdate = if (emailChanged) {
       val otp = RandomStringGenerator.generateNumericPassword(confirmationConf.email.length, confirmationConf.email.length)
-      val ttl = confirmationConf.email.ttl.toSeconds.toInt
+      val ttl = confirmationConf.email.ttl
 
       for {
         _ <- confirmationService.create(oldUser.id, List(oldUser.id, newUser.email.get), ConfirmationCode.OP_EMAIL_CONFIRM, otp, ttl)

@@ -54,7 +54,7 @@ libraryDependencies ++= Seq(
   "net.codingwell"    %% "scala-guice"                      % guiceVersion,
   "org.webjars"       % "swagger-ui"                        % "3.25.0",
   "org.scala-lang"    %  "scala-reflect"                    % "2.12.11",
- //TODO: "io.kamon"          %% "kamon-bundle"                     % "2.0.6",
+  "io.kamon"          %% "kamon-bundle"                     % "2.0.6",
   "com.mohiva"        %% "play-silhouette-testkit"          % silhouetteVersion  % Test,
   "org.scalatest"     %% "scalatest"                        % "3.1.1"  % Test,
   "org.mockito"       %  "mockito-core"                     % "3.3.3"  % Test,

@@ -17,6 +17,7 @@ import utils.RandomStringGenerator
 import utils.RichRequest._
 import utils.TaskExt._
 import zio._
+import scala.concurrent.duration._
 
 import scala.language.implicitConversions
 
@@ -68,7 +69,7 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
         code.ids,
         code.operation,
         otp,
-        code.ttl
+        code.ttl.seconds
       )
       _ <- eventBus.publish(OtpGenerated(user, code.email, code.phone, otp, request.reqInfo))
     } yield {      
