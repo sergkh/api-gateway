@@ -24,7 +24,8 @@ object UserForm {
       "password" -> optional(password),
       "flags" -> optional(list(role)),
       "roles" -> optional(list(role)),
-      "branch" -> optional(text(Branch.BranchIdSize, Branch.BranchIdSize))
+      "branch" -> optional(text(Branch.BranchIdSize, Branch.BranchIdSize)),
+      "extra" -> optional(fieldMap(extraField))
     )(CreateUser.apply)(CreateUser.unapply)
   )
 
@@ -37,6 +38,7 @@ object UserForm {
       "flags" -> default(list(role), Nil),
       "roles" -> default(list(role), Nil),
       "branch" -> optional(text(Branch.BranchIdSize, Branch.BranchIdSize)),
+      "extra" -> optional(fieldMap(extraField)),
       "version" -> default(number(min = 0), 0)
     )(UpdateUser.apply)(UpdateUser.unapply)
   )
@@ -50,7 +52,8 @@ object UserForm {
                         password: Option[String],
                         flags: Option[List[String]],
                         roles: Option[List[String]],
-                        branch: Option[String])
+                        branch: Option[String],
+                        extra: Option[Map[String, String]])
 
   case class UpdatePass(password: Option[String], newPassword: String, login: Option[String] = None)
 
@@ -61,6 +64,7 @@ object UserForm {
                         flags: List[String],
                         roles: List[String],
                         branch: Option[String],
+                        extra: Option[Map[String, String]],
                         version: Int) {
 
     def update(origin: User): User = {
@@ -72,6 +76,7 @@ object UserForm {
         flags = flags,
         roles = roles,
         hierarchy = if (origin.branch == branch) origin.hierarchy else branch.toList,
+        extra = origin.extra ++ extra.getOrElse(Map.empty),
         version = version
       )
     }

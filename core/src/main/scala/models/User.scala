@@ -18,6 +18,7 @@ case class User(email: Option[String] = None,
                 firstName: Option[String] = None,
                 lastName: Option[String] = None,
                 permissions: Option[List[String]] = None,
+                extra: Map[String, String] = Map.empty,
                 @BsonProperty("_id") id: String = RandomStringGenerator.generateId(),
                 version: Int = 0) extends Identity {
 
@@ -105,6 +106,7 @@ object User {
       "hierarchy" -> Option(u.hierarchy).filterNot(_.isEmpty),
       "firstName" -> u.firstName,
       "lastName" -> u.lastName,
+      "extra" -> Option(u.extra).filterNot(_.isEmpty),
       "version" -> u.version
     ).filterNull
   }
@@ -120,6 +122,7 @@ object User {
       "rol" -> Option(u.roles).filterNot(_.isEmpty),
       "prm" -> Option(u.permissions).filterNot(_.isEmpty),
       "hrc" -> Option(u.hierarchy).filterNot(_.isEmpty),
+      "extra" -> u.extra
     ).filterNull
   }
 

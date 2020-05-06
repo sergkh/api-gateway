@@ -73,6 +73,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
     bind[DelegableAuthInfoDAO[OAuth1Info]].to[SocialOAuth1Dao]
     bind[DelegableAuthInfoDAO[OAuth2Info]].to[SocialOAuth2Dao]
     bind[SessionsService].to[MongoSessionsService]
+    bind[ClientAuthenticator].to[ClientAppsService]
   }
 
   /**

@@ -77,17 +77,4 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
       NoContent
     }
   }
-
-  /**
-    * Handles the Sign Out action.
-    *
-    * @return The result to display.
-    */
-  def logout = silh.SecuredAction.async { implicit request =>
-    val result = Redirect(routes.ApplicationController.index()).withNewSession
-
-    eventBus.publish(Logout(request.identity, request.authenticator.id, request.reqInfo)) flatMap { _ =>
-      Task.fromFuture(ec => silh.env.authenticatorService.discard(request.authenticator, result))
-    }
-  }
 }

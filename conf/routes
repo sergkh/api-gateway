@@ -17,7 +17,7 @@ GET           /                                                   @controllers.A
 #   401:
 #     description: User unauthorized
 ###
-POST          /logout                                             @controllers.ApplicationController.logout
+POST          /logout                                             @controllers.AuthController.logout
 
 ###
 # summary: Register a new user

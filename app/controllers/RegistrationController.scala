@@ -11,7 +11,7 @@ import play.api.Configuration
 import play.api.data.validation.Valid
 import play.api.libs.json.Json
 import play.api.mvc.RequestHeader
-import services.{ConfirmationCodeService, RegistrationFiltersChain, UserService}
+import services.{ConfirmationCodeService, RegistrationFiltersChain, UserService, ClientAuthenticator}
 import utils.RandomStringGenerator
 import utils.RichRequest._
 import zio._
@@ -21,33 +21,34 @@ import models.conf.{ConfirmationConfig, RegistrationConfig}
 
 @Singleton
 class RegistrationController @Inject()(userService: UserService,
+                                      clientAuth: ClientAuthenticator,
                                       confirmations: ConfirmationCodeService,
                                       config: RegistrationConfig,
                                       confirmationConf: ConfirmationConfig,
                                       eventBus: EventsStream,
                                       passwordHashers: PasswordHasherRegistry,
                                       registrationFilters: RegistrationFiltersChain) extends BaseController {
-  
-  implicit val createUserFormat = Json.reads[UserForm.CreateUser].map { c =>
-    import forms.FormConstraints._
-    // TODO: use proper form exceptions
-    require(c.email.forall(email => emailAddress.apply(email) == Valid), "Email format is invalid")
-    require(c.phone.forall(phone => phoneNumber(phone) == Valid), "Phone format is invalid")  
-    require(c.password.forall(pass => passwordConstraint(pass) == Valid), "Password format is invalid")
 
-   c
-  }
-    
-  def register = Action.async(parse.json) { implicit request =>
+  def register = Action.async(parse.json(1024)) { implicit request =>
+
+    val clientCreds = request.basicAuth.map(Task.succeed(_)).getOrElse {
+      log.warn(s"No client authentication provided. Request: ${request.reqInfo}")
+      Task.fail(AppException(ErrorCodes.AUTHORIZATION_FAILED, "Client authorization required"))
+    }
+
     for {
+      creds           <- clientCreds
+      _               <- clientAuth.authenticateClientOrFail(creds._1, creds._2)
       transformedReq  <- registrationFilters(request)
-      user            <- userRegistrationRequest(transformedReq)
+      user            <- userRegistrationRequest(transformedReq, creds._1)
       _               <- eventBus.publish(Signup(user, request.reqInfo))
     } yield Ok(Json.toJson(user))
   }
 
-  private def userRegistrationRequest(req: RequestHeader): Task[User] = {
+  private def userRegistrationRequest(req: RequestHeader, clientId: String): Task[User] = {
     val data = req.asForm(UserForm.createUser)
+
+    log.info(s"Registration data: ${data.copy(password = data.password.map(_ => "***"))} from $clientId")
 
     val user = User(
       email = data.email,
@@ -55,7 +56,8 @@ class RegistrationController @Inject()(userService: UserService,
       firstName = data.firstName.filter(_.isEmpty),
       lastName = data.lastName.filter(_.isEmpty),
       password = data.password.map(passwordHashers.current.hash),
-      flags = data.email.map(_ => User.FLAG_EMAIL_NOT_CONFIRMED).toList ++ data.phone.map(_ => User.FLAG_PHONE_NOT_CONFIRMED).toList
+      flags = data.email.map(_ => User.FLAG_EMAIL_NOT_CONFIRMED).toList ++ data.phone.map(_ => User.FLAG_PHONE_NOT_CONFIRMED).toList,
+      extra = data.extra.getOrElse(Map.empty)
     )
 
     val errors = User.validateNewUser(user, config.requiredFields, config.requirePassword)
@@ -66,6 +68,7 @@ class RegistrationController @Inject()(userService: UserService,
     } else {
 
       for {
+
         emailExists     <- data.email.map(email => userService.exists(email)).getOrElse(Task.succeed(false))
         phoneExists     <- data.phone.map(phone => userService.exists(phone)).getOrElse(Task.succeed(false))
         _               <- if (emailExists || phoneExists) Task.fail(AppException(ErrorCodes.ALREADY_EXISTS, "Email or phone already exists")) else Task.unit

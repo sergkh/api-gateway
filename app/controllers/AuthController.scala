@@ -27,6 +27,7 @@ import zio._
 
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
+import events.Logout
 
 
 /**
@@ -79,6 +80,14 @@ class AuthController @Inject()(
           log.warn(s"Cannot authenticate with unknown social provider $provider")
           error(authReq, "invalid_request", s"Unsupported authentication provider $provider")
       }
+    }
+  }
+
+  def logout = silh.SecuredAction.async { implicit request =>
+    val result = Redirect(routes.ApplicationController.index()).withNewSession
+
+    eventBus.publish(Logout(request.identity, request.authenticator.id, request.reqInfo)) flatMap { _ =>
+      Task.fromFuture(ec => silh.env.authenticatorService.discard(request.authenticator, result))
     }
   }
 
