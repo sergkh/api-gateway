@@ -19,8 +19,12 @@ class ClientAppsService @Inject()(userService: UserService,
                                   mongoApi: MongoApi,
                                   refreshTokens: TokensService,
                                   config: Configuration)(implicit exec: ExecutionContext, system: ActorSystem)
-  extends Logging {
+  extends ClientAuthenticator with Logging {
+
   val col = mongoApi.collection[ClientApp](ClientApp.COLLECTION_NAME)
+
+  def authenticateClient(clientId: String, clientSecret: String): Task[Boolean] =
+    getApp(clientId).map(_.secret == clientSecret)
 
   def createApp(app: ClientApp): Task[ClientApp] = col.insertOne(app).toUnitTask.map(_ => app)
 

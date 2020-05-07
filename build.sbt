@@ -3,9 +3,12 @@ import sbt.Keys._
 
 name := """api-gateway"""
 
+ThisBuild / scalaVersion := "2.13.2"
+ThisBuild / crossScalaVersions := Seq("2.13.2")
+
 lazy val commonSettings = Seq(
   version := (version in ThisBuild).value,
-  scalaVersion := "2.13.1"
+  scalaVersion := "2.13.2"
 )
 
 lazy val `core` = (project in file("core")).settings(commonSettings: _*)
@@ -52,15 +55,15 @@ libraryDependencies ++= Seq(
   "org.gnieh"         %% "diffson-play-json"                % "4.0.2",
   "com.impactua"      %% "redis-scala"                      % redisVersion,
   "net.codingwell"    %% "scala-guice"                      % guiceVersion,
-  "org.webjars"       % "swagger-ui"                        % "3.25.0",
-  "org.scala-lang"    %  "scala-reflect"                    % "2.12.11",
- //TODO: "io.kamon"          %% "kamon-bundle"                     % "2.0.6",
+  "org.webjars"       % "swagger-ui"                        % "3.25.1",
+  "org.scala-lang"    %  "scala-reflect"                    % "2.13.2",
+  "io.kamon"          %% "kamon-bundle"                     % "2.1.0",
   "com.mohiva"        %% "play-silhouette-testkit"          % silhouetteVersion  % Test,
   "org.scalatest"     %% "scalatest"                        % "3.1.1"  % Test,
   "org.mockito"       %  "mockito-core"                     % "3.3.3"  % Test,
-  "org.mockito"        %% "mockito-scala"                   % "1.13.9" % Test,
+  "org.mockito"        %% "mockito-scala"                   % "1.14.0" % Test,
   "com.typesafe.akka" %% "akka-testkit"                     % "2.6.3"  % Test,
-  "org.scalatestplus.play"   %% "scalatestplus-play"        % "5.0.0"  % Test,
+  "org.scalatestplus.play"   %% "scalatestplus-play"        % "5.1.0"  % Test,
   "de.leanovate.play-mockws" %% "play-mockws"               % "2.8.0"  % Test,
   "de.flapdoodle.embed"       % "de.flapdoodle.embed.mongo" % "2.2.0" % Test
 )

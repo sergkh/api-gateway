@@ -17,7 +17,7 @@ class EventsStreamSpec extends AsyncWordSpec with Matchers {
   "A events service" should {
 
     "return an event added after subscription" in {
-      val eventsService = new ZioEventPublisher        
+      val eventsService = new ZioEventStream        
       val promise = scala.concurrent.Promise[Event]()
       eventsService.subscribe { evt => UIO(promise.success(evt))}.unsafeRun
       eventsService.publish(event).unsafeRun
@@ -25,7 +25,7 @@ class EventsStreamSpec extends AsyncWordSpec with Matchers {
     }
 
     "broadcast events" in {
-      val eventsService = new ZioEventPublisher        
+      val eventsService = new ZioEventStream        
       val promise = scala.concurrent.Promise[Event]()
       val promise2 = scala.concurrent.Promise[Event]()
 

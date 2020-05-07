@@ -29,14 +29,15 @@ import net.ceedubs.ficus.readers.ArbitraryTypeReader._
 import com.typesafe.config.Config
 import models.ConfigException
 import play.api.Logger
+import models.conf.CryptoConfig
 
 @Singleton
-class KeysManager(conf: Configuration) extends Logging {
+class KeysManager(conf: CryptoConfig) extends Logging {
   import KeysManager._
 
   if (Security.getProvider("BC") == null) Security.addProvider(new BouncyCastleProvider())
   
-  private[this] val authKeys = loadAuthKeys(conf.underlying.as[CryptoConfig]("crypto"), log)
+  private[this] val authKeys = loadAuthKeys(conf, log)
 
   /**
     * @return map of certificates and their key ID's used to verify the 
@@ -64,15 +65,7 @@ class KeysManager(conf: Configuration) extends Logging {
   }
 }
 
-object KeysManager extends App {
-  case class KeystoreConfig(file: Option[String], password: Option[String], passwordFile: Option[String]) {
-    def pass: Option[String] = password orElse passwordFile
-  }
-
-  case class AccessTokenConfig(signKeyId: Option[String], signKeyAlias: Option[String], deprecatedKeyAliases: Option[String])
-  case class AuthCodesConfig(signKeyAlias: Option[String])
-
-  case class CryptoConfig(keystore: KeystoreConfig, accessToken: AccessTokenConfig, authCodes: AuthCodesConfig)
+object KeysManager {
 
   case class AuthKeys(
     keyId: String,

@@ -17,3 +17,5 @@ addSbtPlugin("com.github.gseitz" % "sbt-release" % "1.0.9")
 addSbtPlugin("com.eed3si9n" % "sbt-buildinfo" % "0.9.0")
 
 addSbtPlugin("io.kamon" % "sbt-kanela-runner-play-2.7" % "2.0.3")
+
+addSbtPlugin("com.codecommit" % "sbt-github-actions" % "0.6.2")

@@ -57,6 +57,7 @@ object FormConstraints extends Constraints {
   val description = text(3, 2048).verifying(textConstraint)
   val phone = text(10, 13).verifying(phoneNumber)
   val url = text(11, 256)
+  val extraField = text(3, 200).verifying(textConstraint)
 
   def or[T](constraints: Constraint[T]*): Constraint[T] = Constraint("constraint.or") { field: T =>
       val validationResults = constraints.map(_.apply(field))
@@ -67,6 +68,44 @@ object FormConstraints extends Constraints {
   }
 
 
+  /**
+    * Binds fields to a arbitrary map using `fieldMapping` for each field parsing.
+    * Field mapping will parse only one field at a time.
+    *
+    * @param fieldMapping
+    * @return
+    */
+  def fieldMap[F](fieldMapping: Mapping[F]): Mapping[Map[String, F]] = {
+
+    def merge2(
+      a: Either[Seq[FormError], Map[String, F]], 
+      b: Either[Seq[FormError], Map[String, F]]
+    ): Either[Seq[FormError], Map[String, F]] = (a, b) match {
+      case (Left(errorsA), Left(errorsB)) => Left(errorsA ++ errorsB)
+      case (Left(errorsA), Right(_))      => Left(errorsA)
+      case (Right(_), Left(errorsB))      => Left(errorsB)
+      case (Right(a), Right(b))           => Right(a ++ b)
+    }
+
+    def merge(results: List[Either[Seq[FormError], Map[String, F]]]): Either[Seq[FormError], Map[String, F]] =
+      results.fold(Right(Map.empty[String, F])) { (s, i) => merge2(s, i) }
+
+    val formatter = new Formatter[Map[String, F]] {
+      def bind(key: String, data: Map[String, String]) = {
+        merge(
+          data.filter { case (k, v) => k.startsWith(key) }.toList.map {
+            case (k, v) => 
+            val subKey = if (key.nonEmpty) k.substring(key.length + 1) else k
+            fieldMapping.bind(Map("" -> v)).map(parsed => Map(subKey -> parsed))
+          }
+        )
+      }
+
+      def unbind(key: String, m: Map[String, F]) = m.view.mapValues(v => fieldMapping.unbind(v)("")).toMap
+    }
+
+    Forms.of(formatter)
+  }
   
 
   /**

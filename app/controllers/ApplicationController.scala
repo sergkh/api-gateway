@@ -17,6 +17,7 @@ import utils.RandomStringGenerator
 import utils.RichRequest._
 import utils.TaskExt._
 import zio._
+import scala.concurrent.duration._
 
 import scala.language.implicitConversions
 
@@ -68,25 +69,12 @@ class ApplicationController @Inject()(silh: Silhouette[JwtEnv],
         code.ids,
         code.operation,
         otp,
-        code.ttl
+        code.ttl.seconds
       )
       _ <- eventBus.publish(OtpGenerated(user, code.email, code.phone, otp, request.reqInfo))
     } yield {      
       log.info(s"Regenerated otp code for user: ${code.userId} by login $login")
       NoContent
-    }
-  }
-
-  /**
-    * Handles the Sign Out action.
-    *
-    * @return The result to display.
-    */
-  def logout = silh.SecuredAction.async { implicit request =>
-    val result = Redirect(routes.ApplicationController.index()).withNewSession
-
-    eventBus.publish(Logout(request.identity, request.authenticator.id, request.reqInfo)) flatMap { _ =>
-      Task.fromFuture(ec => silh.env.authenticatorService.discard(request.authenticator, result))
     }
   }
 }

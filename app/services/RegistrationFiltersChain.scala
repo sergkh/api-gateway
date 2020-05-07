@@ -8,10 +8,10 @@ import java.util.{Set => JSet}
 import org.slf4j.LoggerFactory
 import play.api.mvc.RequestHeader
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 @Singleton
-class RegistrationFiltersChain @Inject() (filtersSet: JSet[RegistrationFilter], config: Configuration) {
+class RegistrationFiltersChain @Inject() (filtersSet: JSet[RegistrationFilter]) {
 
   val log = LoggerFactory.getLogger(getClass)
 

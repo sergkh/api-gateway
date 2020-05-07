@@ -42,6 +42,7 @@ import utils.ServerErrorHandler
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
+import models.conf.CryptoConfig
 
 /**
   * The Guice module which wires all Silhouette dependencies.
@@ -72,6 +73,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
     bind[DelegableAuthInfoDAO[OAuth1Info]].to[SocialOAuth1Dao]
     bind[DelegableAuthInfoDAO[OAuth2Info]].to[SocialOAuth2Dao]
     bind[SessionsService].to[MongoSessionsService]
+    bind[ClientAuthenticator].to[ClientAppsService]
   }
 
   /**
@@ -102,7 +104,7 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
 
   @Provides
   @Singleton
-  def provideKeyManger(conf: Configuration): KeysManager = new KeysManager(conf)
+  def provideKeyManger(conf: CryptoConfig): KeysManager = new KeysManager(conf)
 
   /**
     * Provides the social provider registry.
