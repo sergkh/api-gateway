@@ -22,7 +22,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        scala: [2.12.10]
+        scala: [2.13.2]
         java: [adopt@1.8]
     runs-on: ${{ matrix.os }}
     steps:
@@ -116,7 +116,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        scala: [2.12.10]
+        scala: [2.13.2]
         java: [adopt@1.8]
     runs-on: ${{ matrix.os }}
     steps:
@@ -167,28 +167,28 @@ jobs:
           path: ~/.sbt
           key: ${{ runner.os }}-sbt-cache-${{ hashFiles('**/*.sbt') }}-${{ hashFiles('project/build.properties') }}
 
-      - name: Download target directory 'target' (2.12.10)
+      - name: Download target directory 'target' (2.13.2)
         uses: actions/download-artifact@v1
         with:
-          name: target-${{ matrix.os }}-2.12.10-${{ matrix.java }}-target
+          name: target-${{ matrix.os }}-2.13.2-${{ matrix.java }}-target
           path: target
 
-      - name: Download target directory 'modules/kafka/target' (2.12.10)
+      - name: Download target directory 'modules/kafka/target' (2.13.2)
         uses: actions/download-artifact@v1
         with:
-          name: target-${{ matrix.os }}-2.12.10-${{ matrix.java }}-modules_kafka_target
+          name: target-${{ matrix.os }}-2.13.2-${{ matrix.java }}-modules_kafka_target
           path: modules/kafka/target
 
-      - name: Download target directory 'modules/etcd-discovery/target' (2.12.10)
+      - name: Download target directory 'modules/etcd-discovery/target' (2.13.2)
         uses: actions/download-artifact@v1
         with:
-          name: target-${{ matrix.os }}-2.12.10-${{ matrix.java }}-modules_etcd-discovery_target
+          name: target-${{ matrix.os }}-2.13.2-${{ matrix.java }}-modules_etcd-discovery_target
           path: modules/etcd-discovery/target
 
-      - name: Download target directory 'core/target' (2.12.10)
+      - name: Download target directory 'core/target' (2.13.2)
         uses: actions/download-artifact@v1
         with:
-          name: target-${{ matrix.os }}-2.12.10-${{ matrix.java }}-core_target
+          name: target-${{ matrix.os }}-2.13.2-${{ matrix.java }}-core_target
           path: core/target
 
       - name: Download target directory 'project/target'
