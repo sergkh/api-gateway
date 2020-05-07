@@ -3,6 +3,8 @@ import sbt.Keys._
 
 name := """api-gateway"""
 
+crossScalaVersions := Seq("2.13.2")
+
 lazy val commonSettings = Seq(
   version := (version in ThisBuild).value,
   scalaVersion := "2.13.2"
