@@ -36,10 +36,10 @@ class RegistrationControllerSpec extends AsyncWordSpec with Matchers with Result
   val testClientAuth = "Authorization" -> "Basic dGVzdDp0ZXN0Cg=="
 
   def controller(
-    userService: UserService = userServiceMock, 
-        conf: RegistrationConfig = RegistrationConfig(),
-        events: EventsStream = new ZioEventStream(),
-        clientAuth: ClientAuthenticator = anyClientAuth): RegistrationController = {
+      userService: UserService = userServiceMock, 
+      conf: RegistrationConfig = RegistrationConfig(),
+      events: EventsStream = new ZioEventStream(),
+      clientAuth: ClientAuthenticator = anyClientAuth): RegistrationController = {
 
     val c = new RegistrationController(
       userService, 
@@ -117,6 +117,17 @@ class RegistrationControllerSpec extends AsyncWordSpec with Matchers with Result
       recoverToSucceededIf[AppException] {
         result map { r => fail("Should fail") }
       }      
+    }
+
+    "forbid unsafe characters in fields" in {
+      val userService = mock[UserService]
+      
+      val request = Json.parse("""{"email":"user@mail.com", "password":"B^w3Ger#gYt4y1F6", "extra": {"field":"${hello}"}}""")
+      val result = controller().register()(FakeRequest("POST", "/register").withHeaders(testClientAuth).withBody(request))
+      
+      recoverToSucceededIf[FormValidationException[_]] {
+        result map { r => fail("Should fail") }
+      }
     }
 
     "allow user to register" in {

@@ -10,6 +10,7 @@ import play.api.http.HeaderNames
 import play.api.mvc.{Request, RequestHeader}
 
 import scala.util.Try
+import zio.Task
 
 /**
  * Util object containing predefined common server responses and response builders.
@@ -29,7 +30,15 @@ object RichRequest {
         error => throw FormValidationException(error),
         data => data
       )
-      case _ => throw new RuntimeException("Unsupported request header type for form extracting")
+      case _ => throw new Exception("Unsupported request header type for form extracting")
+    }
+
+    def asFormIO[T](form: Form[T]): Task[T] = r match {
+      case req: Request[_] => form.bindFromRequest()(req).fold(
+        error => Task.fail(FormValidationException(error)),
+        data => Task.succeed(data)
+      )
+      case _ => Task.fail(new Exception("Unsupported request header type for form extracting"))
     }
 
     /**

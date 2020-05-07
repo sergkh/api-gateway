@@ -22,4 +22,5 @@ object TestEnv {
   val anyClientAuth = new ClientAuthenticator() {
     def authenticateClient(clientId: String, clientSecret: String): Task[Boolean] = Task.succeed(true)
   }
+
 }
