@@ -21,3 +21,6 @@ dist
 /registration/target/
 pc.stdout.log
 /kamon/target/
+.metals/
+.bloop/
+project/metals.sbt
