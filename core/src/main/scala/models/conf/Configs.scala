@@ -20,7 +20,7 @@ object ConfirmationConfig {
 
 
 case class CryptoConfig(
-  keystore: CryptoConfig.KeystoreConfig = CryptoConfig.KeystoreConfig(), 
+  keystore: CryptoConfig.KeystoreConfig = CryptoConfig.KeystoreConfig(),
   accessToken: CryptoConfig.AccessTokenConfig = CryptoConfig.AccessTokenConfig(),
   authCodes: CryptoConfig.AuthCodesConfig = CryptoConfig.AuthCodesConfig()
 )
@@ -31,10 +31,19 @@ object CryptoConfig {
   }
 
   case class AccessTokenConfig(
-    signKeyId: Option[String] = None, 
-    signKeyAlias: Option[String] = None, 
+    signKeyAlias: Option[String] = None,
     deprecatedKeyAliases: Option[String] = None
-  )
+  ) {
+    /** Map of Key IDs to alias in keystore for deprecated key aliases */
+    def deprecatedKeyAliasesList: List[String] = deprecatedKeyAliases
+      .map(_.split(",").toList.map(_.trim)).getOrElse(Nil)
+  }
   
   case class AuthCodesConfig(signKeyAlias: Option[String] = None)
 }
+
+case class AuthConfig(
+  implicitFlowEnabled: Boolean = true,
+  refreshTokenTTL: FiniteDuration = 365 days,
+  authCodeTTL: FiniteDuration = 10 minutes
+)

@@ -2,11 +2,11 @@ package services
 
 import zio._
 import security.KeysManager
-import models.conf.CryptoConfig
+import models._
 import com.fotolog.redis.RedisClient
 import com.mohiva.play.silhouette.password.BCryptPasswordHasher
 import com.mohiva.play.silhouette.api.util.PasswordHasherRegistry
-import models.conf.ConfirmationConfig
+import models.conf.{ConfirmationConfig, CryptoConfig}
 import services.ClientAuthenticator
 
 object TestEnv {
@@ -22,5 +22,4 @@ object TestEnv {
   val anyClientAuth = new ClientAuthenticator() {
     def authenticateClient(clientId: String, clientSecret: String): Task[Boolean] = Task.succeed(true)
   }
-
 }

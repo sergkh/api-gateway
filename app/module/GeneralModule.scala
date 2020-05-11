@@ -56,5 +56,9 @@ class GeneralModule extends AbstractModule with ScalaModule {
   def cryptoConfig(conf: Configuration): CryptoConfig = conf.underlying.as[CryptoConfig]("crypto")
 
   @Provides
+  @Singleton
+  def authConfig(conf: Configuration): AuthConfig = conf.underlying.as[AuthConfig]("auth")
+
+  @Provides
   def redis(conf: Configuration): RedisClient = RedisClient(conf.get[String]("redis.host"))
 }

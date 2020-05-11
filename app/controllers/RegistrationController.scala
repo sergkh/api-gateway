@@ -39,7 +39,7 @@ class RegistrationController @Inject()(userService: UserService,
 
     for {
       creds           <- clientCreds
-      _               <- clientAuth.authenticateClientOrFail(creds._1, creds._2)
+      _               <- clientAuth.authenticateClientOrFail(creds)
       transformedReq  <- registrationFilters(request)
       user            <- userRegistrationRequest(transformedReq, creds._1)
     } yield Ok(Json.toJson(user))

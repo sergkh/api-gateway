@@ -28,6 +28,7 @@ import zio._
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
 import events.Logout
+import models.conf.AuthConfig
 
 
 /**
@@ -39,7 +40,7 @@ import events.Logout
   */
 class AuthController @Inject()(
                                       silh: Silhouette[JwtEnv],
-                                      conf: Configuration,
+                                      conf: AuthConfig,
                                       userService: UserService,
                                       oauth: ClientAppsService,
                                       tokens: TokensService,
@@ -48,9 +49,6 @@ class AuthController @Inject()(
                                       eventBus: EventsStream,
                                       socialProviderRegistry: SocialProviderRegistry)(implicit ec: ExecutionContext)
   extends BaseController with I18nSupport {
-
-  val AuthCodeTTL = conf.get[FiniteDuration]("oauth.authCodeTTL")
-  val ImplicitFlowEnabled = conf.get[Boolean]("oauth.implicitFlow")
 
   /**
     * Authenticates a user using a social provider.
@@ -62,7 +60,7 @@ class AuthController @Inject()(
     // store original requests between redirects
     val authReq = AuthorizeUsingProvider.fromFlash(request.flash).getOrElse(request.asForm(OAuthForm.authorize))
 
-    if (!ImplicitFlowEnabled && authReq.implicitFlow) {
+    if (!conf.implicitFlowEnabled && authReq.implicitFlow) {
       error(authReq, "unauthorized_client", "Implicit flow in not allowed")
     } else {
       log.info(s"Starting auth using $provider, req: $authReq, query = ${request.queryString}")
@@ -169,7 +167,7 @@ class AuthController @Inject()(
   private def respondWithCode(profile: CommonSocialProfile, user: User, authInfo: AuthInfo, authReq: AuthorizeUsingProvider)
                                     (implicit request: RequestHeader): Task[Result] = {
     
-    val expTime = LocalDateTime.now().plusNanos(AuthCodeTTL.toNanos)
+    val expTime = LocalDateTime.now().plusNanos(conf.authCodeTTL.toNanos)
     authCodes.create(user.id, authReq.scope, expTime, authReq.clientId) map { code =>
       log.info(s"User $user auth code created")
 
