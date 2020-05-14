@@ -14,16 +14,18 @@ import utils.TaskExt._
 import scala.concurrent.ExecutionContext
 import scala.util.Failure
 
+trait InitializationService
+
 /**
   * Service that provisions database on the first start.
   */
-class InitializationService @Inject()(config: Configuration,
+class DefaultInitializationService @Inject()(config: Configuration,
                                       rolesService: UsersRolesService,
                                       userService: UserService,
                                       clientAppsService: ClientAppsService,
                                       branchesService: MongoBranchesService,
                                       mongoApi: MongoApi,
-                                      passwordHasher: PasswordHasherRegistry)(implicit ec: ExecutionContext) {
+                                      passwordHasher: PasswordHasherRegistry)(implicit ec: ExecutionContext) extends InitializationService {
   val log = Logger(getClass.getName)
 
   val AdminRole = "ADMIN"

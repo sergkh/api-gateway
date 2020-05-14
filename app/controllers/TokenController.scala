@@ -48,9 +48,9 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
 
   implicit val jsonConverter = OWrites[JSONObject] { o => Json.parse(JSONObject.toJSONString(o)).as[JsObject] }
 
-  // see: https://tools.ietf.org/html/rfc7517
+  /** Returns list of public keys used to verify JWT tokens */ 
   def authCerts = Action { _ =>
-
+    // see: https://tools.ietf.org/html/rfc7517
     val keys = keyManager.jwkAuthKeys.map(_.toJSONObject)
     Ok(Json.obj("keys" -> keys))
   }
@@ -61,8 +61,6 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
    * brute force attacks.
    */
   def getAccessToken = Action.async { implicit request =>
-    val grantType = request.asForm(OAuthForm.grantType)
-
     val clientCreds = request.basicAuth.map(Task.succeed(_)).getOrElse {
       log.warn(s"No client authentication provided. Request: ${request.reqInfo}")
       Task.fail(AppException(ErrorCodes.AUTHORIZATION_FAILED, "Client authorization required"))
@@ -70,15 +68,16 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
     
     val res = for {
       creds           <- clientCreds
+      grantType       <- request.asFormIO(OAuthForm.grantType)      
       _               <- clientAuth.authenticateClientOrFail(creds)
       clientId        = creds._1
       _               <- Task(log.info(s"Requesting access token for ${clientId}"))
       auth            <- grantType match {
-        case "refresh_token" =>
+        case OAuthForm.GrantType.RefreshToken =>
           authorizeByRefreshToken(clientId, request.asForm(OAuthForm.getAccessTokenFromRefreshToken))
-        case "password" =>
+        case OAuthForm.GrantType.Password =>
           authorizeByPassword(clientId, request.asForm(OAuthForm.getAccessTokenByPass))
-        case "authorization_code" =>
+        case OAuthForm.GrantType.AuthCode =>
           authorizeByAuthorizationCode(clientId, request.asForm(OAuthForm.getAccessTokenFromAuthCode))
       }
       authenticator   <- Task.fromFuture(_ => silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, auth.user.id)))

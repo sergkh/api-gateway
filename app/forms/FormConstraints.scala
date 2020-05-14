@@ -121,7 +121,7 @@ object FormConstraints extends Constraints {
   def enum[E <: Enumeration](enum: E, lowercase: Boolean = false): Mapping[E#Value] = {
     def enumFormat[E <: Enumeration](enum: E, lowercase: Boolean = false): Formatter[E#Value] = new Formatter[E#Value] {
       def bind(key: String, data: Map[String, String]) = {
-        play.api.data.format.Formats.stringFormat.bind(key, data).right.flatMap { s =>
+        play.api.data.format.Formats.stringFormat.bind(key, data).flatMap { s =>
           scala.util.control.Exception.allCatch[E#Value]
             .either(enum.values.find(_.toString.equalsIgnoreCase(s)).getOrElse(
               throw new NoSuchElementException(s"No value found for '$s'"))

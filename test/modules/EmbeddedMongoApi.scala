@@ -10,7 +10,6 @@ import de.flapdoodle.embed.process.config.io.ProcessOutput
 import de.flapdoodle.embed.process.runtime.Network
 import javax.inject.Singleton
 import models.{JwtEnv, MongoFormats}
-import modules.TestSilhouette.{bind, env}
 import net.codingwell.scalaguice.ScalaModule
 import org.mongodb.scala.{MongoClient, MongoDatabase}
 import services.MongoApi
@@ -51,7 +50,7 @@ class EmbeddedMongoApi extends MongoApi {
   sealed case class MongodProps(mongodProcess: MongodProcess, mongodExe: MongodExecutable)
 }
 
-object EmbeddedMongoModule extends ScalaModule {
+object EmbeddedMongoModule extends ScalaModule {  
   override def configure(): Unit = {
     bind[MongoApi].to[EmbeddedMongoApi]
   }
