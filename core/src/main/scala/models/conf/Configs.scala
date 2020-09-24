@@ -2,6 +2,7 @@ package models.conf
 
 import scala.concurrent.duration._
 import scala.io.Source
+import models.conf.CryptoConfig.AccessTokenConfig
 
 case class RegistrationConfig(
   requirePassword: Boolean = true,
@@ -45,5 +46,6 @@ object CryptoConfig {
 case class AuthConfig(
   implicitFlowEnabled: Boolean = true,
   refreshTokenTTL: FiniteDuration = 365 days,
-  authCodeTTL: FiniteDuration = 10 minutes
+  authCodeTTL: FiniteDuration = 10 minutes,
+  accesssTokenFields: List[String] = Nil
 )

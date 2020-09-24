@@ -59,6 +59,10 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
    * Requires client authorization, using basic auth.
    * Since this client authentication method involves a password, the authorization server MUST protect any endpoint utilizing it against
    * brute force attacks.
+   * TODO: 
+   *  * Optionally support Client JWT authentication: https://tools.ietf.org/html/rfc7523
+   *  * Compare token with spec: https://tools.ietf.org/html/rfc7521
+   *  * Check with spec: https://tools.ietf.org/html/rfc6749
    */
   def getAccessToken = Action.async { implicit request =>
     val clientCreds = request.basicAuth.map(Task.succeed(_)).getOrElse {
@@ -81,7 +85,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
           authorizeByAuthorizationCode(clientId, request.asForm(OAuthForm.getAccessTokenFromAuthCode))
       }
       authenticator   <- Task.fromFuture(_ => silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, auth.user.id)))
-      tokenWithUser   = authenticator.withUserInfo(auth.user, auth.scope)
+      tokenWithUser   = authenticator.withUserInfo(auth.user, auth.scope, copyFields = conf.accesssTokenFields)
       token           <- Task.fromFuture(_ => silh.env.authenticatorService.init(tokenWithUser))
       _               <- eventBus.publish(Login(auth.user, authenticator.id, authenticator.expirationDateTime.getMillis, request.reqInfo))
     } yield {

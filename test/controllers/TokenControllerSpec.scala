@@ -16,17 +16,22 @@ import play.api.mvc.Results
 import play.api.test.FakeRequest
 import play.api.test.Helpers._
 import services.TestEnv
+import org.scalatestplus.play.guice.GuiceOneAppPerSuite
+import play.api.Application
 
 
-class TokenControllerSpec extends AnyWordSpec
+class TokenControllerSpec extends AnyWordSpec with GuiceOneAppPerSuite
                           with Matchers with Results with MockitoSugar with ArgumentMatchersSugar {
 
-  val app = new GuiceApplicationBuilder()
+  override def fakeApplication(): Application = {
+    new GuiceApplicationBuilder()
+   .configure("play.cache.createBoundCaches" -> false)
    .overrides(EmbeddedMongoModule)
    .overrides(TestInitializationModule)
    .disable[InitializationModule]
    .in(Mode.Test)
    .build()
+  }
 
   "A token controller" should {
     "return current auth certificates" in {
@@ -34,7 +39,8 @@ class TokenControllerSpec extends AnyWordSpec
 
       status(certsResponse) shouldBe OK
       val json = contentAsJson(certsResponse)
-      val keys = (json \ "keys").as[List[JsObject]]
+      println("Keys response: " + json)
+      val keys = (json \ "keys").as[List[JsObject]]      
       keys shouldNot be (empty)
       keys.foreach { k =>
         (k \ "kty").asOpt[String] shouldBe defined
@@ -87,10 +93,32 @@ class TokenControllerSpec extends AnyWordSpec
       val jwtJson = parseAndValidateJwtToken(token, contentAsString(certsResponse))
 
       (jwtJson \ "id").as[String] shouldEqual "user"
-      (jwtJson \ "iss").as[String] shouldEqual "bnc"
+      (jwtJson \ "iss").as[String] shouldEqual "https://localhost/"
       (jwtJson \ "exp").asOpt[Long] shouldBe defined
+    }
 
-      println(s"JWT: ${jwtJson}")
+    "create access token and refresh for a username/password requested in JSON" in {
+      val req = FakeRequest(routes.TokenController.getAccessToken())
+        .withHeaders(TestEnv.TestClientAuth)
+        .withJsonBody(Json.obj(
+          "grant_type" -> "password",
+          "username" -> "user@mail.test",
+          "password" -> "user-password",
+          "scope" -> "profile email offline_access"
+        ))
+
+      val Some(tokenResponse) = route(app, req)
+      status(tokenResponse) shouldBe OK
+      val json = contentAsJson(tokenResponse)    
+      (json \ "token_type").as[String] shouldEqual "Bearer"
+      (json \ "expires_in").as[Int] should be > 60
+      (json \ "refresh_token").asOpt[String] shouldBe defined
+      (json \ "scope").asOpt[String] shouldEqual Some("profile email offline_access")
+
+      val token = (json \ "access_token").as[String]      
+      val Some(certsResponse) = route(app, FakeRequest(routes.TokenController.authCerts()))
+      val jwtJson = parseAndValidateJwtToken(token, contentAsString(certsResponse))
+      (jwtJson \ "scope").asOpt[String] shouldEqual Some("profile email offline_access")
     }
 
     def parseAndValidateJwtToken(token: String, keyset: String): JsObject = {

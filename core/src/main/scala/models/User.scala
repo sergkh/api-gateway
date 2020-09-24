@@ -60,7 +60,7 @@ case class User(email: Option[String] = None,
 
 object User {
   /** Internal scopes that are required for tokens, but not stored as user permissions */
-  val SelfManagePermissions = List("user:update", "offline_access")
+  val SelfManagePermissions = List("user:update", "offline_access", "profile", "email")
 
   implicit val oAuth1InfoFmt = Json.format[OAuth1Info]
   implicit val oAuth2InfoFmt = Json.format[OAuth2Info]

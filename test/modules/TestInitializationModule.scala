@@ -11,6 +11,7 @@ import services._
 import utils.TaskExt._
 import models.ClientApp
 import utils.Logging
+import zio.Task
 
 
 object TestInitializationModule extends ScalaModule {
@@ -43,7 +44,11 @@ class TestInitializationService @Inject() (users: UserService,
     ))
     } yield ()
 
-    task.unsafeRun
+    users.exists("admin@mail.test").flatMap( exists =>
+      if (exists) Task.unit else task
+    ).unsafeRun
+
+    
 
     log.info("DB initialized")
 }

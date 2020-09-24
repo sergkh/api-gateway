@@ -15,7 +15,7 @@ import org.mongodb.scala.{MongoClient, MongoDatabase}
 import services.MongoApi
 
 @Singleton
-class EmbeddedMongoApi extends MongoApi {
+object EmbeddedMongoApi extends MongoApi {
   final val port = 47836
 
   private val runtimeConfig = new RuntimeConfigBuilder()
@@ -52,6 +52,6 @@ class EmbeddedMongoApi extends MongoApi {
 
 object EmbeddedMongoModule extends ScalaModule {  
   override def configure(): Unit = {
-    bind[MongoApi].to[EmbeddedMongoApi]
+    bind[MongoApi].toInstance(EmbeddedMongoApi)
   }
 }

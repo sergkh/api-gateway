@@ -212,7 +212,9 @@ class UserService @Inject()(
 
   private def loadPermissions(roles: List[String]): Task[List[String]] = Task.fromFuture(ec => rolesCache.getOrElseUpdate(roles.mkString(",")) {
     rolesService.get(roles).map(_.flatMap(_.permissions).distinct).toUnsafeFuture
-  })
+  }).catchSome {
+    case e: Exception => rolesService.get(roles).map(_.flatMap(_.permissions).distinct)
+  }
 
   private def createUserFromSocialProfile(providerKey: String, profile: CommonSocialProfile, authInfo: => AuthInfo): Task[User] = {
 
