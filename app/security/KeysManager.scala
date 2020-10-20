@@ -46,7 +46,7 @@ object KeysManager {
     jwk: JWK,
     keyPair: KeyPair, // Should correspond the current JWK
     codesSignKey: Key,
-    deprecatedJWK: List[(JWK, PublicKey)] = Nil
+    deprecatedJWK: List[(JWK, PublicKey)] = Nil // Old Keys that can be only used for old tokens verification 
   ) {
     val currentPrivKey: (String, PrivateKey) = jwk.getKeyID -> keyPair.getPrivate
 
