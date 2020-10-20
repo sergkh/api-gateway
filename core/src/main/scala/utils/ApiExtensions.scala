@@ -64,7 +64,7 @@ object JwtExtension {
           phone = (json \ "phone_number").asOpt[String],
           roles = (json \ "roles").asOpt[List[String]].getOrElse(Nil),
           flags = (json \ "flags").asOpt[List[String]].getOrElse(Nil),
-          permissions = (json \ "permissions").asOpt[List[String]]
+          permissions = (json \ "scope").asOpt[String].map(_.split(" ").toList)
         )
       }.toOption
     }
@@ -75,7 +75,7 @@ object JwtExtension {
     private def userTokenData(u: User, scope: Option[String], flds: List[String]): JsObject = Json.obj(
       "roles" -> Option(u.roles).filter(r => r.nonEmpty && flds.contains("roles")),
       "flags" -> Option(u.flags).filter(r => r.nonEmpty && flds.contains("flags")),
-      "permissions" -> Option(scope.fold(u.permissions.getOrElse(Nil))(_.split(" ").toList)).filter(p => p.nonEmpty && flds.contains("permissions")),
+      "scope" -> Option(scope.fold(u.permissions.getOrElse(Nil))(_.split(" ").toList).mkString(" ")).filter(p => p.nonEmpty && flds.contains("scope")),
       "email" -> u.email.filter(_ => flds.contains("email")),
       "email_verified" -> Option(!u.hasFlag(User.FLAG_EMAIL_NOT_CONFIRMED)).filter(_ => flds.contains("email")),
       "phone_number" -> u.phone.filter(_ => flds.contains("phone_number")),

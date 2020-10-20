@@ -18,7 +18,7 @@ class UsersRolesService @Inject()(mongoApi: MongoApi) extends Logging {
     col.find(equal("_id", role.toUpperCase)).first.toOptionTask
 
   def get(roles: List[String]): Task[List[RolePermissions]] =
-    col.find(in("_id", roles.map(_.toUpperCase))).toTask.map(_.toList)
+    col.find(in("_id", roles.map(_.toUpperCase):_*)).toTask.map(_.toList)
 
   def update(role: RolePermissions): Task[Unit] =
     col.updateOne(equal("_id", role.role.toUpperCase), Updates.set("permissions", role.permissions)).toUnitTask

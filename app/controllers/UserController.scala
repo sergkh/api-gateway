@@ -56,7 +56,7 @@ class UserController @Inject()(
   val adminEditPerm = WithPermission("users:edit")
   val blockPerm     = WithPermission("users:block")
 
-  def add = silh.SecuredAction(adminReadPerm).async { request =>
+  def add = silh.SecuredAction(adminEditPerm).async { request =>
     for {
       data            <- request.asFormIO(UserForm.createUser)
       user            <- RegistrationController.userFromForm(data, passwordHashers, regConfig)

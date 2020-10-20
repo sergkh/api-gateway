@@ -21,6 +21,9 @@ import utils.RichJson._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.{implicitConversions, postfixOps}
 import scala.util.{Failure, Success, Try}
+import play.api.mvc.Result
+import com.mohiva.play.silhouette.api.services.AuthenticatorResult
+import com.mohiva.play.silhouette.api.exceptions.AuthenticatorUpdateException
 
 /**
   * @author Yaroslav Derman
@@ -70,6 +73,26 @@ class CustomJWTAuthenticator(settings: JWTAuthenticatorSettings,
     }
   }
 
+  /**
+   * Updates the authenticator and embeds a new token in the result.
+   *
+   * To prevent the creation of a new token on every request, disable the idle timeout setting and this
+   * method will not be executed.
+   *
+   * @param authenticator The authenticator to update.
+   * @param result        The result to manipulate.
+   * @param request       The request header.
+   * @return The original or a manipulated result.
+   */
+  override def update(authenticator: JWTAuthenticator, result: Result)(implicit request: RequestHeader): Future[AuthenticatorResult] = {
+
+    repository.fold(Future.successful(authenticator))(_.update(authenticator)).map { a =>
+      AuthenticatorResult(result.withHeaders(settings.fieldName -> serializeJwt(a, authenticatorEncoder, settings)))
+    }.recover {
+      case e => throw new AuthenticatorUpdateException(AuthenticatorService.UpdateError.format(ID, authenticator), e)
+    }
+  }
+  
   /**
     * Retrieves the authenticator for defined token.
     *
@@ -144,7 +167,7 @@ class CustomJWTAuthenticator(settings: JWTAuthenticatorSettings,
       val subject = authenticatorEncoder.decode(claim.subject.getOrElse{throw new RuntimeException("Subject is not present")})
 
       val loginInfo = Json.parse(subject).as[LoginInfo]
-      
+
       JWTAuthenticator(
         id = claim.jwtId.getOrElse(throw new RuntimeException("ID is not present")),
         loginInfo = loginInfo,

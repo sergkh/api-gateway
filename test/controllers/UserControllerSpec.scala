@@ -38,7 +38,8 @@ class UserControllerSpec extends AnyWordSpec with GuiceOneAppPerSuite
         .withJsonBody(Json.obj(
           "grant_type" -> "password",
           "username" -> "admin@mail.test",
-          "password" -> "admin-password"
+          "password" -> "admin-password",
+          "scope" -> "users:edit"
         ))
 
       val Some(tokenResponse) = route(app, req)
@@ -55,6 +56,7 @@ class UserControllerSpec extends AnyWordSpec with GuiceOneAppPerSuite
       ))
 
       val Some(redirectResp) = route(app, req)
+      println(contentAsString(redirectResp))
       status(redirectResp) shouldEqual OK
     }
 

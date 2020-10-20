@@ -12,6 +12,8 @@ import utils.TaskExt._
 import models.ClientApp
 import utils.Logging
 import zio.Task
+import play.api.Configuration
+import models.RolePermissions
 
 
 object TestInitializationModule extends ScalaModule {
@@ -20,17 +22,23 @@ object TestInitializationModule extends ScalaModule {
   }
 }
 
-class TestInitializationService @Inject() (users: UserService, 
-                                clients: ClientAppsService,
-                                passRegistry: PasswordHasherRegistry) extends InitializationService with Logging {
+class TestInitializationService @Inject() (
+  config: Configuration,
+  users: UserService,
+  rolesService: UsersRolesService,
+  clients: ClientAppsService,
+  passRegistry: PasswordHasherRegistry) extends InitializationService with Logging {
 
-  log.info("Starting DB initialization")
+  val AdminRole = "ADMIN"
+
+  log.info(s"Starting DB initialization")
 
   val task = for {
+    _ <- rolesService.save(RolePermissions(AdminRole, config.get[Seq[String]]("app.defaultAdminPermissions").toList))
     _ <- users.save(new User(
         email = Some("admin@mail.test"),
         password = Some(passRegistry.current.hash("admin-password")),
-        permissions = Some(List("user:write", "user:read")),
+        roles = List(AdminRole),
         id = "admin"
       ))
     _ <- users.save(new User(
@@ -45,10 +53,8 @@ class TestInitializationService @Inject() (users: UserService,
     } yield ()
 
     users.exists("admin@mail.test").flatMap( exists =>
-      if (exists) Task.unit else task
+      if (exists) Task(log.info("Skipping users creation")) else task
     ).unsafeRun
-
-    
 
     log.info("DB initialized")
 }

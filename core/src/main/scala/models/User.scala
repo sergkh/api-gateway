@@ -54,7 +54,7 @@ case class User(email: Option[String] = None,
   def info: String = s"id:$id${email.map(e => ",email=" + e).getOrElse("")}"
 
   override def toString =
-    s"u:$id;e:${email.getOrElse("")};p:${phone.getOrElse("")};n:$fullName;fl:${flags.mkString(",")};br:${hierarchy.mkString(",")}"
+    s"u:$id;e:${email.getOrElse("")};p:${phone.getOrElse("")};n:$fullName;r:${roles.mkString(",")};fl:${flags.mkString(",")};br:${hierarchy.mkString(",")}"
 
 }
 
@@ -71,9 +71,7 @@ object User {
   val FLAG_BLOCKED = "blocked"
   val FLAG_2FACTOR = "2factor"
 
-  def checkAnyId(anyId: String): Boolean = checkUuid(anyId) || checkEmail(anyId) || checkPhone(anyId)
-
-  def checkUuid(id: String): Boolean = isNumberString(id) && id.length == 16
+  def checkAnyId(anyId: String): Boolean = checkEmail(anyId) || checkPhone(anyId)
 
   def checkPhone(id: String): Boolean = isValidPhone(id)
 
