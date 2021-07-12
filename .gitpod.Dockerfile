@@ -1,7 +1,7 @@
 FROM gitpod/workspace-full
                     
 USER gitpod
-RUN brew install scala coursier/formulas/coursier sbt scalaenv
+RUN brew install scala sbt scalaenv
 
 RUN sudo env "PATH=$PATH" coursier bootstrap org.scalameta:scalafmt-cli_2.12:2.4.2 \
   -r sonatype:snapshots \
