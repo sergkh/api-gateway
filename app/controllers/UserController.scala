@@ -80,7 +80,7 @@ class UserController @Inject()(
 
   def get(id: String) = silh.SecuredAction(adminReadPerm || WithUser(id)).async { request =>
     userService.getRequestedUser(id, request.identity).map { user =>
-      log.info(s"Obtained user $user")
+      log.info(s"Obtained user $user by ${request.identity.id}")
       Ok(Json.toJson(user))
     }
   }

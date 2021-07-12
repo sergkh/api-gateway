@@ -32,33 +32,72 @@ class UserControllerSpec extends AnyWordSpec with GuiceOneAppPerSuite
 
   "An user controller" should {
 
-    lazy val adminToken = {
-      val req = FakeRequest(routes.TokenController.getAccessToken())
-        .withHeaders(TestEnv.TestClientAuth)
-        .withJsonBody(Json.obj(
-          "grant_type" -> "password",
-          "username" -> "admin@mail.test",
-          "password" -> "admin-password",
-          "scope" -> "users:edit"
-        ))
+    lazy val adminToken = login("admin@mail.test", "admin-password", "users:edit users:read")    
 
-      val Some(tokenResponse) = route(app, req)
-      (contentAsJson(tokenResponse) \ "access_token").as[String]  
-    }
-
-    "create user by admin" in {
+    "create a user by admin" in {
       val req = FakeRequest(routes.UserController.add)
-      .withHeaders("Authorization" -> s"Bearer $adminToken")
+      .withHeaders(auth(adminToken))
       .withJsonBody(Json.obj(
         "email" -> "test-user@mail.com",
         "password" -> "B^w3Ger#gYt4y1F6",
         "extra" -> Json.obj("test" -> "data")
       ))
 
-      val Some(redirectResp) = route(app, req)
-      println(contentAsString(redirectResp))
-      status(redirectResp) shouldEqual OK
+      val Some(resp) = route(app, req)
+      status(resp) shouldEqual OK
+      val user = contentAsJson(resp)
+      (user \ "id").asOpt[String] shouldBe defined
+      (user \ "password").asOpt[String] shouldBe empty
+      (user \ "email").asOpt[String] shouldEqual Some("test-user@mail.com")
+      (user \ "flags").asOpt[List[String]] shouldEqual Some(List("unconfirmed_email"))
+      (user \ "extra" \ "test").asOpt[String] shouldEqual Some("data")
+      (user \ "version").asOpt[Int] shouldEqual Some(0)
+
+      // Should fail to login without confirmed email
+      assertThrows[AppException] {
+        login("test-user@mail.com", "B^w3Ger#gYt4y1F6", "email")
+      }
+    }
+
+    "not allow retrieving user without permission" in {
+      val getReq = FakeRequest(routes.UserController.get("test-user@mail.com"))
+        .withHeaders(auth(login("admin@mail.test", "admin-password", "users:edit")))
+      val Some(getResp) = route(app, getReq)
+      status(getResp) shouldEqual Forbidden
+    }
+
+    "allow admin to retrieve and update user" in {
+      val getReq = FakeRequest(routes.UserController.get("test-user@mail.com")).withHeaders(auth(adminToken))
+      val Some(getResp) = route(app, getReq)
+      status(getResp) shouldEqual OK
+      val user = contentAsJson(getResp)
+
+
+
+      // val req = FakeRequest(routes.UserController.add)
+      // .withHeaders(auth(adminToken))
+      // .withJsonBody(Json.obj(
+      //   "email" -> "test-user@mail.com",
+      //   "password" -> "B^w3Ger#gYt4y1F6",
+      //   "extra" -> Json.obj("test" -> "data")
+      // ))
     }
 
   }
+
+  private def login(username: String, password: String, scope: String): String = {
+    val req = FakeRequest(routes.TokenController.getAccessToken())
+        .withHeaders(TestEnv.TestClientAuth)
+        .withJsonBody(Json.obj(
+          "grant_type" -> "password",
+          "username" -> username,
+          "password" -> password,
+          "scope" -> scope
+        ))
+
+      val Some(tokenResponse) = route(app, req)
+      (contentAsJson(tokenResponse) \ "access_token").as[String] 
+  }
+
+  def auth(token: String): (String, String) =  "Authorization" -> s"Bearer $token"
 }
