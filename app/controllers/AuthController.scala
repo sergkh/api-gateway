@@ -28,6 +28,7 @@ import zio._
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{ExecutionContext, Future}
 import events.Logout
+import models.conf.AuthConfig
 
 
 /**
@@ -38,19 +39,16 @@ import events.Logout
   * @param socialProviderRegistry The social provider registry.
   */
 class AuthController @Inject()(
-                                      silh: Silhouette[JwtEnv],
-                                      conf: Configuration,
-                                      userService: UserService,
-                                      oauth: ClientAppsService,
-                                      tokens: TokensService,
-                                      authCodes: AuthCodesService,
-                                      authInfoRepository: AuthInfoRepository,
-                                      eventBus: EventsStream,
-                                      socialProviderRegistry: SocialProviderRegistry)(implicit ec: ExecutionContext)
+  silh: Silhouette[JwtEnv],
+  conf: AuthConfig,
+  userService: UserService,
+  oauth: ClientAppsService,
+  tokens: TokensService,
+  authCodes: AuthCodesService,
+  authInfoRepository: AuthInfoRepository,
+  eventBus: EventsStream,
+  socialProviderRegistry: SocialProviderRegistry)(implicit ec: ExecutionContext)
   extends BaseController with I18nSupport {
-
-  val AuthCodeTTL = conf.get[FiniteDuration]("oauth.authCodeTTL")
-  val ImplicitFlowEnabled = conf.get[Boolean]("oauth.implicitFlow")
 
   /**
     * Authenticates a user using a social provider.
@@ -59,42 +57,44 @@ class AuthController @Inject()(
     * @return The result to display.
     */
   def authenticate(provider: String) = silh.UserAwareAction.async { implicit request =>
-    // store original requests between redirects
-    val authReq = AuthorizeUsingProvider.fromFlash(request.flash).getOrElse(request.asForm(OAuthForm.authorize))
+    for {
+                  // store original requests between redirects
+      authReq <- Task(AuthorizeUsingProvider.fromFlash(request.flash).getOrElse(request.asForm(OAuthForm.authorize)))
+      res     <- if (!conf.implicitFlowEnabled && authReq.implicitFlow) {
+                error(authReq, "unauthorized_client", "Implicit flow in not allowed")
+              } else {
+                log.info(s"Starting auth using $provider, req: $authReq, query = ${request.queryString}")
+                // TODO: validate scopes and audience
 
-    if (!ImplicitFlowEnabled && authReq.implicitFlow) {
-      error(authReq, "unauthorized_client", "Implicit flow in not allowed")
-    } else {
-      log.info(s"Starting auth using $provider, req: $authReq, query = ${request.queryString}")
-      // TODO: validate scopes and audience
-
-      socialProviderRegistry.get[SocialProvider](provider) match {
-        case Some(p: SocialProvider with CommonSocialProfileBuilder) =>
-          socialAuth(provider, authReq, p).recoverWith {
-            // transform errors into redirects
-            case AppException(ErrorCodes.ACCESS_DENIED, msg) => error(authReq, "access_denied", msg)
-            case AppException(ErrorCodes.AUTHORIZATION_FAILED, msg) => error(authReq, "access_denied", msg)
-            case appException: AppException => error(authReq, "server_error", appException.message)
-          }
-        case _ =>
-          log.warn(s"Cannot authenticate with unknown social provider $provider")
-          error(authReq, "invalid_request", s"Unsupported authentication provider $provider")
-      }
-    }
+                socialProviderRegistry.get[SocialProvider](provider) match {
+                  case Some(p: SocialProvider with CommonSocialProfileBuilder) =>
+                    socialAuth(provider, authReq, p).catchSome {
+                      // transform errors into redirects
+                      case AppException(ErrorCodes.ACCESS_DENIED, msg) => error(authReq, "access_denied", msg)
+                      case AppException(ErrorCodes.AUTHORIZATION_FAILED, msg) => error(authReq, "access_denied", msg)
+                      case appException: AppException => error(authReq, "server_error", appException.message)
+                    }
+                  case _ =>
+                    log.warn(s"Cannot authenticate with unknown social provider $provider")
+                    error(authReq, "invalid_request", s"Unsupported authentication provider $provider")
+                }
+              }
+    } yield res
   }
 
   def logout = silh.SecuredAction.async { implicit request =>
     val result = Redirect(routes.ApplicationController.index()).withNewSession
 
     eventBus.publish(Logout(request.identity, request.authenticator.id, request.reqInfo)) flatMap { _ =>
-      Task.fromFuture(ec => silh.env.authenticatorService.discard(request.authenticator, result))
+      Task.fromFuture(_ => silh.env.authenticatorService.discard(request.authenticator, result))
     }
   }
 
   private def socialAuth(providerName: String,
                          authReq: AuthorizeUsingProvider,
-                         p: SocialProvider with CommonSocialProfileBuilder)(implicit request: UserAwareRequest[JwtEnv, AnyContent]) = {
-    Task.fromFuture(_ => p.authenticate()) flatMap {
+                         p: SocialProvider with CommonSocialProfileBuilder)
+                         (implicit request: UserAwareRequest[JwtEnv, AnyContent]): Task[Result] = {
+    Task.fromFuture(_ => p.authenticate()).flatMap {
       case Left(result) =>
         log.info(s"Social auth redirect: $result")
         Task.succeed(result.flashing(authReq.flash))
@@ -112,10 +112,10 @@ class AuthController @Inject()(
               respondWithAccessToken(profile, user, authInfo, authReq)
           }
         } yield result
-    } recover {
+    }.catchSome {
       case ex: ProviderException =>
         log.warn(s"Oauth provider $providerName exception: ${ex.getMessage}", ex.getCause)
-        throw AppException(ErrorCodes.ACCESS_DENIED, "Invalid credentials")
+        Task.fail(AppException(ErrorCodes.ACCESS_DENIED, "Invalid credentials"))
     }
   }
 
@@ -136,7 +136,7 @@ class AuthController @Inject()(
     for {
       _                 <- Task.fromFuture(_ => authInfoRepository.save(profile.loginInfo, authInfo))
       authenticator     <- Task.fromFuture(_ => silh.env.authenticatorService.create(profile.loginInfo))
-      userAuthenticator  = authenticator.withUserInfo(user, authReq.scope, authReq.audience)
+      userAuthenticator  = authenticator.withUserInfo(user, authReq.scope, authReq.audience, conf.accesssTokenFields)
       token             <- Task.fromFuture(_ => silh.env.authenticatorService.init(userAuthenticator))
       _                 <- eventBus.publish(Login(user, authenticator.id, authenticator.expirationDateTime.getMillis, request.reqInfo))
     } yield {
@@ -169,7 +169,7 @@ class AuthController @Inject()(
   private def respondWithCode(profile: CommonSocialProfile, user: User, authInfo: AuthInfo, authReq: AuthorizeUsingProvider)
                                     (implicit request: RequestHeader): Task[Result] = {
     
-    val expTime = LocalDateTime.now().plusNanos(AuthCodeTTL.toNanos)
+    val expTime = LocalDateTime.now().plusNanos(conf.authCodeTTL.toNanos)
     authCodes.create(user.id, authReq.scope, expTime, authReq.clientId) map { code =>
       log.info(s"User $user auth code created")
 
@@ -202,13 +202,13 @@ class AuthController @Inject()(
    * * server_error
    * * temporarily_unavailable
    */
-  private def error(authReq: AuthorizeUsingProvider, code: String, msg: String): Future[Result] = {
+  private def error(authReq: AuthorizeUsingProvider, code: String, msg: String): Task[Result] = {
     authReq.redirectUri.map { uri =>
       val query = ("error" -> code) +: ("description" -> msg) +: uri.query()
       val queryWithState = authReq.state.map(s => ("state" -> s) +: query).getOrElse(query)
-      Future.successful(Redirect(uri.withQuery(queryWithState).toString))
+      Task.succeed(Redirect(uri.withQuery(queryWithState).toString))
     } getOrElse {
-      Future.failed(AppException(code, msg))
+      Task.fail(AppException(code, msg))
     }
   }
 

@@ -1,19 +1,21 @@
+package modules
 
-import javax.inject.{Inject, Singleton}
+
+import com.mohiva.play.silhouette.api.{Environment, Silhouette, SilhouetteProvider}
+import de.flapdoodle.embed.mongo.config.{MongodConfigBuilder, Net, RuntimeConfigBuilder}
 import de.flapdoodle.embed.mongo.distribution.Version
-import de.flapdoodle.embed.mongo.{Command, MongodProcess, MongodExecutable, MongodStarter}
-import de.flapdoodle.embed.mongo.config.{Net, MongodConfigBuilder}
-import de.flapdoodle.embed.process.runtime.Network
+import de.flapdoodle.embed.mongo.{Command, MongodExecutable, MongodProcess, MongodStarter}
 import de.flapdoodle.embed.process.config.IRuntimeConfig
 import de.flapdoodle.embed.process.config.io.ProcessOutput
-import de.flapdoodle.embed.mongo.config.RuntimeConfigBuilder
+import de.flapdoodle.embed.process.runtime.Network
+import javax.inject.Singleton
+import models.{JwtEnv, MongoFormats}
+import net.codingwell.scalaguice.ScalaModule
+import org.mongodb.scala.{MongoClient, MongoDatabase}
 import services.MongoApi
-import org.mongodb.scala.{MongoDatabase, MongoCollection, MongoClient}
-import scala.reflect.ClassTag
-import models.MongoFormats
 
 @Singleton
-class EmbeddedMongoApi extends MongoApi {
+object EmbeddedMongoApi extends MongoApi {
   final val port = 47836
 
   private val runtimeConfig = new RuntimeConfigBuilder()
@@ -46,4 +48,10 @@ class EmbeddedMongoApi extends MongoApi {
       )
 
   sealed case class MongodProps(mongodProcess: MongodProcess, mongodExe: MongodExecutable)
+}
+
+object EmbeddedMongoModule extends ScalaModule {  
+  override def configure(): Unit = {
+    bind[MongoApi].toInstance(EmbeddedMongoApi)
+  }
 }

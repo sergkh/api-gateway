@@ -18,7 +18,7 @@ import javax.inject.{Inject, Singleton}
 import models.ErrorCodes._
 import models._
 import play.api.Configuration
-import play.api.libs.json.Json
+import play.api.libs.json.{JsObject, Json, OWrites}
 import security.{KeysManager, WithUser}
 import services.{AuthCodesService, ClientAppsService, TokensService, UserService}
 import utils.JwtExtension._
@@ -29,11 +29,14 @@ import zio._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.FiniteDuration
+import models.conf.AuthConfig
+import net.minidev.json.JSONObject
+import services.ClientAuthenticator
 
 @Singleton
 class TokenController @Inject()(silh: Silhouette[JwtEnv],
-                                conf: Configuration,
-                                oauth: ClientAppsService,
+                                conf: AuthConfig,
+                                clientAuth: ClientAuthenticator,
                                 tokens: TokensService,
                                 authCodes: AuthCodesService,
                                 keyManager: KeysManager,
@@ -43,51 +46,46 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
                               )
                                (implicit exec: ExecutionContext) extends BaseController {
 
-  val RefreshTokenTTL = conf.get[FiniteDuration]("oauth.refreshToken.ttl")
+  implicit val jsonConverter = OWrites[JSONObject] { o => Json.parse(JSONObject.toJSONString(o)).as[JsObject] }
 
+  /** Returns list of public keys used to verify JWT tokens */ 
   def authCerts = Action { _ =>
-
-    val keys = keyManager.authCertificates
-    
-    Ok(Json.obj(
-      "keys" -> Json.arr(
-        keys.map {
-          case (kid, cert) => Json.obj("kid" -> kid, "x5c" -> Json.arr(
-            ju.Base64.getEncoder.encodeToString(cert.getEncoded)
-          ))
-        }
-      )
-    ))
+    // see: https://tools.ietf.org/html/rfc7517
+    val keys = keyManager.jwkAuthKeys.map(_.toJSONObject)
+    Ok(Json.obj("keys" -> keys))
   }
 
   /**
    * Requires client authorization, using basic auth.
    * Since this client authentication method involves a password, the authorization server MUST protect any endpoint utilizing it against
    * brute force attacks.
+   * TODO: 
+   *  * Optionally support Client JWT authentication: https://tools.ietf.org/html/rfc7523
+   *  * Compare token with spec: https://tools.ietf.org/html/rfc7521
+   *  * Check with spec: https://tools.ietf.org/html/rfc6749
    */
   def getAccessToken = Action.async { implicit request =>
-    val grantType = request.asForm(OAuthForm.grantType)
-
-    val (clientId, clientSecret) = request.basicAuth.getOrElse {
+    val clientCreds = request.basicAuth.map(Task.succeed(_)).getOrElse {
       log.warn(s"No client authentication provided. Request: ${request.reqInfo}")
-      throw AppException(AUTHORIZATION_FAILED, "Client authorization required")
+      Task.fail(AppException(ErrorCodes.AUTHORIZATION_FAILED, "Client authorization required"))
     }
     
-    log.info(s"Requesting access token for ${clientId}")
-
     val res = for {
-      app             <- oauth.getApp(clientId)
-      _               <- failIf(app.secret != clientSecret, ACCESS_DENIED, "Wrong client secret")
+      creds           <- clientCreds
+      grantType       <- request.asFormIO(OAuthForm.grantType)      
+      _               <- clientAuth.authenticateClientOrFail(creds)
+      clientId        = creds._1
+      _               <- Task(log.info(s"Requesting access token for ${clientId}"))
       auth            <- grantType match {
-        case "refresh_token" =>
+        case OAuthForm.GrantType.RefreshToken =>
           authorizeByRefreshToken(clientId, request.asForm(OAuthForm.getAccessTokenFromRefreshToken))
-        case "password" =>
+        case OAuthForm.GrantType.Password =>
           authorizeByPassword(clientId, request.asForm(OAuthForm.getAccessTokenByPass))
-        case "authorization_code" =>
+        case OAuthForm.GrantType.AuthCode =>
           authorizeByAuthorizationCode(clientId, request.asForm(OAuthForm.getAccessTokenFromAuthCode))
       }
       authenticator   <- Task.fromFuture(_ => silh.env.authenticatorService.create(LoginInfo(CredentialsProvider.ID, auth.user.id)))
-      tokenWithUser   = authenticator.withUserInfo(auth.user, auth.scope)
+      tokenWithUser   = authenticator.withUserInfo(auth.user, auth.scope, copyFields = conf.accesssTokenFields)
       token           <- Task.fromFuture(_ => silh.env.authenticatorService.init(tokenWithUser))
       _               <- eventBus.publish(Login(auth.user, authenticator.id, authenticator.expirationDateTime.getMillis, request.reqInfo))
     } yield {
@@ -168,7 +166,7 @@ class TokenController @Inject()(silh: Silhouette[JwtEnv],
       tokens.create(
         user.id, 
         Option(scopes.mkString(" ")).filter(_.nonEmpty),
-        LocalDateTime.now().plusSeconds(RefreshTokenTTL.toSeconds),
+        LocalDateTime.now().plusSeconds(conf.refreshTokenTTL.toSeconds),
         clientId
       ).map(Some(_))
     } else {

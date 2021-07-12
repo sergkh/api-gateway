@@ -54,29 +54,12 @@ class UserController @Inject()(
 
   val adminReadPerm = WithPermission("users:read")
   val adminEditPerm = WithPermission("users:edit")
-  val blockPerm = WithPermission("users:block")
+  val blockPerm     = WithPermission("users:block")
 
-  def add = silh.SecuredAction(adminReadPerm).async { request =>
-    val data = request.asForm(UserForm.createUser)
-
-    val user = User(
-      email = data.email,
-      phone = data.phone,
-      firstName = data.firstName,
-      lastName = data.lastName,
-      password = data.password.map(passwordHashers.current.hash),
-      flags = data.flags.getOrElse(Nil),
-      roles = data.roles.getOrElse(Nil)
-    )
-
-    val errors = User.validateNewUser(user, regConfig.requiredFields, regConfig.requirePassword)
-
-    if (errors.nonEmpty) {
-      log.warn(s"Registration fields were required but not set: ${errors.mkString("\n")}")
-       throw AppException(ErrorCodes.INVALID_REQUEST, errors.mkString("\n"))
-    }
-
+  def add = silh.SecuredAction(adminEditPerm).async { request =>
     for {
+      data            <- request.asFormIO(UserForm.createUser)
+      user            <- RegistrationController.userFromForm(data, passwordHashers, regConfig)
       _               <- validateBranchAccess(user.branch, request.identity)
       emailExists     <- data.email.map(userService.exists).getOrElse(Task.succeed(false))
       phoneExists     <- data.phone.map(userService.exists).getOrElse(Task.succeed(false))
@@ -97,7 +80,7 @@ class UserController @Inject()(
 
   def get(id: String) = silh.SecuredAction(adminReadPerm || WithUser(id)).async { request =>
     userService.getRequestedUser(id, request.identity).map { user =>
-      log.info(s"Obtained user $user")
+      log.info(s"Obtained user $user by ${request.identity.id}")
       Ok(Json.toJson(user))
     }
   }

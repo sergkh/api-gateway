@@ -53,7 +53,9 @@ class UserService @Inject()(
         Task.fail(AppException(ErrorCodes.EMAIL_NOT_CONFIRMED, s"User email is not confirmed"))
       case Some(u) if u.hasFlag(User.FLAG_PHONE_NOT_CONFIRMED) && !allowUnconfirmedPhones =>
         Task.fail(AppException(ErrorCodes.PHONE_NOT_CONFIRMED, s"User phone is not confirmed"))
-      case userOpt: Any => Task.succeed(userOpt)
+      case userOpt: Any => 
+        log.debug("User: " + userOpt)
+        Task.succeed(userOpt)
     }
   }
 
@@ -133,9 +135,9 @@ class UserService @Inject()(
 
   def updatePassHash(login: String, pass: PasswordInfo): Task[Unit] = {
     val criteria = login match {
-      case id: String if User.checkUuid(id) => equal("_id", id)
       case email: String if User.checkEmail(email) => equal("email", email.toLowerCase)
       case phone: String if User.checkPhone(phone) => equal("phone", phone)
+      case id: String => equal("_id", id)      
     }
 
     col.updateOne(criteria,
@@ -177,14 +179,14 @@ class UserService @Inject()(
   def getByAnyId(id: String): Task[User] = getByAnyIdOpt(id).map(_ getOrElse (throw AppException(ErrorCodes.ENTITY_NOT_FOUND, s"User '$id' not found")))
 
   def getByAnyIdOpt(id: String): Task[Option[User]] = {
-    val user = id match {
-      case uuid: String if User.checkUuid(uuid)    => col.find(equal("_id", uuid)).first.toOptionTask
+    val user = id match {      
       case email: String if User.checkEmail(email) => col.find(equal("email", email.toLowerCase)).first.toOptionTask
       case phone: String if User.checkPhone(phone) => col.find(equal("phone", phone.toLowerCase)).first.toOptionTask
       case socialId: String if User.checkSocialProviderKey(socialId) => Task.fromFuture(ec => authService.findUserUuid(socialId)) flatMap {
         case Some(uuid) => col.find(equal("_id", uuid)).first.toOptionTask
         case None => Task.none
       }
+      case uuid: String => col.find(equal("_id", uuid)).first.toOptionTask
       case _ => Task.none
     }
 
@@ -212,7 +214,11 @@ class UserService @Inject()(
 
   private def loadPermissions(roles: List[String]): Task[List[String]] = Task.fromFuture(ec => rolesCache.getOrElseUpdate(roles.mkString(",")) {
     rolesService.get(roles).map(_.flatMap(_.permissions).distinct).toUnsafeFuture
-  })
+  }).catchSome {
+    case e: Exception => 
+      log.info("Error while loading permissions: ", e)
+      rolesService.get(roles).map(_.flatMap(_.permissions).distinct)
+  }
 
   private def createUserFromSocialProfile(providerKey: String, profile: CommonSocialProfile, authInfo: => AuthInfo): Task[User] = {
 

@@ -29,7 +29,7 @@ object OAuthForm {
     )(AuthorizeUsingProvider.apply)(AuthorizeUsingProvider.unapply)
   )
 
-  val grantType = Form(single("grant_type" -> nonEmptyText))
+  val grantType = Form(single("grant_type" -> enum(GrantType, true)))
 
   val getAccessTokenByPass = Form(
     mapping(
@@ -97,9 +97,15 @@ object OAuthForm {
   }
 
   type ResponseType = ResponseType.Value
-  object ResponseType extends Enumeration {    
+  object ResponseType extends Enumeration {
     val Code = Value(1, "code")
     val Token = Value(2, "token")
   }
 
+  type GrantType = GrantType.Value
+  object GrantType extends Enumeration {
+    val RefreshToken = Value(1, "refresh_token")
+    val Password     = Value(2, "password")
+    val AuthCode     = Value(3, "authorization_code")
+  }
 }

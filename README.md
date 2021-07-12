@@ -1,13 +1,11 @@
 API Gateway
 ==============================
 
-Main purpose of this project is to create an API Gateway that provides authorization and users/permissions 
+Main purpose of this project is to create an API Gateway that works as authorization server and can be used for users and their permissions 
 management for any web generic service.
 
-Connection of a new service is done dynamically using [Swagger](http://swagger.io/). 
-Service must expose an URL with a swagger JSON (or it can be stored externally) and the API Gateway will add them into the 
-common swagger (`/docs/api.html`) and will proxy requests to it. For authorized users proxied requests contain a header with 
-a JWT token containing user information and signed by a secret provided with service configuration.
+Service able to issue authorization JWT tokens containing user information and signed by a ECDSA keypair provided from a configured 
+keystore or generated dynamically. Any services can verify issued tokens using public keys.
 
 ## Authorization header
 
@@ -16,7 +14,7 @@ information in a JWT token. The JSON format of user data has the following forma
 
 ```json
 { 
-  "uuid": 2134443645645546,
+  "id": 2134443645645546,
   "email" : "email@user.com",
   "phone": "+440989452367",
   "firstName": "John",
@@ -42,7 +40,13 @@ of user data JSON that can be optionally enabled on the API Gateway:
 }
 ```
 
-## Dynamic services discovery
+# Swagger and proxying
+
+api-gateway also able to dynamically add any internal services into a common Swagger documentation exposed at (`https://service_url/docs/api.html`) and optionally
+proxy requests to it. For that service must expose an URL with a swagger JSON (or it can be stored externally) and the API Gateway will add them into the 
+common swagger and will proxy any requests to it doing routing based on the Swagger API. 
+
+### Services discovery
 
 Dynamic services discovery is intended to be used in a Docker Swarm environment and allows to automatically discover available 
 docker swarm services. For dynamic services discovery API Gateway uses a [ETCD](https://coreos.com/etcd/docs/latest/) in 
@@ -82,7 +86,7 @@ Docker swarm manager node and mainly it is used to decompose API Gateway from Do
 ```
 
 
-## Manual service configuration
+### Manual service configuration
 
 Services can be also added manually into the application config using `services` key:
 

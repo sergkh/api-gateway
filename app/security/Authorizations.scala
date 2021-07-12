@@ -10,9 +10,11 @@ import utils.TaskExt._
 
 import scala.concurrent.ExecutionContext.Implicits._
 import scala.concurrent.Future
+import play.api.Logger
 
 case class WithPermission(permission: String) extends Authorization[User, JWTAuthenticator] {
   override def isAuthorized[B](identity: User, authenticator: JWTAuthenticator)(implicit request: Request[B]): Future[Boolean] = {
+    Logger("test").info(s"Identity: $identity, auth: $authenticator, perm: ${authenticator.asPartialUser.exists(_.hasPermission(permission))}")
     Future.successful(authenticator.asPartialUser.exists(_.hasPermission(permission)) && identity.hasPermission(permission))
   }
 }

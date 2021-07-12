@@ -18,7 +18,6 @@ object FormConstraints extends Constraints {
   private final val ERROR_PASSWORD_FORMAT = "error.password.format"
   private final val ERROR_FORBIDDEN_CHARACTERS = "error.text.forbidden.format"
   private final val MIN_PASSWORD_LENGTH = 6
-  private final val MAX_PASSWORD_LENGTH = 64 // Bcrypt limitation
 
   val EMAIL_VALIDATION_PATTERN = Pattern.compile("""^[a-zA-Z0-9\.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$""")
   val PHONE_VALIDATION_PTRN = """^(\+\d{10,15})$""".r
@@ -47,7 +46,7 @@ object FormConstraints extends Constraints {
   
   val limit = number(min = 1, max = 100)
   val offset = number(min = 0)
-  val password = nonEmptyText(MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH).verifying(passwordConstraint)
+  val password = nonEmptyText(MIN_PASSWORD_LENGTH).verifying(passwordConstraint)
   
   val login = text(3, 128).verifying(textConstraint)
   val code = text(4, 60)
@@ -122,7 +121,7 @@ object FormConstraints extends Constraints {
   def enum[E <: Enumeration](enum: E, lowercase: Boolean = false): Mapping[E#Value] = {
     def enumFormat[E <: Enumeration](enum: E, lowercase: Boolean = false): Formatter[E#Value] = new Formatter[E#Value] {
       def bind(key: String, data: Map[String, String]) = {
-        play.api.data.format.Formats.stringFormat.bind(key, data).right.flatMap { s =>
+        play.api.data.format.Formats.stringFormat.bind(key, data).flatMap { s =>
           scala.util.control.Exception.allCatch[E#Value]
             .either(enum.values.find(_.toString.equalsIgnoreCase(s)).getOrElse(
               throw new NoSuchElementException(s"No value found for '$s'"))

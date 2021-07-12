@@ -1,6 +1,6 @@
 import Dependencies._
 
-name := """base-models"""
+name := """core"""
 
 publish := ()
 
@@ -22,5 +22,5 @@ libraryDependencies ++= Seq(
   "org.mongodb.scala"         %% "mongo-scala-driver"               % "2.9.0",
   "dev.zio"                   %% "zio"                              % "1.0.0-RC18-2",
   "dev.zio"                   %% "zio-streams"                      % "1.0.0-RC18-2",
-  "org.scalatest"             %% "scalatest"                        % "3.1.1"  % Test
+  "org.scalatest"             %% "scalatest"                        % "3.1.2"  % Test
 )

@@ -60,11 +60,11 @@ class SilhouetteModule extends AbstractModule with ScalaModule with EnumerationR
   /**
     * Configures the module.
     */
-  override def configure() {
+  override def configure(): Unit = {
     bind[IdentityService[User]].to[UserService]
     bind[Silhouette[JwtEnv]].to[SilhouetteProvider[JwtEnv]]
     bind[CacheLayer].to[PlayCacheLayer]
-    bind[IDGenerator].toInstance(new SecureRandomIDGenerator())
+    bind[IDGenerator].toInstance(new SecureRandomIDGenerator(32))
     bind[PasswordHasher].toInstance(new BCryptSha256PasswordHasher())
     bind[Clock].toInstance(Clock())
     bind[UnsecuredErrorHandler].to[ServerErrorHandler]

@@ -18,6 +18,7 @@ import zio._
 
 import scala.language.implicitConversions
 import models.conf.{ConfirmationConfig, RegistrationConfig}
+import forms.UserForm.CreateUser
 
 @Singleton
 class RegistrationController @Inject()(userService: UserService,
@@ -38,47 +39,27 @@ class RegistrationController @Inject()(userService: UserService,
 
     for {
       creds           <- clientCreds
-      _               <- clientAuth.authenticateClientOrFail(creds._1, creds._2)
+      _               <- clientAuth.authenticateClientOrFail(creds)
       transformedReq  <- registrationFilters(request)
       user            <- userRegistrationRequest(transformedReq, creds._1)
-      _               <- eventBus.publish(Signup(user, request.reqInfo))
     } yield Ok(Json.toJson(user))
   }
 
-  private def userRegistrationRequest(req: RequestHeader, clientId: String): Task[User] = {
-    val data = req.asForm(UserForm.createUser)
-
-    log.info(s"Registration data: ${data.copy(password = data.password.map(_ => "***"))} from $clientId")
-
-    val user = User(
-      email = data.email,
-      phone = data.phone,
-      firstName = data.firstName.filter(_.isEmpty),
-      lastName = data.lastName.filter(_.isEmpty),
-      password = data.password.map(passwordHashers.current.hash),
-      flags = data.email.map(_ => User.FLAG_EMAIL_NOT_CONFIRMED).toList ++ data.phone.map(_ => User.FLAG_PHONE_NOT_CONFIRMED).toList,
-      extra = data.extra.getOrElse(Map.empty)
-    )
-
-    val errors = User.validateNewUser(user, config.requiredFields, config.requirePassword)
-
-    if (errors.nonEmpty) {
-      log.warn(s"Registration fields were required but not set: ${errors.mkString("\n")}")
-      Task.fail(AppException(ErrorCodes.INVALID_REQUEST, errors.mkString("\n")))
-    } else {
-
-      for {
-
-        emailExists     <- data.email.map(email => userService.exists(email)).getOrElse(Task.succeed(false))
-        phoneExists     <- data.phone.map(phone => userService.exists(phone)).getOrElse(Task.succeed(false))
-        _               <- if (emailExists || phoneExists) Task.fail(AppException(ErrorCodes.ALREADY_EXISTS, "Email or phone already exists")) else Task.unit
-        _               <- userService.save(user)
-        _               <- publishEmailConfirmationCode(user, req.reqInfo)
-        _               <- publishPhoneConfirmationCode(user, req.reqInfo)
-      } yield {
-        log.info(s"New user $user registered")
-        user
-      }
+  private def userRegistrationRequest(req: RequestHeader, clientId: String): Task[User] = {  
+    for {
+      data            <- req.asFormIO(UserForm.createUser)
+      _               <- Task(log.info(s"Registration data: ${data.copy(password = data.password.map(_ => "***"))} from $clientId"))
+      user            <- RegistrationController.userFromForm(data, passwordHashers, config)
+      emailExists     <- data.email.map(email => userService.exists(email)).getOrElse(Task.succeed(false))
+      phoneExists     <- data.phone.map(phone => userService.exists(phone)).getOrElse(Task.succeed(false))
+      _               <- if (emailExists || phoneExists) Task.fail(AppException(ErrorCodes.ALREADY_EXISTS, "Email or phone already exists")) else Task.unit
+      _               <- userService.save(user)
+      _               <- publishEmailConfirmationCode(user, req.reqInfo)
+      _               <- publishPhoneConfirmationCode(user, req.reqInfo)
+      _               <- eventBus.publish(Signup(user, req.reqInfo))      
+    } yield {
+      log.info(s"New user $user registered")
+      user
     }
   }
 
@@ -108,4 +89,26 @@ class RegistrationController @Inject()(userService: UserService,
       } yield ()
     } getOrElse Task.unit
   }
+}
+
+object RegistrationController {
+  def userFromForm(data: CreateUser, hashers: PasswordHasherRegistry, config: RegistrationConfig): Task[User] = Task {
+      val user = User(
+        email = data.email,
+        phone = data.phone,
+        firstName = data.firstName.filter(_.isEmpty),
+        lastName = data.lastName.filter(_.isEmpty),
+        password = data.password.map(hashers.current.hash),
+        flags = data.email.map(_ => User.FLAG_EMAIL_NOT_CONFIRMED).toList ++ data.phone.map(_ => User.FLAG_PHONE_NOT_CONFIRMED).toList,
+        extra = data.extra.getOrElse(Map.empty)
+      )
+
+      val errors = User.validateNewUser(user, config.requiredFields, config.requirePassword)
+
+      if (errors.nonEmpty) {
+        throw new AppException(ErrorCodes.INVALID_REQUEST, errors.mkString("\n"))
+      } else {
+        user
+      }
+    } 
 }
